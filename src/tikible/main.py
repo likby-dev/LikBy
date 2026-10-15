@@ -5,6 +5,7 @@ Application entrypoint, FastAPI server, webhook route, and polling runner.
 
 import argparse
 import asyncio
+import contextlib
 from contextlib import asynccontextmanager
 import sys
 from typing import AsyncGenerator
@@ -246,10 +247,14 @@ async def run_polling() -> None:
     worker_task = asyncio.create_task(matchmaker_background_worker(match_service))
 
     try:
+        # Purge stale/buffered pending updates from previous offline sessions
+        await bot.delete_webhook(drop_pending_updates=True)
         print("⚡ LikBy Bot is LIVE! Open Telegram and message your bot: https://t.me/LikBy_bot")
-        await dp.start_polling(bot)
+        await dp.start_polling(bot, polling_timeout=20, drop_pending_updates=True)
     finally:
         worker_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await worker_task
         await conn.close()
         await bot.session.close()
 
@@ -265,7 +270,10 @@ def main() -> None:
     mode = args.mode or settings.bot_mode
 
     if mode == "polling":
-        asyncio.run(run_polling())
+        try:
+            asyncio.run(run_polling())
+        except (KeyboardInterrupt, SystemExit):
+            print("\n👋 LikBy Bot stopped gracefully.")
     else:
         uvicorn.run("tikible.main:app", host=args.host, port=args.port, reload=False)
 
