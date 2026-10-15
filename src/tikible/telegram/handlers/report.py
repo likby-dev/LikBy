@@ -17,6 +17,7 @@ from tikible.repositories.interfaces import (
 )
 from tikible.services.chat_relay_service import ChatRelayService
 from tikible.telegram.keyboards import get_main_menu_keyboard
+from tikible.telegram.utils import safe_edit_text
 
 router = Router(name="report")
 
@@ -76,7 +77,7 @@ async def process_report(
     tg_id = callback.from_user.id
     cached = await chat_relay.get_or_warm_session(tg_id)
     if not cached:
-        await callback.message.edit_text("Session already closed.")
+        await safe_edit_text(callback.message, "Session already closed.")
         return
 
     reporter_id = cached.user_a_id if tg_id == cached.user_a_tg_id else cached.user_b_id

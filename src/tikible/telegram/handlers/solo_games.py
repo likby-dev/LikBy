@@ -11,6 +11,7 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 from tikible.games.solo.gem_hunter import GemHunterGame
 from tikible.games.solo.rps import CHOICE_EMOJIS, RPSChoice, play_rps
 from tikible.games.solo.trivia import TRIVIA_QUESTIONS, get_random_question
+from tikible.telegram.utils import safe_edit_text
 from tikible.telegram.keyboards import (
     get_gem_hunter_keyboard,
     get_rps_keyboard,
@@ -48,7 +49,8 @@ async def back_to_arcade_hub(callback: CallbackQuery) -> None:
     await callback.answer()
     if not callback.message:
         return
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         "🕹 <b>LikBy Solo Arcade</b>\n\n"
         "Choose a casual game to play:",
         parse_mode="HTML",
@@ -77,7 +79,8 @@ async def start_new_trivia(callback: CallbackQuery) -> None:
     streak = _USER_TRIVIA_STREAKS.get(callback.from_user.id, 0)
 
     kb = get_trivia_keyboard(q_idx, question.options)
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         f"🎯 <b>Trivia Blitz</b> ({question.category})\n"
         f"🔥 <i>Current Streak: {streak}</i>\n\n"
         f"<b>{question.prompt}</b>",
@@ -125,7 +128,8 @@ async def process_trivia_answer(callback: CallbackQuery) -> None:
         ]
     )
 
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         f"🎯 <b>Trivia Blitz</b>\n\n"
         f"<b>Q:</b> {question.prompt}\n\n"
         f"{verdict}",
@@ -149,7 +153,8 @@ async def start_gem_hunter(callback: CallbackQuery) -> None:
     _USER_GEM_GAMES[tg_id] = game
 
     kb = get_gem_hunter_keyboard(game)
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         "💎 <b>Gem Hunter (3x3 Minefield)</b>\n\n"
         "8 tiles hide precious gems 💎 (+10 pts each).\n"
         "1 tile hides a hidden explosive bomb 💣!\n\n"
@@ -178,7 +183,8 @@ async def process_gem_pick(callback: CallbackQuery) -> None:
     if is_bomb:
         await callback.answer("💥 BOOM! You hit the bomb!", show_alert=True)
         kb = get_gem_hunter_keyboard(game, show_all=True)
-        await callback.message.edit_text(
+        await safe_edit_text(
+            callback.message,
             f"💥 <b>BOOM! Game Over!</b>\n\n"
             f"You struck the hidden explosive. Score for this run: <b>0 pts</b>.\n"
             "Try again and see how many gems you can collect before cashing out!",
@@ -188,7 +194,8 @@ async def process_gem_pick(callback: CallbackQuery) -> None:
     elif is_win:
         await callback.answer("🏆 JACKPOT! All gems cleared!", show_alert=True)
         kb = get_gem_hunter_keyboard(game, show_all=True)
-        await callback.message.edit_text(
+        await safe_edit_text(
+            callback.message,
             f"🏆 <b>PERFECT CLEAR! JACKPOT!</b>\n\n"
             f"You successfully gathered all 8 gems without detonating the bomb!\n"
             f"Total Points: <b>{game.score} pts</b> 🌟",
@@ -199,7 +206,8 @@ async def process_gem_pick(callback: CallbackQuery) -> None:
         await callback.answer("💎 Gem Found! +10 pts")
         kb = get_gem_hunter_keyboard(game)
         revealed_count = sum(sum(1 for c in r if c) for r in game.revealed)
-        await callback.message.edit_text(
+        await safe_edit_text(
+            callback.message,
             f"💎 <b>Gems Collected: {revealed_count} / 8</b>\n"
             f"💰 Current Bank: <b>{game.score} pts</b>\n\n"
             "Keep digging or tap <b>Cash Out</b> to bank your score!",
@@ -222,7 +230,8 @@ async def process_gem_cashout(callback: CallbackQuery) -> None:
     game.is_over = True
     await callback.answer(f"💰 Cashed out {game.score} points!", show_alert=True)
     kb = get_gem_hunter_keyboard(game, show_all=True)
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         f"💰 <b>Cashed Out Successfully!</b>\n\n"
         f"You safely walked away with <b>{game.score} pts</b>! 💎\n"
         f"Smart move avoiding the bomb at row {game.bomb_row + 1}, col {game.bomb_col + 1}.",
@@ -245,7 +254,8 @@ async def start_rps(callback: CallbackQuery) -> None:
     stats = _USER_RPS_SCORES.setdefault(tg_id, {"wins": 0, "losses": 0, "draws": 0})
     kb = get_rps_keyboard()
 
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         "🪨 <b>Rock, Paper, Scissors vs Bot</b>\n\n"
         f"📊 Record: <b>{stats['wins']}W - {stats['losses']}L - {stats['draws']}D</b>\n\n"
         "Choose your move:",
@@ -285,7 +295,8 @@ async def process_rps_play(callback: CallbackQuery) -> None:
         ]
     )
 
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         f"{header}\n\n"
         f"You chose: <b>{CHOICE_EMOJIS[user_choice]}</b>\n"
         f"Bot chose: <b>{CHOICE_EMOJIS[bot_choice]}</b>\n\n"

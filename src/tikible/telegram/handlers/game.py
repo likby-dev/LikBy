@@ -20,6 +20,7 @@ from tikible.repositories.interfaces import (
 )
 from tikible.services.chat_relay_service import ChatRelayService
 from tikible.telegram.keyboards import get_tictactoe_keyboard
+from tikible.telegram.utils import safe_edit_text
 
 router = Router(name="game")
 
@@ -133,7 +134,7 @@ async def process_move(
     if status == GameStatus.COMPLETED:
         win_msg_mover = "🏆 <b>Victory! You won the game!</b>"
         win_msg_partner = "😔 <b>Your partner won the game!</b> Good match."
-        await callback.message.edit_text(win_msg_mover, parse_mode="HTML", reply_markup=updated_kb)
+        await safe_edit_text(callback.message, win_msg_mover, parse_mode="HTML", reply_markup=updated_kb)
         if partner_tg_id and callback.bot:
             await callback.bot.send_message(
                 chat_id=partner_tg_id,
@@ -143,7 +144,7 @@ async def process_move(
             )
     elif status == GameStatus.DRAW:
         draw_msg = "🤝 <b>It's a draw!</b> Well played by both."
-        await callback.message.edit_text(draw_msg, parse_mode="HTML", reply_markup=updated_kb)
+        await safe_edit_text(callback.message, draw_msg, parse_mode="HTML", reply_markup=updated_kb)
         if partner_tg_id and callback.bot:
             await callback.bot.send_message(
                 chat_id=partner_tg_id,
@@ -153,7 +154,8 @@ async def process_move(
             )
     else:
         # Move succeeded, update current player board
-        await callback.message.edit_text(
+        await safe_edit_text(
+            callback.message,
             "Move registered! Waiting for partner...",
             reply_markup=updated_kb,
         )

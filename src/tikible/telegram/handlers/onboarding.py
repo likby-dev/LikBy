@@ -15,6 +15,7 @@ from tikible.telegram.keyboards import (
     get_main_menu_keyboard,
 )
 from tikible.telegram.states import OnboardingStates
+from tikible.telegram.utils import safe_edit_reply_markup, safe_edit_text
 
 router = Router(name="onboarding")
 
@@ -70,7 +71,8 @@ async def process_gender(callback: CallbackQuery, state: FSMContext) -> None:
     await state.update_data(gender=gender.value, selected_interests=[])
     await state.set_state(OnboardingStates.waiting_for_interests)
 
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         "🎯 <b>Select 2 to 5 topics you enjoy discussing:</b>\n\n"
         "<i>Tap buttons to select/unselect, then press Done.</i>",
         parse_mode="HTML",
@@ -80,7 +82,6 @@ async def process_gender(callback: CallbackQuery, state: FSMContext) -> None:
 
 @router.callback_query(OnboardingStates.waiting_for_interests, F.data.startswith("interest_toggle:"))
 async def toggle_interest(callback: CallbackQuery, state: FSMContext) -> None:
-    await callback.answer()
     if not callback.data or not callback.message:
         return
 
@@ -90,12 +91,19 @@ async def toggle_interest(callback: CallbackQuery, state: FSMContext) -> None:
 
     if interest_code in selected:
         selected.remove(interest_code)
+        await callback.answer()
     else:
-        if len(selected) < 5:
-            selected.append(interest_code)
+        if len(selected) >= 5:
+            await callback.answer("You can select up to 5 interests maximum!", show_alert=True)
+            return
+        selected.append(interest_code)
+        await callback.answer()
 
     await state.update_data(selected_interests=selected)
-    await callback.message.edit_reply_markup(reply_markup=get_interests_keyboard(selected=selected))
+    await safe_edit_reply_markup(
+        callback.message,
+        reply_markup=get_interests_keyboard(selected=selected),
+    )
 
 
 @router.callback_query(OnboardingStates.waiting_for_interests, F.data == "interest_done")

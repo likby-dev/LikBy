@@ -13,6 +13,7 @@ from tikible.domain.enums import UserState
 from tikible.repositories.interfaces import ProfileRepository, UserRepository
 from tikible.telegram.keyboards import get_age_gate_keyboard, get_main_menu_keyboard
 from tikible.telegram.states import OnboardingStates
+from tikible.telegram.utils import safe_edit_text
 
 router = Router(name="start")
 
@@ -80,7 +81,8 @@ async def handle_age_accept(
         await user_repo.save(user)
 
     await state.set_state(OnboardingStates.waiting_for_alias)
-    await callback.message.edit_text(
+    await safe_edit_text(
+        callback.message,
         "✅ <b>Age verified (18+).</b>\n\n"
         "🏷 <b>Choose your display alias</b>\n"
         "Pick a nickname for your profile (2-20 characters). "
@@ -94,7 +96,8 @@ async def handle_age_reject(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     await state.clear()
     if callback.message:
-        await callback.message.edit_text(
+        await safe_edit_text(
+            callback.message,
             "🛑 <b>Access Restricted</b>\n\n"
             "LikBy is strictly for adults aged 18 and older.\n"
             "Thank you for your honesty. We look forward to welcoming you when you are 18!",
