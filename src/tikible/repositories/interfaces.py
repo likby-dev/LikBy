@@ -24,6 +24,10 @@ class UserRepository(ABC):
         pass
 
     @abstractmethod
+    async def get_by_unique_id(self, unique_id: str) -> Optional[User]:
+        pass
+
+    @abstractmethod
     async def save(self, user: User) -> None:
         pass
 
@@ -31,6 +35,10 @@ class UserRepository(ABC):
 class ProfileRepository(ABC):
     @abstractmethod
     async def get_by_user_id(self, user_id: str) -> Optional[Profile]:
+        pass
+
+    @abstractmethod
+    async def get_by_unique_id(self, unique_id: str) -> Optional[Profile]:
         pass
 
     @abstractmethod

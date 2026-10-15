@@ -11,6 +11,7 @@ SQLITE_SCHEMA_DDL = """
 CREATE TABLE IF NOT EXISTS users (
     id TEXT PRIMARY KEY,
     telegram_id INTEGER UNIQUE NOT NULL,
+    unique_id TEXT UNIQUE,
     state TEXT NOT NULL DEFAULT 'ONBOARDING_AGE_GATE',
     status TEXT NOT NULL DEFAULT 'ACTIVE',
     age_verified INTEGER NOT NULL DEFAULT 0,
@@ -30,6 +31,7 @@ CREATE INDEX IF NOT EXISTS idx_users_state ON users(state);
 -- Profiles table
 CREATE TABLE IF NOT EXISTS profiles (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    unique_id TEXT UNIQUE,
     display_name TEXT NOT NULL,
     age INTEGER NOT NULL,
     gender TEXT NOT NULL,
@@ -154,5 +156,20 @@ async def init_sqlite_db(db_path: str) -> aiosqlite.Connection:
     
     # Execute DDL
     await conn.executescript(SQLITE_SCHEMA_DDL)
+
+    # Ensure backwards compatibility for existing databases without unique_id column
+    async with conn.execute("PRAGMA table_info(users)") as cursor:
+        user_cols = [r[1] for r in await cursor.fetchall()]
+        if "unique_id" not in user_cols:
+            await conn.execute("ALTER TABLE users ADD COLUMN unique_id TEXT")
+
+    async with conn.execute("PRAGMA table_info(profiles)") as cursor:
+        profile_cols = [r[1] for r in await cursor.fetchall()]
+        if "unique_id" not in profile_cols:
+            await conn.execute("ALTER TABLE profiles ADD COLUMN unique_id TEXT")
+
+    await conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_users_unique_id ON users(unique_id)")
+    await conn.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_unique_id ON profiles(unique_id)")
+
     await conn.commit()
     return conn

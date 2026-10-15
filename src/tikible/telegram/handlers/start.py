@@ -84,9 +84,9 @@ async def handle_age_accept(
     await safe_edit_text(
         callback.message,
         "✅ <b>Age verified (18+).</b>\n\n"
-        "🏷 <b>Choose your display alias</b>\n"
-        "Pick a nickname for your profile (2-20 characters). "
-        "This can be a pseudonym—it does <i>not</i> have to be your real name.",
+        "🏷 <b>Choose your Display Name</b>\n"
+        "Pick a name or alias for your profile (2-30 characters).\n"
+        "<i>(Names can allow duplicates and can be updated anytime.)</i>",
         parse_mode="HTML",
     )
 

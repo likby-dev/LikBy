@@ -13,7 +13,8 @@ class Profile(BaseModel):
     """User profile data including demographics, interests, and matching criteria."""
 
     user_id: str = Field(..., description="Foreign key to User.id")
-    display_name: str = Field(..., min_length=2, max_length=50, description="Public conversational alias")
+    unique_id: Optional[str] = Field(default=None, description="Permanent unique user handle (immutable)")
+    display_name: str = Field(..., min_length=2, max_length=50, description="Public conversational alias (duplicates allowed)")
     age: int = Field(..., ge=18, le=120, description="User age (must be >= 18)")
     gender: Gender = Field(..., description="Gender identity")
     bio: Optional[str] = Field(default=None, max_length=500, description="Short personal bio")
@@ -48,3 +49,11 @@ class Profile(BaseModel):
         if v < min_age:
             raise ValueError("max_age_filter cannot be less than min_age_filter")
         return v
+
+    def update_display_name(self, new_name: str) -> None:
+        """Update public display name (duplicates allowed)."""
+        clean_name = new_name.strip()
+        if len(clean_name) < 2 or len(clean_name) > 50:
+            raise ValueError("Display name must be between 2 and 50 characters.")
+        self.display_name = clean_name
+        self.updated_at = datetime.now(timezone.utc)

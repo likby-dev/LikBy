@@ -19,7 +19,7 @@ class SqliteUserRepository(UserRepository):
 
     async def get_by_id(self, user_id: str) -> Optional[User]:
         async with self._conn.execute(
-            "SELECT id, telegram_id, state, status, age_verified, terms_accepted_at, "
+            "SELECT id, telegram_id, unique_id, state, status, age_verified, terms_accepted_at, "
             "karma_score, report_count, ban_reason, banned_at, last_active_at, created_at, updated_at "
             "FROM users WHERE id = ?",
             (user_id,),
@@ -31,10 +31,23 @@ class SqliteUserRepository(UserRepository):
 
     async def get_by_telegram_id(self, telegram_id: int) -> Optional[User]:
         async with self._conn.execute(
-            "SELECT id, telegram_id, state, status, age_verified, terms_accepted_at, "
+            "SELECT id, telegram_id, unique_id, state, status, age_verified, terms_accepted_at, "
             "karma_score, report_count, ban_reason, banned_at, last_active_at, created_at, updated_at "
             "FROM users WHERE telegram_id = ?",
             (telegram_id,),
+        ) as cursor:
+            row = await cursor.fetchone()
+            if not row:
+                return None
+            return self._row_to_entity(row)
+
+    async def get_by_unique_id(self, unique_id: str) -> Optional[User]:
+        clean = unique_id.strip().lstrip("@").lower()
+        async with self._conn.execute(
+            "SELECT id, telegram_id, unique_id, state, status, age_verified, terms_accepted_at, "
+            "karma_score, report_count, ban_reason, banned_at, last_active_at, created_at, updated_at "
+            "FROM users WHERE LOWER(unique_id) = ?",
+            (clean,),
         ) as cursor:
             row = await cursor.fetchone()
             if not row:
@@ -45,10 +58,11 @@ class SqliteUserRepository(UserRepository):
         await self._conn.execute(
             """
             INSERT INTO users (
-                id, telegram_id, state, status, age_verified, terms_accepted_at,
+                id, telegram_id, unique_id, state, status, age_verified, terms_accepted_at,
                 karma_score, report_count, ban_reason, banned_at, last_active_at, created_at, updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(id) DO UPDATE SET
+                unique_id = COALESCE(excluded.unique_id, users.unique_id),
                 state = excluded.state,
                 status = excluded.status,
                 age_verified = excluded.age_verified,
@@ -63,6 +77,7 @@ class SqliteUserRepository(UserRepository):
             (
                 user.id,
                 user.telegram_id,
+                user.unique_id,
                 user.state.value,
                 user.status.value,
                 1 if user.age_verified else 0,
@@ -82,15 +97,16 @@ class SqliteUserRepository(UserRepository):
         return User(
             id=row[0],
             telegram_id=row[1],
-            state=UserState(row[2]),
-            status=UserStatus(row[3]),
-            age_verified=bool(row[4]),
-            terms_accepted_at=datetime.fromisoformat(row[5]) if row[5] else None,
-            karma_score=row[6],
-            report_count=row[7],
-            ban_reason=row[8],
-            banned_at=datetime.fromisoformat(row[9]) if row[9] else None,
-            last_active_at=datetime.fromisoformat(row[10]),
-            created_at=datetime.fromisoformat(row[11]),
-            updated_at=datetime.fromisoformat(row[12]),
+            unique_id=row[2],
+            state=UserState(row[3]),
+            status=UserStatus(row[4]),
+            age_verified=bool(row[5]),
+            terms_accepted_at=datetime.fromisoformat(row[6]) if row[6] else None,
+            karma_score=row[7],
+            report_count=row[8],
+            ban_reason=row[9],
+            banned_at=datetime.fromisoformat(row[10]) if row[10] else None,
+            last_active_at=datetime.fromisoformat(row[11]),
+            created_at=datetime.fromisoformat(row[12]),
+            updated_at=datetime.fromisoformat(row[13]),
         )

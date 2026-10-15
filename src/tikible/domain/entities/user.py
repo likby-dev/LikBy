@@ -14,6 +14,7 @@ class User(BaseModel):
 
     id: str = Field(..., description="Unique internal user identifier (UUID or usr_...)")
     telegram_id: int = Field(..., description="Telegram user ID")
+    unique_id: Optional[str] = Field(default=None, description="User-defined permanent unique handle (immutable)")
     state: UserState = Field(default=UserState.ONBOARDING_AGE_GATE, description="Conversational state")
     status: UserStatus = Field(default=UserStatus.ACTIVE, description="Account standing")
     age_verified: bool = Field(default=False, description="Whether 18+ gate was passed")
@@ -25,6 +26,13 @@ class User(BaseModel):
     last_active_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    def set_unique_id(self, unique_id: str) -> None:
+        """Set the permanent unique ID. Cannot be modified once set."""
+        if self.unique_id is not None:
+            raise ValueError("Unique ID is permanent and cannot be modified once set.")
+        self.unique_id = unique_id.strip().lower()
+        self.updated_at = datetime.now(timezone.utc)
 
     def verify_age(self) -> None:
         """Pass the 18+ age verification gate."""

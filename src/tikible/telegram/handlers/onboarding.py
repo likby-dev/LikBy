@@ -3,6 +3,7 @@ tikible.telegram.handlers.onboarding
 Onboarding FSM handlers: Alias, Age, Gender, and Interests selection.
 """
 
+import re
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -19,20 +20,68 @@ from tikible.telegram.utils import safe_edit_reply_markup, safe_edit_text
 
 router = Router(name="onboarding")
 
+UNIQUE_ID_REGEX = re.compile(r"^[a-zA-Z0-9_]{3,20}$")
+
 
 @router.message(OnboardingStates.waiting_for_alias)
 async def process_alias(message: Message, state: FSMContext) -> None:
     alias = (message.text or "").strip()
     if len(alias) < 2 or len(alias) > 30:
         await message.answer(
-            "⚠️ Alias must be between 2 and 30 characters. Please choose a different name:"
+            "⚠️ Name must be between 2 and 30 characters. Please choose a different name:"
         )
         return
 
     await state.update_data(alias=alias)
-    await state.set_state(OnboardingStates.waiting_for_age)
+    await state.set_state(OnboardingStates.waiting_for_unique_id)
     await message.answer(
         f"Nice to meet you, <b>{alias}</b>! ✨\n\n"
+        "🆔 <b>Now, choose your Unique ID:</b>\n"
+        "Create a unique handle for your account (e.g. <code>alex_99</code>, <code>skywalker</code>).\n\n"
+        "📌 <b>Rules:</b>\n"
+        "• 3 to 20 characters (letters, numbers, underscores)\n"
+        "• <b>Unique:</b> No two users can have the same Unique ID\n"
+        "• 🔒 <b>Permanent:</b> Your Unique ID <b>cannot be edited or changed</b> once created!\n\n"
+        "<i>(Your Display Name can have duplicates and be changed anytime, but your Unique ID is permanent.)</i>",
+        parse_mode="HTML",
+    )
+
+
+@router.message(OnboardingStates.waiting_for_unique_id)
+async def process_unique_id(
+    message: Message,
+    state: FSMContext,
+    user_repo: UserRepository,
+) -> None:
+    raw_id = (message.text or "").strip()
+    clean_id = raw_id.lstrip("@").lower()
+
+    if not UNIQUE_ID_REGEX.match(clean_id):
+        await message.answer(
+            "⚠️ <b>Invalid Unique ID format.</b>\n\n"
+            "• Must be 3 to 20 characters long\n"
+            "• Only letters (a-z), numbers (0-9), and underscores (_)\n"
+            "• Example: <code>alex_99</code> or <code>sam2024</code>\n\n"
+            "Please choose a valid Unique ID:",
+            parse_mode="HTML",
+        )
+        return
+
+    # Check case-insensitive uniqueness in database
+    existing_user = await user_repo.get_by_unique_id(clean_id)
+    if existing_user:
+        await message.answer(
+            f"⚠️ <b>@{clean_id} is already taken!</b>\n\n"
+            "Another user has already claimed this Unique ID. Please choose a different handle:",
+            parse_mode="HTML",
+        )
+        return
+
+    await state.update_data(unique_id=clean_id)
+    await state.set_state(OnboardingStates.waiting_for_age)
+    await message.answer(
+        f"✅ Unique ID <b>@{clean_id}</b> is available and locked to your profile! 🔒\n"
+        f"<i>(Note: This Unique ID is permanent and cannot be changed later.)</i>\n\n"
         "🎂 <b>How old are you?</b>\n"
         "<i>Please type your age as a number (e.g. 24). This is only used to match you within appropriate age brackets.</i>",
         parse_mode="HTML",
@@ -128,8 +177,13 @@ async def finish_interests(
     if not user:
         return
 
+    unique_id = data.get("unique_id")
+    if unique_id:
+        user.unique_id = unique_id
+
     profile = Profile(
         user_id=user.id,
+        unique_id=unique_id,
         display_name=data["alias"],
         age=data["age"],
         gender=Gender(data["gender"]),
@@ -145,11 +199,13 @@ async def finish_interests(
     await state.clear()
 
     await callback.message.delete()
+    unique_tag = f"@{profile.unique_id}" if profile.unique_id else "<i>Not set</i>"
     await callback.message.answer(
         f"🎉 <b>Profile created successfully!</b>\n\n"
-        f"Alias: <b>{profile.display_name}</b>\n"
-        f"Age: <b>{profile.age}</b>\n"
-        f"Interests: <b>{', '.join(profile.interests).title()}</b>\n\n"
+        f"• <b>Name:</b> {profile.display_name} <i>(non-unique)</i>\n"
+        f"• <b>Unique ID:</b> {unique_tag} 🔒 <i>(Permanent — cannot be edited)</i>\n"
+        f"• <b>Age:</b> {profile.age}\n"
+        f"• <b>Interests:</b> {', '.join(profile.interests).title()}\n\n"
         "Tap <b>🎲 Find a Match</b> below whenever you're ready to start chatting!",
         parse_mode="HTML",
         reply_markup=get_main_menu_keyboard(),
