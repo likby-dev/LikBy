@@ -26,6 +26,7 @@ from tikible.telegram.handlers import (
     menu,
     onboarding,
     report,
+    solo_games,
     start,
 )
 
@@ -74,6 +75,7 @@ def create_dispatcher(
         menu.router,
         matchmaking.router,
         game.router,
+        solo_games.router,
         report.router,
         chat.router,
     ]

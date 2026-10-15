@@ -79,7 +79,7 @@ def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(
         keyboard=[
             [KeyboardButton(text="🎲 Find a Match")],
-            [KeyboardButton(text="👤 My Profile"), KeyboardButton(text="⚙️ Preferences")],
+            [KeyboardButton(text="🕹 Solo Arcade"), KeyboardButton(text="👤 My Profile")],
             [KeyboardButton(text="📜 Guidelines"), KeyboardButton(text="❓ Help / About")],
         ],
         resize_keyboard=True,
@@ -103,7 +103,75 @@ def get_queue_cancel_keyboard() -> InlineKeyboardMarkup:
     """Inline keyboard shown while waiting in queue."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="❌ Cancel Search", callback_data="queue:cancel")]
+            [InlineKeyboardButton(text="🕹 Play While Waiting", callback_data="solo:hub")],
+            [InlineKeyboardButton(text="❌ Cancel Search", callback_data="queue:cancel")],
+        ]
+    )
+
+
+def get_solo_hub_keyboard() -> InlineKeyboardMarkup:
+    """Arcade selector for single-player casual mini-games."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="🎯 Trivia Blitz", callback_data="solo:trivia:new")],
+            [InlineKeyboardButton(text="💎 Gem Hunter (Mini Mines)", callback_data="solo:gem:new")],
+            [InlineKeyboardButton(text="🪨 Rock Paper Scissors", callback_data="solo:rps:new")],
+            [InlineKeyboardButton(text="❌ Close Arcade", callback_data="solo:close")],
+        ]
+    )
+
+
+def get_trivia_keyboard(q_idx: int, options: Sequence[str]) -> InlineKeyboardMarkup:
+    """Multiple choice options for Trivia Blitz."""
+    buttons = []
+    for opt_idx, opt_text in enumerate(options):
+        buttons.append(
+            [InlineKeyboardButton(text=opt_text, callback_data=f"trivia_ans:{q_idx}:{opt_idx}")]
+        )
+    buttons.append([InlineKeyboardButton(text="🏠 Solo Arcade", callback_data="solo:hub")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_gem_hunter_keyboard(game, show_all: bool = False) -> InlineKeyboardMarkup:
+    """Renders 3x3 grid for Gem Hunter."""
+    rows = []
+    for r in range(3):
+        row_btns = []
+        for c in range(3):
+            if game.revealed[r][c] or show_all:
+                if r == game.bomb_row and c == game.bomb_col:
+                    symbol = "💥 Bomb!"
+                else:
+                    symbol = "💎 +10"
+            else:
+                symbol = "❓ Tile"
+            row_btns.append(
+                InlineKeyboardButton(
+                    text=symbol,
+                    callback_data=f"gem_pick:{r}:{c}",
+                )
+            )
+        rows.append(row_btns)
+
+    controls = []
+    if not game.is_over and game.score > 0:
+        controls.append(InlineKeyboardButton(text=f"💰 Cash Out ({game.score} pts)", callback_data="gem:cashout"))
+    controls.append(InlineKeyboardButton(text="🔄 New Game", callback_data="solo:gem:new"))
+    controls.append(InlineKeyboardButton(text="🏠 Arcade", callback_data="solo:hub"))
+    rows.append(controls)
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_rps_keyboard() -> InlineKeyboardMarkup:
+    """Action buttons for Rock Paper Scissors."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🪨 Rock", callback_data="rps_play:ROCK"),
+                InlineKeyboardButton(text="📄 Paper", callback_data="rps_play:PAPER"),
+                InlineKeyboardButton(text="✂️ Scissors", callback_data="rps_play:SCISSORS"),
+            ],
+            [InlineKeyboardButton(text="🏠 Solo Arcade", callback_data="solo:hub")],
         ]
     )
 

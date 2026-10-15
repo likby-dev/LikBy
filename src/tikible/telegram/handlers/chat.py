@@ -114,7 +114,7 @@ async def handle_chat_message(
     text = message.text
 
     # Ignore system menu commands that might fall through
-    if text in ["🎲 Find a Match", "👤 My Profile", "⚙️ Preferences", "📜 Guidelines", "❓ Help / About"]:
+    if text in ["🎲 Find a Match", "🕹 Solo Arcade", "👤 My Profile", "⚙️ Preferences", "📜 Guidelines", "❓ Help / About"]:
         return
 
     relayed = await chat_relay.relay_text(sender_tg_id=tg_id, text=text)
