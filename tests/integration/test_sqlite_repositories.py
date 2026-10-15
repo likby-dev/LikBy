@@ -5,14 +5,14 @@ Integration tests for all SQLite repositories and database schema.
 
 import pytest
 import aiosqlite
-from tikible.domain.entities.user import User
-from tikible.domain.entities.profile import Profile
-from tikible.domain.entities.match_ticket import MatchTicket
-from tikible.domain.entities.chat_session import ChatSession
-from tikible.domain.entities.game import GameSession
-from tikible.domain.entities.block import UserBlock
-from tikible.domain.entities.report import Report
-from tikible.domain.enums import (
+from likby.domain.entities.user import User
+from likby.domain.entities.profile import Profile
+from likby.domain.entities.match_ticket import MatchTicket
+from likby.domain.entities.chat_session import ChatSession
+from likby.domain.entities.game import GameSession
+from likby.domain.entities.block import UserBlock
+from likby.domain.entities.report import Report
+from likby.domain.enums import (
     Gender,
     GenderPreference,
     ReportCategory,
@@ -22,14 +22,14 @@ from tikible.domain.enums import (
     UserState,
     UserStatus,
 )
-from tikible.repositories.sqlite.database import SQLITE_SCHEMA_DDL
-from tikible.repositories.sqlite.user_repository import SqliteUserRepository
-from tikible.repositories.sqlite.profile_repository import SqliteProfileRepository
-from tikible.repositories.sqlite.match_ticket_repository import SqliteMatchTicketRepository
-from tikible.repositories.sqlite.chat_session_repository import SqliteChatSessionRepository
-from tikible.repositories.sqlite.game_repository import SqliteGameRepository
-from tikible.repositories.sqlite.block_repository import SqliteBlockRepository
-from tikible.repositories.sqlite.report_repository import SqliteReportRepository
+from likby.repositories.sqlite.database import SQLITE_SCHEMA_DDL
+from likby.repositories.sqlite.user_repository import SqliteUserRepository
+from likby.repositories.sqlite.profile_repository import SqliteProfileRepository
+from likby.repositories.sqlite.match_ticket_repository import SqliteMatchTicketRepository
+from likby.repositories.sqlite.chat_session_repository import SqliteChatSessionRepository
+from likby.repositories.sqlite.game_repository import SqliteGameRepository
+from likby.repositories.sqlite.block_repository import SqliteBlockRepository
+from likby.repositories.sqlite.report_repository import SqliteReportRepository
 
 
 @pytest.fixture

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the concurrency architecture, execution model, synchronization primitives, caching strategy, and performance budgets for Tikible under production constraints.
+Define the concurrency architecture, execution model, synchronization primitives, caching strategy, and performance budgets for LikBy under production constraints.
 
 ## Scope
 
@@ -12,7 +12,7 @@ Covers the asyncio runtime model, database contention management, Telegram webho
 
 ## Concurrency Runtime Model
 
-Tikible runs on Python 3.11+ using the standard `asyncio` event loop.
+LikBy runs on Python 3.11+ using the standard `asyncio` event loop.
 
 ```mermaid
 graph TD
@@ -61,7 +61,7 @@ graph TD
 Database round-trips for every relayed message add unnecessary latency (10-30ms per message). An in-memory concurrent cache provides sub-millisecond lookup for active chat sessions:
 
 ```python
-# src/tikible/services/session_cache.py
+# src/likby/services/session_cache.py
 from dataclasses import dataclass
 from typing import Optional, Dict
 import asyncio

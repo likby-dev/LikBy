@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide a step-by-step operational runbook for migrating Tikible's persistent data from the MVP local SQLite store to the production PostgreSQL (Supabase) database with zero data loss and verifiable consistency.
+Provide a step-by-step operational runbook for migrating LikBy's persistent data from the MVP local SQLite store to the production PostgreSQL (Supabase) database with zero data loss and verifiable consistency.
 
 ## Scope
 
@@ -55,10 +55,10 @@ Do NOT copy the live database file directly while processes are active. Use SQLi
 
 ```bash
 # Connect to SQLite CLI and create a clean frozen snapshot
-sqlite3 /data/tikible.db "VACUUM INTO '/backup/tikible_freeze_$(date +%Y%m%d_%H%M%S).db';"
+sqlite3 /data/likby.db "VACUUM INTO '/backup/likby_freeze_$(date +%Y%m%d_%H%M%S).db';"
 
 # Verify integrity of snapshot
-sqlite3 /backup/tikible_freeze_*.db "PRAGMA integrity_check;"
+sqlite3 /backup/likby_freeze_*.db "PRAGMA integrity_check;"
 # Output must be: ok
 ```
 
@@ -72,7 +72,7 @@ A deterministic Python script handles type conversions, JSON serialization, and 
 #!/usr/bin/env python3
 """
 tools/migrate_sqlite_to_pg.py
-Migrates Tikible data from SQLite to PostgreSQL with data validation.
+Migrates LikBy data from SQLite to PostgreSQL with data validation.
 """
 import asyncio
 import json
@@ -147,7 +147,7 @@ async def migrate_table(sqlite_conn: sqlite3.Connection, pg_pool: asyncpg.Pool, 
     return len(rows)
 
 async def main(sqlite_path: str, pg_dsn: str):
-    print(f"--- Starting Tikible Migration ---")
+    print(f"--- Starting LikBy Migration ---")
     sqlite_conn = sqlite3.connect(sqlite_path)
     pg_pool = await asyncpg.create_pool(dsn=pg_dsn)
 
@@ -185,7 +185,7 @@ SELECT
 
 Compare these counts against the source SQLite metrics:
 ```bash
-sqlite3 /backup/tikible_freeze.db "SELECT 'users', count(*) FROM users UNION ALL SELECT 'profiles', count(*) FROM profiles UNION ALL SELECT 'chat_sessions', count(*) FROM chat_sessions UNION ALL SELECT 'reports', count(*) FROM reports;"
+sqlite3 /backup/likby_freeze.db "SELECT 'users', count(*) FROM users UNION ALL SELECT 'profiles', count(*) FROM profiles UNION ALL SELECT 'chat_sessions', count(*) FROM chat_sessions UNION ALL SELECT 'reports', count(*) FROM reports;"
 ```
 
 ### Referential Integrity Check
@@ -213,7 +213,7 @@ WHERE u.id IS NULL;
 2. **Deploy / Restart Webhook Worker**: Trigger a redeployment on Render.
 3. **Verify Health Check Endpoint**:
    ```bash
-   curl -s -f https://api.tikible.com/health | jq .
+   curl -s -f https://api.likby.com/health | jq .
    # Expected: {"status": "healthy", "database": "connected", "database_backend": "postgres"}
    ```
 4. **End-to-End Test**:
@@ -230,7 +230,7 @@ If critical failures occur during cutover (e.g., connection pool exhaustion, lat
 1. **Revert Configuration**:
    ```env
    DATABASE_BACKEND=sqlite
-   DATABASE_URL=sqlite+aiosqlite:////data/tikible.db
+   DATABASE_URL=sqlite+aiosqlite:////data/likby.db
    MAINTENANCE_MODE=false
    ```
 2. **Restart Webhook Worker**.

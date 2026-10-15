@@ -2,11 +2,11 @@
 
 ## Purpose
 
-Define the alternative document-oriented persistence architecture using Google Cloud Firestore. Document collection topologies, subcollection vs root collection tradeoffs, atomic transaction semantics, indexing constraints, security rules, and evaluate Firestore against Tikible's domain requirements.
+Define the alternative document-oriented persistence architecture using Google Cloud Firestore. Document collection topologies, subcollection vs root collection tradeoffs, atomic transaction semantics, indexing constraints, security rules, and evaluate Firestore against LikBy's domain requirements.
 
 ## Scope
 
-Covers the technical architecture of a Firestore repository adapter implementing Tikible's repository contracts, and provides a comparative analysis against relational storage.
+Covers the technical architecture of a Firestore repository adapter implementing LikBy's repository contracts, and provides a comparative analysis against relational storage.
 
 ---
 
@@ -14,7 +14,7 @@ Covers the technical architecture of a Firestore repository adapter implementing
 
 ### Decision: REJECTED as Primary Production Target; Documented as Pluggable Adapter
 
-| Architectural Concern | PostgreSQL / Supabase | Cloud Firestore | Impact on Tikible |
+| Architectural Concern | PostgreSQL / Supabase | Cloud Firestore | Impact on LikBy |
 |---|---|---|---|
 | **Data Model Fit** | Relational (Foreign keys, joins) | Document / Hierarchical | Social graphs and bidirectional matches fit relational better |
 | **Transactional Scope** | Multi-table ACID | Max 500 documents per tx | Matchmaking requires atomic locks across tickets & users |
@@ -33,7 +33,7 @@ Firestore organizes data into documents and collections. Two structural models e
 
 ### Selected Topology: Root Collections with Normalized References
 
-Subcollections (e.g., `users/{userId}/sessions/{sessionId}`) introduce query isolation issues when querying across sessions involving two different users. Therefore, Tikible adopts a **normalized root collection** topology:
+Subcollections (e.g., `users/{userId}/sessions/{sessionId}`) introduce query isolation issues when querying across sessions involving two different users. Therefore, LikBy adopts a **normalized root collection** topology:
 
 ```mermaid
 graph TD

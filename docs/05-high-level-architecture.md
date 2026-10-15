@@ -14,7 +14,7 @@ Covers the current Telegram bot architecture and documents how future clients wi
 
 ### Decision: DECIDED — Modular Monolith
 
-Tikible uses a **modular monolith** deployed as a single process. Business logic lives in FastAPI application services. The Telegram bot is an adapter/client of the backend.
+LikBy uses a **modular monolith** deployed as a single process. Business logic lives in FastAPI application services. The Telegram bot is an adapter/client of the backend.
 
 ### Why Not Microservices?
 
@@ -177,7 +177,7 @@ sequenceDiagram
 ## Module Map
 
 ```
-src/tikible/
+src/likby/
 ├── main.py                 # FastAPI app creation, lifespan, middleware
 ├── config.py               # Settings from environment variables
 │

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Identify, evaluate, and mitigate architectural, security, privacy, operational, and platform risks across the Tikible project lifecycle.
+Identify, evaluate, and mitigate architectural, security, privacy, operational, and platform risks across the LikBy project lifecycle.
 
 ## Scope
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the production deployment configuration, infrastructure-as-code blueprints, runtime environment, and operational procedures for deploying Tikible on Render.
+Define the production deployment configuration, infrastructure-as-code blueprints, runtime environment, and operational procedures for deploying LikBy on Render.
 
 ## Scope
 
@@ -17,12 +17,12 @@ Render supports Infrastructure as Code via `render.yaml` committed to the reposi
 ```yaml
 services:
   - type: web
-    name: tikible-app
+    name: likby-app
     env: python
     region: oregon # or frankfurt depending on target audience
     plan: free # Upgrade to 'starter' ($7/mo) for persistent uptime
     buildCommand: "pip install --upgrade pip && pip install -e '.[prod]'"
-    startCommand: "uvicorn tikible.main:app --host 0.0.0.0 --port $PORT --workers 1"
+    startCommand: "uvicorn likby.main:app --host 0.0.0.0 --port $PORT --workers 1"
     healthCheckPath: /health/ready
     autoDeploy: true
     envVars:
@@ -39,12 +39,12 @@ services:
       - key: BASE_URL
         fromService:
           type: web
-          name: tikible-app
+          name: likby-app
           property: host
       - key: DATABASE_BACKEND
         value: sqlite # Change to 'postgres' once Supabase is connected
       - key: DATABASE_URL
-        value: sqlite+aiosqlite:////data/tikible.db
+        value: sqlite+aiosqlite:////data/likby.db
 ```
 
 ---
@@ -53,7 +53,7 @@ services:
 
 > [!CAUTION]
 > **Render Free Tier Ephemeral File System**
-> On the free tier, Render does NOT offer persistent disks. Any local file created in the container filesystem (including `/data/tikible.db`) is **completely erased** when:
+> On the free tier, Render does NOT offer persistent disks. Any local file created in the container filesystem (including `/data/likby.db`) is **completely erased** when:
 > 1. The container spins down after 15 minutes of inactivity.
 > 2. A new code deployment occurs.
 > 3. The container is restarted for maintenance.
@@ -65,13 +65,13 @@ To run with persistent user data, two supported options exist:
 ```mermaid
 graph TD
     subgraph Option A: Render Paid Disk
-        RAppA[Tikible Web Service<br/>Render Starter Plan $7/mo]
+        RAppA[LikBy Web Service<br/>Render Starter Plan $7/mo]
         RDisk[(Render Persistent Disk<br/>1 GB @ $0.25/mo)]
         RAppA -->|aiosqlite| RDisk
     end
 
     subgraph Option B: Managed Cloud Postgres (Recommended)
-        RAppB[Tikible Web Service<br/>Render Free or Starter]
+        RAppB[LikBy Web Service<br/>Render Free or Starter]
         SupaDB[(Supabase Managed Postgres<br/>Free Tier 500MB)]
         RAppB -->|asyncpg pool| SupaDB
     end
@@ -84,15 +84,15 @@ graph TD
 
 ## Application Startup & Webhook Registration Lifecycle
 
-When Tikible boots on Render, the FastAPI lifespan event orchestrates startup checks and registers the webhook with Telegram:
+When LikBy boots on Render, the FastAPI lifespan event orchestrates startup checks and registers the webhook with Telegram:
 
 ```python
-# src/tikible/main.py lifespan implementation
+# src/likby/main.py lifespan implementation
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from aiogram import Bot
-from tikible.config import get_settings
-from tikible.repositories.factory import init_database
+from likby.config import get_settings
+from likby.repositories.factory import init_database
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -138,7 +138,7 @@ After deploying to Render:
    {
      "ok": true,
      "result": {
-       "url": "https://tikible-app.onrender.com/api/v1/telegram/webhook",
+       "url": "https://likby-app.onrender.com/api/v1/telegram/webhook",
        "has_custom_certificate": false,
        "pending_update_count": 0,
        "last_error_date": null,
@@ -148,7 +148,7 @@ After deploying to Render:
    ```
 4. **Trigger Health Endpoint**:
    ```bash
-   curl -i https://tikible-app.onrender.com/health/ready
+   curl -i https://likby-app.onrender.com/health/ready
    # Expected: HTTP/1.1 200 OK
    ```
 

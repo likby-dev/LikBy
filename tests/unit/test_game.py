@@ -4,12 +4,12 @@ Unit tests for server-authoritative Tic-Tac-Toe state machine.
 """
 
 import pytest
-from tikible.domain.entities.game import (
+from likby.domain.entities.game import (
     GameSession,
     InvalidMoveError,
     NotYourTurnError,
 )
-from tikible.domain.enums import GameStatus
+from likby.domain.enums import GameStatus
 
 
 def test_game_creation():

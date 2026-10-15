@@ -3,8 +3,8 @@ tests/unit/test_scorer.py
 Unit tests for the deterministic compatibility scoring engine.
 """
 
-from tikible.domain.enums import Gender, GenderPreference
-from tikible.domain.matching.scorer import calculate_match_score
+from likby.domain.enums import Gender, GenderPreference
+from likby.domain.matching.scorer import calculate_match_score
 
 
 def test_perfect_compatible_pair():

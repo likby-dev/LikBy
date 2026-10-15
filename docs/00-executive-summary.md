@@ -2,11 +2,11 @@
 
 ## Purpose
 
-This document provides the high-level overview of Tikible: what it is, who it serves, and the foundational technical decisions that shape the entire system.
+This document provides the high-level overview of LikBy: what it is, who it serves, and the foundational technical decisions that shape the entire system.
 
 ## Product
 
-Tikible is a **privacy-first anonymous social matching and real-time chat platform**. Users are paired with compatible strangers for anonymous one-to-one text conversations. The initial client is a **Telegram bot**; a web application and Telegram Mini App will share the same backend in the future.
+LikBy is a **privacy-first anonymous social matching and real-time chat platform**. Users are paired with compatible strangers for anonymous one-to-one text conversations. The initial client is a **Telegram bot**; a web application and Telegram Mini App will share the same backend in the future.
 
 ### Core Principles
 

@@ -68,7 +68,7 @@ Based on Tier 1 traction metrics:
 - Storage footprint per session record (metadata only): ~0.8 KB
 - **Cost per Monthly Active User (MAU)**: **~$0.004 to $0.007 / user / month**
 
-Because Tikible does NOT store message payloads, storage costs scale with user registrations and match counts rather than conversational volume.
+Because LikBy does NOT store message payloads, storage costs scale with user registrations and match counts rather than conversational volume.
 
 ---
 

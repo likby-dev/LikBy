@@ -4,10 +4,10 @@ Unit tests verifying Unique ID uniqueness rules, format validation, and immutabi
 """
 
 import pytest
-from tikible.domain.entities.profile import Profile
-from tikible.domain.entities.user import User
-from tikible.domain.enums import Gender, GenderPreference
-from tikible.telegram.handlers.onboarding import UNIQUE_ID_REGEX
+from likby.domain.entities.profile import Profile
+from likby.domain.entities.user import User
+from likby.domain.enums import Gender, GenderPreference
+from likby.telegram.handlers.onboarding import UNIQUE_ID_REGEX
 
 
 def test_unique_id_regex_validation() -> None:

@@ -170,7 +170,7 @@ class AIConfig(BaseSettings):
 
 ## Terminology Clarity
 
-| Term | What It Means in Tikible |
+| Term | What It Means in LikBy |
 |---|---|
 | **Rules-based** | Hand-written if/else logic, scoring formulas, curated lists |
 | **Traditional ML** | Trained models (embeddings, classifiers) — not used in MVP |

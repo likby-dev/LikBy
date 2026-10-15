@@ -3,8 +3,8 @@ tests/unit/test_user.py
 Unit tests for User entity behavior and transitions.
 """
 
-from tikible.domain.entities.user import User
-from tikible.domain.enums import UserState, UserStatus
+from likby.domain.entities.user import User
+from likby.domain.enums import UserState, UserStatus
 
 
 def test_user_initial_state():

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the complete feature inventory for Tikible, classify each feature by implementation phase, and establish dependencies between features.
+Define the complete feature inventory for LikBy, classify each feature by implementation phase, and establish dependencies between features.
 
 ## Scope
 
@@ -197,7 +197,7 @@ The service is designed for adults aged 18 and above.
 
 1. Users are told that Telegram processes their messages and account data.
 2. Users are warned that the platform cannot prevent screenshots or external recording.
-3. Users are not promised "absolute anonymity" — only that Tikible does not expose their Telegram identity to other users by default.
+3. Users are not promised "absolute anonymity" — only that LikBy does not expose their Telegram identity to other users by default.
 4. Retention and deletion policies are explained in the privacy notice.
 
 ---

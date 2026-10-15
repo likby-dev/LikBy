@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define logging standards, metrics collection, distributed tracing, health check protocols, and operational alerting thresholds for Tikible.
+Define logging standards, metrics collection, distributed tracing, health check protocols, and operational alerting thresholds for LikBy.
 
 ## Scope
 
@@ -14,7 +14,7 @@ Covers runtime diagnostics, structured JSON logging, privacy-safe sanitization, 
 
 ```mermaid
 graph LR
-    subgraph Tikible Core
+    subgraph LikBy Core
         App[FastAPI / aiogram]
         Logger[Structlog Logger]
         Metrics[Prometheus Registry]
@@ -52,7 +52,7 @@ Logs are emitted to `stdout` in machine-parseable JSON format using `structlog`.
 - **HASH** or truncate Telegram user IDs in debug logs if required by privacy policy.
 
 ```python
-# src/tikible/observability/logging.py
+# src/likby/observability/logging.py
 import logging
 import structlog
 from typing import Any, Dict
@@ -101,7 +101,7 @@ Every log event contains contextual metadata:
 
 ## Health Check Protocols
 
-Tikible provides standard RFC-compliant health endpoints in `tikible/api/routes/health.py`:
+LikBy provides standard RFC-compliant health endpoints in `likby/api/routes/health.py`:
 
 ### 1. Liveness Probe (`GET /health/live`)
 Returns HTTP 200 as long as the Uvicorn worker process is alive.
@@ -151,17 +151,17 @@ async def readiness_check(
 
 ## Prometheus Key Metrics
 
-Tikible exposes Prometheus metrics at `GET /metrics` protected by an internal bearer token:
+LikBy exposes Prometheus metrics at `GET /metrics` protected by an internal bearer token:
 
 | Metric Name | Type | Description |
 |---|---|---|
-| `tikible_http_requests_total` | Counter | Total incoming webhook requests labeled by `status_code` |
-| `tikible_http_request_duration_seconds` | Histogram | Latency distribution of webhook handling |
-| `tikible_active_chat_sessions` | Gauge | Number of active two-way chat sessions |
-| `tikible_matchmaking_queue_size` | Gauge | Number of tickets waiting in matchmaking queue |
-| `tikible_messages_relayed_total` | Counter | Cumulative count of relayed text messages |
-| `tikible_games_active` | Gauge | Currently active Tic-Tac-Toe matches |
-| `tikible_reports_submitted_total` | Counter | Cumulative user moderation reports filed |
+| `likby_http_requests_total` | Counter | Total incoming webhook requests labeled by `status_code` |
+| `likby_http_request_duration_seconds` | Histogram | Latency distribution of webhook handling |
+| `likby_active_chat_sessions` | Gauge | Number of active two-way chat sessions |
+| `likby_matchmaking_queue_size` | Gauge | Number of tickets waiting in matchmaking queue |
+| `likby_messages_relayed_total` | Counter | Cumulative count of relayed text messages |
+| `likby_games_active` | Gauge | Currently active Tic-Tac-Toe matches |
+| `likby_reports_submitted_total` | Counter | Cumulative user moderation reports filed |
 
 ---
 

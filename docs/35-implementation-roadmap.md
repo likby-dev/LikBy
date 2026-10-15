@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the dependency-ordered engineering work breakdown structure (WBS), implementation phases, milestones, and deliverable validation gates for building Tikible.
+Define the dependency-ordered engineering work breakdown structure (WBS), implementation phases, milestones, and deliverable validation gates for building LikBy.
 
 ## Scope
 
@@ -46,7 +46,7 @@ graph TD
 - [ ] Implement pure unit tests achieving ≥ 95% coverage for domain packages.
 
 ### Phase 2: Storage Abstraction & SQLite Adapter
-- [ ] Define generic repository interfaces in `tikible.domain.repositories`.
+- [ ] Define generic repository interfaces in `likby.domain.repositories`.
 - [ ] Implement SQLite adapter using `aiosqlite` with WAL mode and foreign key pragmas.
 - [ ] Implement atomic migration system and schema initialization scripts.
 - [ ] Write integration test suite verifying transactions, constraints, and busy timeout behavior.

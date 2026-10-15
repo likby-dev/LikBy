@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the typed configuration management architecture, comprehensive environment variable inventory, secret handling standards, and rotation procedures for Tikible.
+Define the typed configuration management architecture, comprehensive environment variable inventory, secret handling standards, and rotation procedures for LikBy.
 
 ## Scope
 
@@ -12,10 +12,10 @@ Covers runtime settings, validation rules, local development `.env` management, 
 
 ## Configuration Architecture (`pydantic-settings`)
 
-Tikible enforces strict, fail-fast configuration parsing at application boot using `pydantic-settings`. If any required secret is missing or malformed, the process terminates immediately with an explicit error.
+LikBy enforces strict, fail-fast configuration parsing at application boot using `pydantic-settings`. If any required secret is missing or malformed, the process terminates immediately with an explicit error.
 
 ```python
-# src/tikible/config.py
+# src/likby/config.py
 from typing import Literal, Optional
 from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -47,7 +47,7 @@ class Settings(BaseSettings):
 
     # Database Configuration
     database_backend: Literal["sqlite", "postgres", "firestore"] = "sqlite"
-    database_url: str = "sqlite+aiosqlite:////data/tikible.db"
+    database_url: str = "sqlite+aiosqlite:////data/likby.db"
     database_direct_url: Optional[str] = None
     db_pool_min_size: int = 2
     db_pool_max_size: int = 10

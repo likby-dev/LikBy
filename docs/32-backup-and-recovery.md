@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the data protection strategy, backup automation pipelines, Recovery Point Objectives (RPO), Recovery Time Objectives (RTO), and disaster recovery restoration procedures for Tikible.
+Define the data protection strategy, backup automation pipelines, Recovery Point Objectives (RPO), Recovery Time Objectives (RTO), and disaster recovery restoration procedures for LikBy.
 
 ## Scope
 
@@ -18,7 +18,7 @@ Covers both the MVP SQLite persistence tier and the target Supabase PostgreSQL p
 | **RTO (Recovery Time Objective)** | Maximum acceptable downtime to restore | **≤ 30 minutes** | **≤ 15 minutes** |
 
 > [!NOTE]
-> Because Tikible stores **zero chat messages**, disaster recovery restores user profiles, blocklists, and moderation history. Active chat sessions and matchmaking tickets are ephemeral and are naturally recreated by users reconnecting.
+> Because LikBy stores **zero chat messages**, disaster recovery restores user profiles, blocklists, and moderation history. Active chat sessions and matchmaking tickets are ephemeral and are naturally recreated by users reconnecting.
 
 ---
 
@@ -67,14 +67,14 @@ import shutil
 from datetime import datetime
 import boto3
 
-DB_PATH = os.getenv("SQLITE_PATH", "/data/tikible.db")
+DB_PATH = os.getenv("SQLITE_PATH", "/data/likby.db")
 BACKUP_DIR = "/backup/snapshots"
-S3_BUCKET = os.getenv("BACKUP_S3_BUCKET", "tikible-backups")
+S3_BUCKET = os.getenv("BACKUP_S3_BUCKET", "likby-backups")
 
 def perform_backup():
     os.makedirs(BACKUP_DIR, exist_ok=True)
     timestamp = datetime.utcnow().strftime("%Y%m%d_%H%M%S")
-    raw_snapshot = os.path.join(BACKUP_DIR, f"tikible_{timestamp}.db")
+    raw_snapshot = os.path.join(BACKUP_DIR, f"likby_{timestamp}.db")
     compressed_file = f"{raw_snapshot}.gz"
 
     print(f"[*] Starting online SQLite snapshot: {DB_PATH} -> {raw_snapshot}")
@@ -124,7 +124,7 @@ In the event of filesystem corruption or accidental deletion:
    ```
 2. **Download Target Backup Snapshot**:
    ```bash
-   aws s3 cp s3://tikible-backups/sqlite/tikible_20261015_120000.db.gz /tmp/backup.db.gz
+   aws s3 cp s3://likby-backups/sqlite/likby_20261015_120000.db.gz /tmp/backup.db.gz
    gunzip /tmp/backup.db.gz
    ```
 3. **Verify Integrity of Recovered File**:
@@ -134,8 +134,8 @@ In the event of filesystem corruption or accidental deletion:
    ```
 4. **Replace Production Database File**:
    ```bash
-   mv /tmp/backup.db /data/tikible.db
-   chmod 600 /data/tikible.db
+   mv /tmp/backup.db /data/likby.db
+   chmod 600 /data/likby.db
    ```
 5. **Restart Service & Verify Health**:
    ```bash

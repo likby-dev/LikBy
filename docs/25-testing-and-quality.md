@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the comprehensive testing strategy, quality gates, test hierarchy, mocking guidelines, and automated verification procedures for Tikible.
+Define the comprehensive testing strategy, quality gates, test hierarchy, mocking guidelines, and automated verification procedures for LikBy.
 
 ## Scope
 
@@ -26,10 +26,10 @@ Covers unit, integration, contract, security, load, and end-to-end testing acros
 
 | Test Layer | Target Coverage | Enforcement | Scope |
 |---|---|---|---|
-| **Domain Logic (`tikible.domain`)** | **≥ 95%** | Hard CI Gate | Pure business logic, state machines, matching engine, game rules |
-| **Application Services (`tikible.services`)** | **≥ 90%** | Hard CI Gate | Session lifecycle, user coordination, rate limiting |
-| **Repositories (`tikible.repositories`)** | **≥ 85%** | Hard CI Gate | SQLite & PostgreSQL query execution, schema constraints |
-| **Telegram Adapter (`tikible.telegram`)** | **≥ 80%** | Hard CI Gate | Handler routing, keyboard generation, update parsing |
+| **Domain Logic (`likby.domain`)** | **≥ 95%** | Hard CI Gate | Pure business logic, state machines, matching engine, game rules |
+| **Application Services (`likby.services`)** | **≥ 90%** | Hard CI Gate | Session lifecycle, user coordination, rate limiting |
+| **Repositories (`likby.repositories`)** | **≥ 85%** | Hard CI Gate | SQLite & PostgreSQL query execution, schema constraints |
+| **Telegram Adapter (`likby.telegram`)** | **≥ 80%** | Hard CI Gate | Handler routing, keyboard generation, update parsing |
 | **Overall Project** | **≥ 88%** | Hard CI Gate | Entire codebase |
 
 ---
@@ -48,7 +48,7 @@ Covers unit, integration, contract, security, load, and end-to-end testing acros
 asyncio_mode = "auto"
 testpaths = ["tests"]
 python_files = ["test_*.py"]
-addopts = "--strict-markers --cov=src/tikible --cov-report=term-missing --cov-fail-under=85"
+addopts = "--strict-markers --cov=src/likby --cov-report=term-missing --cov-fail-under=85"
 
 [tool.mypy]
 strict = true
@@ -69,9 +69,9 @@ import aiosqlite
 from typing import AsyncGenerator
 from unittest.mock import AsyncMock
 from aiogram import Bot
-from tikible.domain.entities.user import User, UserState, UserStatus
-from tikible.domain.entities.profile import Profile
-from tikible.repositories.sqlite.database import init_sqlite_schema
+from likby.domain.entities.user import User, UserState, UserStatus
+from likby.domain.entities.profile import Profile
+from likby.repositories.sqlite.database import init_sqlite_schema
 
 @pytest.fixture
 async def sqlite_db() -> AsyncGenerator[aiosqlite.Connection, None]:
@@ -127,7 +127,7 @@ Verifies compatibility calculations, zero-division boundaries, and reciprocal pr
 ```python
 # tests/unit/test_matching_engine.py
 import pytest
-from tikible.domain.matching.scorer import calculate_match_score
+from likby.domain.matching.scorer import calculate_match_score
 
 def test_reciprocal_gender_mismatch_yields_zero():
     # User A wants FEMALE only; User B is MALE
@@ -168,7 +168,7 @@ Guarantees by architectural design that message payloads cannot leak to persiste
 ```python
 # tests/integration/test_privacy_guarantees.py
 import pytest
-from tikible.services.chat_service import ChatRelayService
+from likby.services.chat_service import ChatRelayService
 
 async def test_relayed_messages_do_not_persist_content(sqlite_db, mock_bot):
     service = ChatRelayService(db=sqlite_db, bot=mock_bot)
@@ -201,7 +201,7 @@ Verifies invalid moves, out-of-turn attempts, and winning conditions for Tic-Tac
 ```python
 # tests/unit/test_tictactoe_engine.py
 import pytest
-from tikible.games.tictactoe import TicTacToeGame, InvalidMoveError, NotYourTurnError
+from likby.games.tictactoe import TicTacToeGame, InvalidMoveError, NotYourTurnError
 
 def test_out_of_turn_move_rejected():
     game = TicTacToeGame.create(player_x="usr_001", player_o="usr_002")

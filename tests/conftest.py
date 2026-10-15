@@ -1,14 +1,14 @@
 """
 tests/conftest.py
-Global pytest fixtures and test doubles for Tikible test suites.
+Global pytest fixtures and test doubles for LikBy test suites.
 """
 
 import pytest
-from tikible.domain.entities.user import User
-from tikible.domain.entities.profile import Profile
-from tikible.domain.entities.match_ticket import MatchTicket
-from tikible.domain.entities.chat_session import ChatSession
-from tikible.domain.enums import Gender, GenderPreference, UserState, UserStatus
+from likby.domain.entities.user import User
+from likby.domain.entities.profile import Profile
+from likby.domain.entities.match_ticket import MatchTicket
+from likby.domain.entities.chat_session import ChatSession
+from likby.domain.enums import Gender, GenderPreference, UserState, UserStatus
 
 
 @pytest.fixture

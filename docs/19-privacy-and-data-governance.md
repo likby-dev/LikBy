@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define data classification, retention policies, deletion procedures, and privacy controls for all data handled by Tikible.
+Define data classification, retention policies, deletion procedures, and privacy controls for all data handled by LikBy.
 
 ## Scope
 

@@ -65,7 +65,7 @@ stateDiagram-v2
     WELCOME --> AGE_CHECK: Show welcome + privacy
     AGE_CHECK --> AGE_DECLINED: "No, I'm under 18"
     AGE_CHECK --> NAME_INPUT: "Yes, I'm 18+"
-    AGE_DECLINED --> [*]: "Sorry, Tikible is for adults only."
+    AGE_DECLINED --> [*]: "Sorry, LikBy is for adults only."
     NAME_INPUT --> INTERESTS: Display name submitted
     INTERESTS --> PREFS: Interests selected
     PREFS --> COMPLETE: Preferences set
@@ -149,9 +149,9 @@ Partner wants to play Tic-tac-toe!
 
 | Scenario | Message |
 |---|---|
-| Welcome (new user) | "👋 Welcome to Tikible!\n\nTikible connects you with anonymous chat partners. Your identity is never shared.\n\nBefore we start, please review our privacy notice:" |
-| Age check | "To use Tikible, you must be 18 or older. Please confirm:" |
-| Age declined | "Tikible is designed for adults aged 18 and above. We can't create an account for you at this time." |
+| Welcome (new user) | "👋 Welcome to LikBy!\n\nLikBy connects you with anonymous chat partners. Your identity is never shared.\n\nBefore we start, please review our privacy notice:" |
+| Age check | "To use LikBy, you must be 18 or older. Please confirm:" |
+| Age declined | "LikBy is designed for adults aged 18 and above. We can't create an account for you at this time." |
 | Profile prompt | "Let's set up your profile! Choose a display name (2–30 characters):" |
 | Queued | "🔍 Looking for a match...\nThis may take a moment. We'll notify you when someone is found." |
 | Matched | "🎉 You're connected with a new partner!\n\n{icebreaker}\n\nType a message to chat. Use /next for a new partner or /stop to end." |
@@ -160,7 +160,7 @@ Partner wants to play Tic-tac-toe!
 | Already queued | "You're already waiting for a match. Hang tight! ⏳" |
 | Rate limited | "You're sending messages too quickly. Please wait a moment." |
 | Block confirmed | "User blocked. You won't be matched with them again." |
-| Report submitted | "Report submitted. Thank you for helping keep Tikible safe." |
+| Report submitted | "Report submitted. Thank you for helping keep LikBy safe." |
 | Account deleted | "Your account and all data have been permanently deleted. Goodbye! 👋" |
 | Error (generic) | "Something went wrong. Please try again in a moment." |
 

@@ -5,8 +5,8 @@ Unit tests for Profile entity, validation, and interest normalization.
 
 import pytest
 from pydantic import ValidationError
-from tikible.domain.entities.profile import Profile
-from tikible.domain.enums import Gender, GenderPreference
+from likby.domain.entities.profile import Profile
+from likby.domain.enums import Gender, GenderPreference
 
 
 def test_profile_creation_and_normalization():

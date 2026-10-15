@@ -5,12 +5,12 @@ Integration tests for Unique ID database persistence, case-insensitive retrieval
 
 import pytest
 import aiosqlite
-from tikible.domain.entities.user import User
-from tikible.domain.entities.profile import Profile
-from tikible.domain.enums import Gender, GenderPreference
-from tikible.repositories.sqlite.database import SQLITE_SCHEMA_DDL
-from tikible.repositories.sqlite.user_repository import SqliteUserRepository
-from tikible.repositories.sqlite.profile_repository import SqliteProfileRepository
+from likby.domain.entities.user import User
+from likby.domain.entities.profile import Profile
+from likby.domain.enums import Gender, GenderPreference
+from likby.repositories.sqlite.database import SQLITE_SCHEMA_DDL
+from likby.repositories.sqlite.user_repository import SqliteUserRepository
+from likby.repositories.sqlite.profile_repository import SqliteProfileRepository
 
 
 @pytest.fixture

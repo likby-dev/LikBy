@@ -5,8 +5,8 @@ Unit tests for ChatSession entity.
 
 import pytest
 from pydantic import ValidationError
-from tikible.domain.entities.chat_session import ChatSession
-from tikible.domain.enums import SessionStatus, TerminationReason
+from likby.domain.entities.chat_session import ChatSession
+from likby.domain.enums import SessionStatus, TerminationReason
 
 
 def test_chat_session_partner_resolution(sample_chat_session: ChatSession):

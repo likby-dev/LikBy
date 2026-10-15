@@ -5,7 +5,7 @@ Integration tests for FastAPI health check and webhook endpoints.
 
 import pytest
 from starlette.testclient import TestClient
-from tikible.main import app
+from likby.main import app
 
 
 def test_health_live():

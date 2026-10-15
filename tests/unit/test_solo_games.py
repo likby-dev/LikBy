@@ -3,9 +3,9 @@ tests/unit/test_solo_games.py
 Unit tests for solo games: Trivia Blitz, Gem Hunter, and Rock Paper Scissors.
 """
 
-from tikible.games.solo.gem_hunter import GemHunterGame
-from tikible.games.solo.rps import RPSChoice, play_rps
-from tikible.games.solo.trivia import TRIVIA_QUESTIONS, get_random_question
+from likby.games.solo.gem_hunter import GemHunterGame
+from likby.games.solo.rps import RPSChoice, play_rps
+from likby.games.solo.trivia import TRIVIA_QUESTIONS, get_random_question
 
 
 def test_trivia_question_selection():

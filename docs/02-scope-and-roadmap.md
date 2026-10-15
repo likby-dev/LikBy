@@ -14,7 +14,7 @@ This roadmap covers the journey from architecture documentation to a production-
 
 ```mermaid
 gantt
-    title Tikible Implementation Phases
+    title LikBy Implementation Phases
     dateFormat YYYY-MM-DD
     axisFormat %b %Y
 

@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the external systems, actors, and boundaries that Tikible interacts with. Establish what is inside and outside the system boundary.
+Define the external systems, actors, and boundaries that LikBy interacts with. Establish what is inside and outside the system boundary.
 
 ## Scope
 
@@ -14,23 +14,23 @@ Covers all external dependencies for the current MVP (Telegram bot) and identifi
 
 ```mermaid
 C4Context
-    title Tikible System Context
+    title LikBy System Context
 
     Person(user, "User", "Adult 18+ seeking anonymous chat")
     Person(admin, "Admin", "Bot operator / moderator")
 
-    System(tikible, "Tikible", "Privacy-first anonymous matching and chat platform")
+    System(likby, "LikBy", "Privacy-first anonymous matching and chat platform")
 
     System_Ext(telegram, "Telegram", "Messaging platform (Bot API)")
     System_Ext(ai_provider, "AI Provider", "Optional LLM API (e.g., Gemini)")
     System_Ext(render, "Render", "Hosting platform")
 
     Rel(user, telegram, "Sends messages, taps buttons")
-    Rel(telegram, tikible, "Webhook: delivers updates")
-    Rel(tikible, telegram, "Bot API: sends messages, keyboards")
-    Rel(admin, tikible, "Admin commands via Telegram")
-    Rel(tikible, ai_provider, "Optional: icebreakers, suggestions")
-    Rel(tikible, render, "Deployed on")
+    Rel(telegram, likby, "Webhook: delivers updates")
+    Rel(likby, telegram, "Bot API: sends messages, keyboards")
+    Rel(admin, likby, "Admin commands via Telegram")
+    Rel(likby, ai_provider, "Optional: icebreakers, suggestions")
+    Rel(likby, render, "Deployed on")
 ```
 
 ---
@@ -74,7 +74,7 @@ C4Context
 
 ### Outside the System Boundary
 
-| Component | Owner | What Tikible Controls |
+| Component | Owner | What LikBy Controls |
 |---|---|---|
 | Telegram Platform | Telegram | Nothing — Telegram processes messages, stores user accounts |
 | User's Device | User | Nothing — screenshots, screen recording possible |

@@ -6,7 +6,7 @@ Define explicit boundaries, contracts, and dependency rules between internal mod
 
 ## Scope
 
-Covers all modules in the `src/tikible/` package.
+Covers all modules in the `src/likby/` package.
 
 ---
 
@@ -44,27 +44,27 @@ repositories/interfaces ← repositories/sqlite/
 **Violation example** (FORBIDDEN):
 ```python
 # In domain/matching.py — WRONG
-from tikible.services.user_service import UserService  # ❌ Domain importing service
+from likby.services.user_service import UserService  # ❌ Domain importing service
 ```
 
 ### Rule 2: Telegram adapter never accesses storage
 
 ```python
 # In telegram/handlers/match.py — WRONG
-from tikible.repositories.sqlite.user_repo import SQLiteUserRepo  # ❌
+from likby.repositories.sqlite.user_repo import SQLiteUserRepo  # ❌
 
 # CORRECT
-from tikible.services.matching_service import MatchingService  # ✅
+from likby.services.matching_service import MatchingService  # ✅
 ```
 
 ### Rule 3: Services use repository interfaces, not implementations
 
 ```python
 # In services/user_service.py — WRONG
-from tikible.repositories.sqlite.user_repo import SQLiteUserRepo  # ❌
+from likby.repositories.sqlite.user_repo import SQLiteUserRepo  # ❌
 
 # CORRECT
-from tikible.repositories.interfaces import UserRepository  # ✅
+from likby.repositories.interfaces import UserRepository  # ✅
 ```
 
 ### Rule 4: Domain has no framework dependencies
@@ -140,7 +140,7 @@ Services call domain functions directly. Domain functions are pure or near-pure,
 
 ```python
 # In services/matching_service.py
-from tikible.domain.matching import find_best_match, calculate_score
+from likby.domain.matching import find_best_match, calculate_score
 
 async def find_match(self, user: User) -> MatchResult:
     candidates = await self.queue_repo.find_candidates(user, blocked)

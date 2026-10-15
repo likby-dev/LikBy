@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the conversational experience, persona, message copy guidelines, keyboard layouts, and interaction patterns for Tikible across Telegram bot interactions and future Mini App interfaces.
+Define the conversational experience, persona, message copy guidelines, keyboard layouts, and interaction patterns for LikBy across Telegram bot interactions and future Mini App interfaces.
 
 ## Scope
 
@@ -12,13 +12,13 @@ Covers the voice and tone, exact copy templates, visual formatting, inline/reply
 
 ## Brand Persona & Voice
 
-Tikible's voice is:
+LikBy's voice is:
 - **Calm & Respectful**: Welcoming and non-judgmental. Avoids hyper-energetic marketing hype or corporate sterility.
 - **Privacy-First & Transparent**: Explains *why* certain inputs are asked (e.g., age verification) and affirms data ephemeral nature.
 - **Concise & Direct**: Mobile screen space in Telegram is limited. Messages should be skimmable in under 3 seconds.
 - **Safety-Centric**: Clear pathways to report, block, or exit any interaction instantly.
 
-| Dimension | Tikible Approach | Anti-Pattern to Avoid |
+| Dimension | LikBy Approach | Anti-Pattern to Avoid |
 |---|---|---|
 | **Tone** | Friendly, polite, discreet | Boisterous, teasing, patronizing |
 | **Length** | 1 to 3 short paragraphs max | Massive blocks of wall-of-text |
@@ -29,7 +29,7 @@ Tikible's voice is:
 
 ## Message Formatting Conventions
 
-Tikible standardizes on Telegram **HTML parsing mode** rather than MarkdownV2 to eliminate brittle regex escaping bugs with punctuation marks (`.`, `!`, `-`, `(`).
+LikBy standardizes on Telegram **HTML parsing mode** rather than MarkdownV2 to eliminate brittle regex escaping bugs with punctuation marks (`.`, `!`, `-`, `(`).
 
 ### Formatting Rules
 - **Bold (`<b>`)**: Used sparingly for key headings, status words, and calls to action.
@@ -119,9 +119,9 @@ Active Chat Reply Keyboard:
 
 #### Step 1: Welcome & Age Gate
 ```html
-👋 <b>Welcome to Tikible.</b>
+👋 <b>Welcome to LikBy.</b>
 
-Tikible connects you with thoughtful people for <b>100% anonymous, real-time conversations</b>.
+LikBy connects you with thoughtful people for <b>100% anonymous, real-time conversations</b>.
 
 🔒 <b>Our core promise:</b>
 • We never reveal your Telegram username or phone number.
@@ -204,4 +204,4 @@ Please select the reason for reporting this user:
 
 1. **Screen Reader Optimization**: Emoji icons are consistently accompanied by textual descriptors (e.g., `[ ❌ Cancel ]` rather than just `[ ❌ ]`).
 2. **Color Blindness**: Tic-tac-toe games use distinct glyphs (`❌` and `⭕`) rather than relying on colored circles.
-3. **i18n Architecture**: All user-facing strings are stored in `src/tikible/telegram/locales/{lang}.json` with key-based lookup (`get_text("onboarding.welcome", lang="es")`).
+3. **i18n Architecture**: All user-facing strings are stored in `src/likby/telegram/locales/{lang}.json` with key-based lookup (`get_text("onboarding.welcome", lang="es")`).

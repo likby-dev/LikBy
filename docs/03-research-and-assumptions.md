@@ -6,7 +6,7 @@ Document verified facts, research sources, assumptions, and open questions that 
 
 ## Scope
 
-Covers all external dependencies, platform constraints, and technical capabilities relevant to Tikible's architecture.
+Covers all external dependencies, platform constraints, and technical capabilities relevant to LikBy's architecture.
 
 ---
 

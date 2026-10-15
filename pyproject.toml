@@ -3,14 +3,14 @@ requires = ["setuptools>=61.0", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "tikible"
+name = "likby"
 version = "0.1.0"
 description = "Privacy-first anonymous social matching and real-time chat platform starting as a Telegram bot."
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Proprietary" }
 authors = [
-    { name = "Tikible Team" }
+    { name = "LikBy Team" }
 ]
 dependencies = [
     "aiogram>=3.4.0,<4.0.0",

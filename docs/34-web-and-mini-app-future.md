@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the future architectural roadmap for expanding Tikible from a pure Telegram bot into Telegram Mini Apps (TMA) and an independent standalone web platform.
+Define the future architectural roadmap for expanding LikBy from a pure Telegram bot into Telegram Mini Apps (TMA) and an independent standalone web platform.
 
 ## Scope
 
@@ -51,7 +51,7 @@ Telegram Mini Apps run inside an in-app WebView within Telegram mobile and deskt
 When the Mini App opens, Telegram provides an `initData` query string. The backend verifies that the data was signed by Telegram using the bot token secret:
 
 ```python
-# src/tikible/security/telegram_webapp_auth.py
+# src/likby/security/telegram_webapp_auth.py
 import hmac
 import hashlib
 from urllib.parse import parse_qsl
@@ -130,7 +130,7 @@ Expanding outside Telegram removes dependency on Telegram servers and opens glob
 
 ### 2. Cross-Client Interoperability
 
-Tikible's clean domain layer decouples messaging transport from core routing. 
+LikBy's clean domain layer decouples messaging transport from core routing. 
 - A user on the **Telegram Bot** can chat seamlessly with a user on the **Web Client**.
 - The `ChatRelayService` determines the transport channel for each participant:
   - If `recipient.client_type == 'telegram'`: calls Telegram Bot API `sendMessage`.

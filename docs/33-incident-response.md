@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the incident severity classifications, triage procedures, operational kill switches, escalation paths, and postmortem guidelines for Tikible.
+Define the incident severity classifications, triage procedures, operational kill switches, escalation paths, and postmortem guidelines for LikBy.
 
 ## Scope
 
@@ -23,10 +23,10 @@ Covers security breaches, system outages, abuse outbreaks, platform-level Telegr
 
 ## Operational Kill Switches
 
-Tikible implements runtime circuit-breaker flags stored in memory or fast environment config to isolate subsystems without taking down the entire service:
+LikBy implements runtime circuit-breaker flags stored in memory or fast environment config to isolate subsystems without taking down the entire service:
 
 ```python
-# src/tikible/config.py / app state circuit breakers
+# src/likby/config.py / app state circuit breakers
 class FeatureFlags:
     GLOBAL_BOT_ENABLED: bool = True       # Master switch: returns maintenance message to all updates
     MATCHMAKING_ENABLED: bool = True     # Pauses /find queue; active chats continue unaffected

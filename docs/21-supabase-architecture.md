@@ -6,7 +6,7 @@ Define the target production database architecture using Supabase (managed Postg
 
 ## Scope
 
-Covers the primary production persistence target for Tikible beyond the local SQLite MVP.
+Covers the primary production persistence target for LikBy beyond the local SQLite MVP.
 
 ---
 
@@ -16,7 +16,7 @@ Supabase provides managed PostgreSQL 15+, automated backups, built-in connection
 
 ### Alignment with Clean Architecture
 
-Tikible domain logic never references Supabase or PostgreSQL directly. All database access occurs through the repository interfaces defined in [Storage & Persistence](20-storage-and-persistence.md):
+LikBy domain logic never references Supabase or PostgreSQL directly. All database access occurs through the repository interfaces defined in [Storage & Persistence](20-storage-and-persistence.md):
 - `UserRepository`
 - `ProfileRepository`
 - `MatchTicketRepository`
@@ -25,7 +25,7 @@ Tikible domain logic never references Supabase or PostgreSQL directly. All datab
 - `ReportRepository`
 - `BlockRepository`
 
-The `tikible.repositories.postgres` package implements these interfaces using `asyncpg` and SQLAlchemy Core (or direct SQL queries) configured for Supabase.
+The `likby.repositories.postgres` package implements these interfaces using `asyncpg` and SQLAlchemy Core (or direct SQL queries) configured for Supabase.
 
 ```mermaid
 graph TD
@@ -236,10 +236,10 @@ Supabase provides two ports for PostgreSQL connections:
 ### Asyncpg Configuration
 
 ```python
-# src/tikible/repositories/postgres/pool.py
+# src/likby/repositories/postgres/pool.py
 from typing import Optional
 import asyncpg
-from tikible.config import Settings
+from likby.config import Settings
 
 class PostgresPoolManager:
     """Manages asyncpg connection pool to Supabase."""
@@ -279,7 +279,7 @@ class PostgresPoolManager:
 
 ## Row Level Security (RLS) Policies
 
-Supabase enforces RLS at the PostgreSQL kernel level. For Tikible's backend service role, queries run with the service key (`postgres` role or `service_role`), which bypasses RLS for high-performance server-side operations.
+Supabase enforces RLS at the PostgreSQL kernel level. For LikBy's backend service role, queries run with the service key (`postgres` role or `service_role`), which bypasses RLS for high-performance server-side operations.
 
 However, if future web or Mini App clients query Supabase directly via the JavaScript/Dart SDK, RLS guarantees multi-tenant security:
 

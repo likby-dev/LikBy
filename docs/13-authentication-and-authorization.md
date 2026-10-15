@@ -18,7 +18,7 @@ Covers Telegram bot auth (MVP), future web/Mini App auth, and internal service a
 |---|---|---|
 | **Transport** | `X-Telegram-Bot-Api-Secret-Token` header | Request originates from Telegram (not a spoofed POST) |
 | **Identity** | `update.message.from_user.id` (Telegram user ID) | Which Telegram account sent the message |
-| **Internal Mapping** | `telegram_id → User.id` lookup | Maps to Tikible internal user |
+| **Internal Mapping** | `telegram_id → User.id` lookup | Maps to LikBy internal user |
 
 **Implementation:**
 

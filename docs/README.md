@@ -1,6 +1,6 @@
-# Tikible Documentation Master Catalog
+# LikBy Documentation Master Catalog
 
-This directory contains the complete, implementation-ready architecture and production engineering documentation for **Tikible** — a privacy-first anonymous social matching and real-time chat platform starting as a Telegram bot.
+This directory contains the complete, implementation-ready architecture and production engineering documentation for **LikBy** — a privacy-first anonymous social matching and real-time chat platform starting as a Telegram bot.
 
 ---
 

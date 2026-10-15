@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide immediate diagnostic procedures, error code explanations, SQL inspection queries, and remediation runbooks for common development, deployment, and runtime failures in Tikible.
+Provide immediate diagnostic procedures, error code explanations, SQL inspection queries, and remediation runbooks for common development, deployment, and runtime failures in LikBy.
 
 ## Scope
 
@@ -32,7 +32,7 @@ curl -s "https://api.telegram.org/bot<BOT_TOKEN>/deleteWebhook?drop_pending_upda
 
 ### 1. `TelegramConflictError: Conflict: can't use getUpdates method while webhook is active`
 
-- **Symptom**: When running `python -m tikible.main --mode polling`, the application crashes with a conflict error.
+- **Symptom**: When running `python -m likby.main --mode polling`, the application crashes with a conflict error.
 - **Root Cause**: A webhook was previously registered for this bot token (e.g. from Render or local ngrok). Telegram does not permit long polling while a webhook is registered.
 - **Solution**: Delete the active webhook before starting polling mode:
   ```bash
@@ -40,7 +40,7 @@ curl -s "https://api.telegram.org/bot<BOT_TOKEN>/deleteWebhook?drop_pending_upda
   ```
   Or launch with the automated clear flag in dev:
   ```bash
-  python -m tikible.main --mode polling --drop-webhook
+  python -m likby.main --mode polling --drop-webhook
   ```
 
 ---
@@ -52,7 +52,7 @@ curl -s "https://api.telegram.org/bot<BOT_TOKEN>/deleteWebhook?drop_pending_upda
 - **Solution**:
   1. Verify WAL mode is enabled:
      ```bash
-     sqlite3 /data/tikible.db "PRAGMA journal_mode;"
+     sqlite3 /data/likby.db "PRAGMA journal_mode;"
      # Must return: wal
      ```
   2. Increase busy timeout to 5000ms:
@@ -87,7 +87,7 @@ curl -s "https://api.telegram.org/bot<BOT_TOKEN>/deleteWebhook?drop_pending_upda
 - **Root Cause**: Uvicorn is binding to `127.0.0.1` instead of `0.0.0.0`, or is ignoring `$PORT`.
 - **Solution**: Update the `startCommand` in `render.yaml`:
   ```bash
-  uvicorn tikible.main:app --host 0.0.0.0 --port $PORT --workers 1
+  uvicorn likby.main:app --host 0.0.0.0 --port $PORT --workers 1
   ```
 
 ---

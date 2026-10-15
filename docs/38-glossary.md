@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Provide precise, unambiguous definitions for all domain entities, architectural concepts, security primitives, and platform-specific terminology used throughout the Tikible project.
+Provide precise, unambiguous definitions for all domain entities, architectural concepts, security primitives, and platform-specific terminology used throughout the LikBy project.
 
 ---
 
@@ -92,4 +92,4 @@ The formal quality criteria that every feature and pull request must satisfy bef
 A threat modeling methodology used to evaluate system risks across six vectors: **S**poofing, **T**ampering, **R**epudiation, **I**nformation Disclosure, **D**enial of Service, and **E**levation of Privilege.
 
 ### Zero-Persistence Chat
-The foundational privacy guarantee of Tikible: private conversational message text is received into volatile application memory solely to forward to the matched partner, and is immediately discarded without ever being written to a database, log file, or disk storage.
+The foundational privacy guarantee of LikBy: private conversational message text is received into volatile application memory solely to forward to the matched partner, and is immediately discarded without ever being written to a database, log file, or disk storage.

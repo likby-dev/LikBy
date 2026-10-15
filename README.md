@@ -1,8 +1,8 @@
-# Tikible
+# LikBy
 
 **Privacy-first anonymous social matching and real-time chat platform.**
 
-Tikible helps adults discover compatible people, communicate anonymously, and build meaningful conversations through a simple, enjoyable, safe, and privacy-respecting experience.
+LikBy helps adults discover compatible people, communicate anonymously, and build meaningful conversations through a simple, enjoyable, safe, and privacy-respecting experience.
 
 > [!IMPORTANT]
 > This project is in the **architecture and documentation** phase. No production features are implemented yet. The documentation in `docs/` is the engineering source of truth.
@@ -77,9 +77,9 @@ Tikible helps adults discover compatible people, communicate anonymously, and bu
 ## Project Structure (Planned)
 
 ```
-tikible/
+likby/
 ├── src/
-│   └── tikible/
+│   └── likby/
 │       ├── __init__.py
 │       ├── main.py              # FastAPI app entry
 │       ├── config.py            # Typed settings
@@ -109,7 +109,7 @@ tikible/
 ```powershell
 # Clone the repository
 git clone <repository-url>
-cd tikible
+cd likby
 
 # Create virtual environment
 python -m venv .venv
@@ -126,7 +126,7 @@ cp .env.example .env
 pytest
 
 # Start development server (long polling mode)
-python -m tikible.main --mode polling
+python -m likby.main --mode polling
 ```
 
 ---

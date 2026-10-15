@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the continuous integration, continuous delivery, automated quality gates, branch management strategy, and release procedures for Tikible.
+Define the continuous integration, continuous delivery, automated quality gates, branch management strategy, and release procedures for LikBy.
 
 ## Scope
 
@@ -94,7 +94,7 @@ jobs:
 
       - name: Run test suite with coverage gate
         run: |
-          pytest --cov=src/tikible --cov-report=xml --cov-fail-under=85
+          pytest --cov=src/likby --cov-report=xml --cov-fail-under=85
 
       - name: Upload coverage report
         uses: codecov/codecov-action@v4
@@ -135,7 +135,7 @@ jobs:
         run: |
           echo "Waiting 45s for container initialization..."
           sleep 45
-          curl -f -s https://api.tikible.com/health/ready || (echo "Health check failed!" && exit 1)
+          curl -f -s https://api.likby.com/health/ready || (echo "Health check failed!" && exit 1)
 ```
 
 ---

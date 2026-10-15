@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the formal Definition of Done (DoD), functional acceptance criteria, and Given-When-Then behavior specifications for the Tikible MVP launch.
+Define the formal Definition of Done (DoD), functional acceptance criteria, and Given-When-Then behavior specifications for the LikBy MVP launch.
 
 ## Scope
 
@@ -42,7 +42,7 @@ Scenario: New adult user successfully completes age gate and onboarding
 Scenario: Underage user attempts registration
   Given a new user who sends "/start" to the bot
   When the user taps "[ ❌ I am under 18 ]"
-  Then the bot displays: "Tikible is strictly for adults (18+)."
+  Then the bot displays: "LikBy is strictly for adults (18+)."
   And no active profile is created
   And the user cannot enter the matchmaking queue
 ```

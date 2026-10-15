@@ -37,7 +37,7 @@ sequenceDiagram
 
     US-->>A: OnboardingResponse(show_welcome=true)
     A->>T: Send welcome message + privacy notice
-    T->>U: "Welcome to Tikible! ..."
+    T->>U: "Welcome to LikBy! ..."
     A->>T: Send age eligibility inline keyboard
     T->>U: "Are you 18 or older?" [Yes] [No]
 ```
@@ -334,7 +334,7 @@ sequenceDiagram
     A->>SS: create_report(reporter_id, reported_id, session_id, category, description)
     SS->>RR: create(Report{...})
     SS-->>A: ReportCreated
-    A->>U: "Report submitted. Thank you for helping keep Tikible safe."
+    A->>U: "Report submitted. Thank you for helping keep LikBy safe."
 ```
 
 | Aspect | Detail |

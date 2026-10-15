@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Maintain a formal historical record of critical architectural decisions, context, evaluated alternatives, and consequences for Tikible.
+Maintain a formal historical record of critical architectural decisions, context, evaluated alternatives, and consequences for LikBy.
 
 ---
 
@@ -28,7 +28,7 @@ Maintain a formal historical record of critical architectural decisions, context
 ### ADR-001: Telegram Bot as Initial Launch Platform
 
 - **Status**: DECIDED
-- **Context**: Tikible requires rapid user validation without the friction of app store downloads, native mobile installations, or custom push notification infrastructure.
+- **Context**: LikBy requires rapid user validation without the friction of app store downloads, native mobile installations, or custom push notification infrastructure.
 - **Decision**: Launch the MVP as a Telegram bot.
 - **Consequences**:
   - *Positive*: Zero installation friction for Telegram's 900M+ users; built-in notifications; cross-platform compatibility.

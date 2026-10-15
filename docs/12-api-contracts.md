@@ -188,7 +188,7 @@ Error response:
 ```python
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://tikible.app"],  # Production domain only
+    allow_origins=["https://likby.app"],  # Production domain only
     allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["Authorization", "Content-Type"],
     allow_credentials=True,
