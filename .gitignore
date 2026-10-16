@@ -41,6 +41,9 @@ venv.bak/
 *.db-wal
 *.db-shm
 likby.db*
+media_store/
+*.log
+scratch/
 
 # Testing & Coverage
 .pytest_cache/
