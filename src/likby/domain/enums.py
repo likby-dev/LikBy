@@ -58,6 +58,10 @@ class SessionStatus(str, Enum):
     ENDED = "ENDED"
 
 
+ChatSessionStatus = SessionStatus
+
+
+
 class TerminationReason(str, Enum):
     """Reason for chat session termination."""
     USER_STOPPED = "USER_STOPPED"
@@ -93,6 +97,93 @@ class ReportCategory(str, Enum):
 class ReportStatus(str, Enum):
     """Moderation report review status."""
     PENDING = "PENDING"
+    PENDING_REVIEW = "PENDING_REVIEW"
+    REVIEWING = "REVIEWING"
+    ACTIONED = "ACTIONED"
+    DISMISSED = "DISMISSED"
     RESOLVED_NO_ACTION = "RESOLVED_NO_ACTION"
     RESOLVED_WARNED = "RESOLVED_WARNED"
     RESOLVED_BANNED = "RESOLVED_BANNED"
+
+
+class MessageType(str, Enum):
+    """Content classification for chat messages."""
+    TEXT = "TEXT"
+    PHOTO = "PHOTO"
+    VIDEO = "VIDEO"
+    VOICE = "VOICE"
+    DOCUMENT = "DOCUMENT"
+    STICKER = "STICKER"
+    SYSTEM = "SYSTEM"
+
+
+class MessageDeliveryStatus(str, Enum):
+    """Durable delivery states for outbound relay."""
+    PENDING = "PENDING"
+    SENDING = "SENDING"
+    DELIVERED = "DELIVERED"
+    RETRYING = "RETRYING"
+    FAILED = "FAILED"
+    UNKNOWN = "UNKNOWN"
+
+
+class MediaUploadStatus(str, Enum):
+    """Media object archival lifecycle."""
+    PENDING = "PENDING"
+    UPLOADING = "UPLOADING"
+    ARCHIVED = "ARCHIVED"
+    FAILED = "FAILED"
+
+
+class RatingType(str, Enum):
+    """Post-session evaluation rating."""
+    LIKE = "LIKE"
+    DISLIKE = "DISLIKE"
+
+
+class KarmaSourceType(str, Enum):
+    """Source event triggering a karma ledger change."""
+    SESSION_RATING = "SESSION_RATING"
+    SESSION_LIKE = "SESSION_LIKE"
+    SESSION_DISLIKE = "SESSION_DISLIKE"
+    MODERATION_PENALTY = "MODERATION_PENALTY"
+    ADMIN_ADJUSTMENT = "ADMIN_ADJUSTMENT"
+
+
+class FriendshipStatus(str, Enum):
+    """Canonical friendship standing."""
+    ACTIVE = "ACTIVE"
+    BLOCKED = "BLOCKED"
+    REMOVED = "REMOVED"
+    PENDING_CAPACITY = "PENDING_CAPACITY"
+
+
+class ConnectionRequestStatus(str, Enum):
+    """ID search connection request lifecycle."""
+    PENDING = "PENDING"
+    ACCEPTED = "ACCEPTED"
+    REJECTED = "REJECTED"
+    WITHDRAWN = "WITHDRAWN"
+    EXPIRED = "EXPIRED"
+
+
+class PresenceStatus(str, Enum):
+    """User presence and activity visibility."""
+    ACTIVE = "ACTIVE"
+    INACTIVE = "INACTIVE"
+    HIDDEN = "HIDDEN"
+
+
+class SubscriptionTier(str, Enum):
+    """Subscription plan levels."""
+    FREE = "FREE"
+    PREMIUM = "PREMIUM"
+    HIGHER = "HIGHER"
+
+
+class OutboxJobStatus(str, Enum):
+    """Transactional outbox processing status."""
+    PENDING = "PENDING"
+    PROCESSING = "PROCESSING"
+    COMPLETED = "COMPLETED"
+    DEAD_LETTER = "DEAD_LETTER"

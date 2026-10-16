@@ -6,7 +6,7 @@ User domain entity and business lifecycle methods.
 from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel, Field
-from likby.domain.enums import UserState, UserStatus
+from likby.domain.enums import PresenceStatus, UserState, UserStatus
 
 
 class User(BaseModel):
@@ -15,6 +15,7 @@ class User(BaseModel):
     id: str = Field(..., description="Unique internal user identifier (UUID or usr_...)")
     telegram_id: int = Field(..., description="Telegram user ID")
     unique_id: Optional[str] = Field(default=None, description="User-defined permanent unique handle (immutable)")
+    presence: PresenceStatus = Field(default=PresenceStatus.ACTIVE, description="Activity status")
     state: UserState = Field(default=UserState.ONBOARDING_AGE_GATE, description="Conversational state")
     status: UserStatus = Field(default=UserStatus.ACTIVE, description="Account standing")
     age_verified: bool = Field(default=False, description="Whether 18+ gate was passed")
@@ -26,6 +27,19 @@ class User(BaseModel):
     last_active_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+    @property
+    def display_user_id(self) -> str:
+        """Stable formatted user ID (e.g. @handle or LK-10001)."""
+        if self.unique_id:
+            return f"@{self.unique_id}"
+        suffix = abs(self.telegram_id) % 90000 + 10000
+        return f"LK-{suffix}"
+
+    def apply_karma_delta(self, delta: int) -> None:
+        """Adjust karma score atomically within bounds."""
+        self.karma_score = max(0, min(500, self.karma_score + delta))
+        self.updated_at = datetime.now(timezone.utc)
 
     def set_unique_id(self, unique_id: str) -> None:
         """Set the permanent unique ID. Cannot be modified once set."""

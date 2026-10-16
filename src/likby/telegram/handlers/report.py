@@ -102,13 +102,11 @@ async def process_report(
     )
     await block_repo.save(block)
 
-    # 3. Apply penalty to reported user
-    reported_user = await user_repo.get_by_id(reported_id)
-    if reported_user:
-        reported_user.apply_report_penalty()
-        await user_repo.save(reported_user)
+    # 3. Record system events in transcript
+    await chat_relay.record_system_event(cached.session_id, "Session reported.")
+    await chat_relay.record_system_event(cached.session_id, "Report submitted for review.")
 
-    # 4. Terminate chat session
+    # 4. Terminate chat session (safeguard: no automatic karma deduction on unconfirmed report)
     await chat_relay.end_active_session(
         sender_tg_id=tg_id,
         reason=TerminationReason.USER_REPORTED,

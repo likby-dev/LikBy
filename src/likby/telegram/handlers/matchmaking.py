@@ -18,14 +18,23 @@ from likby.telegram.keyboards import (
 router = Router(name="matchmaking")
 
 
-@router.message(F.text == "🎲 Find a Match")
+from likby.services.chat_relay_service import ChatRelayService
+
+
+@router.message(F.text.in_(["🎲 Find Someone", "🎲 Find a Match"]))
 @router.message(Command("find"))
+@router.callback_query(F.data == "queue:find_new")
 async def start_search(
-    message: Message,
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
     match_service: MatchmakingService,
+    chat_relay: ChatRelayService,
 ) -> None:
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+
     if not message.from_user:
         return
 
@@ -68,6 +77,8 @@ async def start_search(
             if partner_user:
                 partner_user.transition_state(UserState.IN_CHAT)
                 await user_repo.save(partner_user)
+
+            await chat_relay.record_system_event(session.id, "Session started.")
 
             await message.bot.send_message(
                 chat_id=tg_id,

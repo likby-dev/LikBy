@@ -1,16 +1,27 @@
 """
 likby.telegram.handlers.chat
-Handlers for anonymous real-time message relaying, /stop, and /next.
+Handlers for anonymous real-time message relaying, media forwarding, /stop, /next, and transcript export.
 """
 
-from aiogram import Router, F
+from aiogram import Bot, Router, F
 from aiogram.filters import Command
-from aiogram.types import Message
-from likby.domain.enums import TerminationReason, UserState
-from likby.repositories.interfaces import ProfileRepository, UserRepository
+from aiogram.types import BufferedInputFile, CallbackQuery, Message
+from likby.domain.enums import MessageType, RatingType, TerminationReason, UserState
+from likby.repositories.interfaces import (
+    ChatSessionRepository,
+    ProfileRepository,
+    UserRepository,
+)
 from likby.services.chat_relay_service import ChatRelayService
+from likby.services.karma_service import KarmaService
 from likby.services.matchmaking_service import MatchmakingService
-from likby.telegram.keyboards import get_active_chat_keyboard, get_main_menu_keyboard
+from likby.services.social_service import SocialService
+from likby.services.transcript_service import TranscriptService
+from likby.telegram.keyboards import (
+    get_active_chat_keyboard,
+    get_main_menu_keyboard,
+    get_post_session_keyboard,
+)
 
 router = Router(name="chat")
 
@@ -31,15 +42,24 @@ async def handle_stop_chat(
         user.transition_state(UserState.MAIN_MENU)
         await user_repo.save(user)
 
+    cached = await chat_relay.get_or_warm_session(tg_id)
+    session_id = cached.session_id if cached else None
+    partner_id = (
+        (cached.user_b_id if cached.user_a_tg_id == tg_id else cached.user_a_id)
+        if cached
+        else None
+    )
+
     ended = await chat_relay.end_active_session(
         sender_tg_id=tg_id,
         reason=TerminationReason.USER_STOPPED,
     )
-    if ended:
+
+    if ended and session_id and partner_id:
         await message.answer(
-            "🛑 <b>Chat ended.</b>\nReturned to Main Menu.",
+            "🛑 <b>Chat ended.</b>\nHow was your conversation? You can rate your partner, express interest in friendship, or save the transcript.",
             parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_post_session_keyboard(session_id, partner_id),
         )
     else:
         await message.answer(
@@ -87,6 +107,7 @@ async def handle_next_chat(
         if tkt_a.user_id == user.id or tkt_b.user_id == user.id:
             user.transition_state(UserState.IN_CHAT)
             await user_repo.save(user)
+            await chat_relay.record_system_event(session.id, "Session started.")
             await message.answer(
                 "🎉 <b>Connected to a new conversation partner!</b>",
                 parse_mode="HTML",
@@ -100,13 +121,92 @@ async def handle_next_chat(
     )
 
 
+# --- Media Message Handlers ---
+
+@router.message(F.photo)
+async def handle_chat_photo(message: Message, chat_relay: ChatRelayService) -> None:
+    if not message.from_user or not message.photo:
+        return
+    highest_res = message.photo[-1]
+    relayed = await chat_relay.relay_media(
+        sender_tg_id=message.from_user.id,
+        message_type=MessageType.PHOTO,
+        file_id=highest_res.file_id,
+        caption=message.caption,
+    )
+    if not relayed:
+        await message.answer("You are not currently in an active chat.")
+
+
+@router.message(F.video)
+async def handle_chat_video(message: Message, chat_relay: ChatRelayService) -> None:
+    if not message.from_user or not message.video:
+        return
+    relayed = await chat_relay.relay_media(
+        sender_tg_id=message.from_user.id,
+        message_type=MessageType.VIDEO,
+        file_id=message.video.file_id,
+        caption=message.caption,
+        file_name=message.video.file_name,
+        mime_type=message.video.mime_type,
+    )
+    if not relayed:
+        await message.answer("You are not currently in an active chat.")
+
+
+@router.message(F.voice)
+async def handle_chat_voice(message: Message, chat_relay: ChatRelayService) -> None:
+    if not message.from_user or not message.voice:
+        return
+    relayed = await chat_relay.relay_media(
+        sender_tg_id=message.from_user.id,
+        message_type=MessageType.VOICE,
+        file_id=message.voice.file_id,
+        caption=message.caption,
+        mime_type=message.voice.mime_type,
+    )
+    if not relayed:
+        await message.answer("You are not currently in an active chat.")
+
+
+@router.message(F.document)
+async def handle_chat_document(message: Message, chat_relay: ChatRelayService) -> None:
+    if not message.from_user or not message.document:
+        return
+    relayed = await chat_relay.relay_media(
+        sender_tg_id=message.from_user.id,
+        message_type=MessageType.DOCUMENT,
+        file_id=message.document.file_id,
+        caption=message.caption,
+        file_name=message.document.file_name,
+        mime_type=message.document.mime_type,
+    )
+    if not relayed:
+        await message.answer("You are not currently in an active chat.")
+
+
+@router.message(F.sticker)
+async def handle_chat_sticker(message: Message, chat_relay: ChatRelayService) -> None:
+    if not message.from_user or not message.sticker:
+        return
+    relayed = await chat_relay.relay_media(
+        sender_tg_id=message.from_user.id,
+        message_type=MessageType.STICKER,
+        file_id=message.sticker.file_id,
+    )
+    if not relayed:
+        await message.answer("You are not currently in an active chat.")
+
+
+# --- Text Message Handler ---
+
 @router.message(F.text)
 async def handle_chat_message(
     message: Message,
     user_repo: UserRepository,
     chat_relay: ChatRelayService,
 ) -> None:
-    """Relays text messages strictly in-memory between active partners."""
+    """Relays text messages with durable persistence between active partners."""
     if not message.from_user or not message.text:
         return
 
@@ -114,13 +214,119 @@ async def handle_chat_message(
     text = message.text
 
     # Ignore system menu commands that might fall through
-    if text in ["🎲 Find a Match", "🕹 Solo Arcade", "👤 My Profile", "⚙️ Preferences", "📜 Guidelines", "❓ Help / About"]:
+    menu_buttons = [
+        "🎲 Find a Match", "🎲 Find Someone", "💬 My Chats", "💙 Who Liked Me",
+        "👥 My Friends", "🔍 Search ID", "📬 Requests", "👤 My Profile",
+        "🌟 My Karma", "💎 Subscription", "🕹 Solo Arcade", "🛡 Help & Safety",
+        "📜 Guidelines", "❓ Help / About",
+    ]
+    if text in menu_buttons:
         return
 
     relayed = await chat_relay.relay_text(sender_tg_id=tg_id, text=text)
     if not relayed:
         await message.answer(
-            "You are not currently in an active chat.\nTap <b>🎲 Find a Match</b> to connect!",
+            "You are not currently in an active chat.\nTap <b>🎲 Find Someone</b> to connect!",
             parse_mode="HTML",
             reply_markup=get_main_menu_keyboard(),
         )
+
+
+# --- Post-Session & Transcript Callbacks ---
+
+@router.callback_query(F.data.startswith("rate:"))
+async def handle_rating_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    karma_service: KarmaService,
+) -> None:
+    """Handle post-session like/dislike rating."""
+    if not callback.data or not callback.from_user:
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) < 3:
+        return
+
+    session_id, action = parts[1], parts[2]
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        await callback.answer("User profile not found.", show_alert=True)
+        return
+
+    rating_type = RatingType.LIKE if action == "like" else RatingType.DISLIKE
+    success, msg, _ = await karma_service.rate_session(
+        session_id=session_id,
+        rater_id=user.id,
+        rating_type=rating_type,
+    )
+    await callback.answer(msg, show_alert=True)
+
+
+@router.callback_query(F.data.startswith("social_like:"))
+async def handle_social_like_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    social_service: SocialService,
+) -> None:
+    """Handle post-session mutual like (friendship interest)."""
+    if not callback.data or not callback.from_user:
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) < 3:
+        return
+
+    session_id, partner_id = parts[1], parts[2]
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        await callback.answer("User profile not found.", show_alert=True)
+        return
+
+    success, msg, _ = await social_service.express_like(
+        sender_id=user.id,
+        target_id=partner_id,
+        session_id=session_id,
+    )
+    await callback.answer(msg, show_alert=True)
+
+
+@router.callback_query(F.data.startswith("transcript:export:"))
+async def handle_transcript_export_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    session_repo: ChatSessionRepository,
+    transcript_service: TranscriptService,
+    bot: Bot,
+) -> None:
+    """Export human-readable chat transcript as a .txt document."""
+    if not callback.data or not callback.from_user:
+        return
+
+    session_id = callback.data.split(":")[2]
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        await callback.answer("User not found.")
+        return
+
+    # Verify authorization (requester must be participant)
+    session = await session_repo.get_by_id(session_id)
+    if not session or (user.id != session.user_a_id and user.id != session.user_b_id):
+        await callback.answer("Unauthorized: You were not a participant in this session.", show_alert=True)
+        return
+
+    export = await transcript_service.export_transcript_bytes(session_id)
+    if not export:
+        await callback.answer("No transcript available for this session.", show_alert=True)
+        return
+
+    filename, file_bytes = export
+    doc = BufferedInputFile(file_bytes, filename=filename)
+
+    await bot.send_document(
+        chat_id=callback.from_user.id,
+        document=doc,
+        caption="📜 <b>LikBy Chat Session Transcript</b>\nSaved in human-readable plain text format.",
+        parse_mode="HTML",
+    )
+    await callback.answer("Transcript sent!")

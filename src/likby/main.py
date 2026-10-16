@@ -9,23 +9,41 @@ import contextlib
 from contextlib import asynccontextmanager
 import sys
 from typing import AsyncGenerator
+
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
 from fastapi import FastAPI, Header, HTTPException, Request, Response, status
 from fastapi.responses import JSONResponse
 import uvicorn
+
 from likby.config import Settings, get_settings
 from likby.repositories.sqlite.block_repository import SqliteBlockRepository
 from likby.repositories.sqlite.chat_session_repository import SqliteChatSessionRepository
+from likby.repositories.sqlite.connection_request_repository import SqliteConnectionRequestRepository
+from likby.repositories.sqlite.daily_usage_repository import SqliteDailyUsageRepository
 from likby.repositories.sqlite.database import init_sqlite_db
+from likby.repositories.sqlite.friendship_repository import SqliteFriendshipRepository
 from likby.repositories.sqlite.game_repository import SqliteGameRepository
+from likby.repositories.sqlite.karma_repository import SqliteKarmaRepository
+from likby.repositories.sqlite.like_repository import SqliteLikeRepository
 from likby.repositories.sqlite.match_ticket_repository import SqliteMatchTicketRepository
+from likby.repositories.sqlite.media_asset_repository import SqliteMediaAssetRepository
+from likby.repositories.sqlite.message_repository import SqliteMessageRepository
+from likby.repositories.sqlite.outbox_repository import SqliteOutboxRepository
 from likby.repositories.sqlite.profile_repository import SqliteProfileRepository
+from likby.repositories.sqlite.rating_repository import SqliteRatingRepository
 from likby.repositories.sqlite.report_repository import SqliteReportRepository
+from likby.repositories.sqlite.subscription_repository import SqliteSubscriptionRepository
 from likby.repositories.sqlite.user_repository import SqliteUserRepository
 from likby.services.chat_relay_service import ChatRelayService
+from likby.services.discovery_service import DiscoveryService
+from likby.services.karma_service import KarmaService
 from likby.services.matchmaking_service import MatchmakingService
+from likby.services.media_storage_service import LocalMediaStorageProvider, MediaService
 from likby.services.session_cache import ActiveSessionCache
+from likby.services.social_service import SocialService
+from likby.services.subscription_service import SubscriptionService
+from likby.services.transcript_service import TranscriptService
 from likby.telegram.bot import create_bot, create_dispatcher
 
 
@@ -43,7 +61,7 @@ async def matchmaker_background_worker(match_service: MatchmakingService, interv
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan managing DB, Bot, and background tasks."""
+    """Application lifespan managing DB, Bot, background tasks, and all services."""
     settings = get_settings()
 
     # 1. Initialize SQLite Database
@@ -58,15 +76,40 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     game_repo = SqliteGameRepository(conn)
     block_repo = SqliteBlockRepository(conn)
     report_repo = SqliteReportRepository(conn)
+    message_repo = SqliteMessageRepository(conn)
+    media_repo = SqliteMediaAssetRepository(conn)
+    like_repo = SqliteLikeRepository(conn)
+    friendship_repo = SqliteFriendshipRepository(conn)
+    request_repo = SqliteConnectionRequestRepository(conn)
+    rating_repo = SqliteRatingRepository(conn)
+    karma_repo = SqliteKarmaRepository(conn)
+    subscription_repo = SqliteSubscriptionRepository(conn)
+    daily_usage_repo = SqliteDailyUsageRepository(conn)
+    outbox_repo = SqliteOutboxRepository(conn)
 
     # 3. Build Services
     session_cache = ActiveSessionCache()
     bot = create_bot(settings)
+
+    media_storage = LocalMediaStorageProvider()
+    media_service = MediaService(
+        provider=media_storage,
+        media_repo=media_repo,
+    )
+    transcript_service = TranscriptService(
+        session_repo=session_repo,
+        message_repo=message_repo,
+        media_repo=media_repo,
+        user_repo=user_repo,
+    )
     chat_relay = ChatRelayService(
         bot=bot,
         session_cache=session_cache,
         session_repo=session_repo,
         user_repo=user_repo,
+        message_repo=message_repo,
+        outbox_repo=outbox_repo,
+        media_service=media_service,
     )
     match_service = MatchmakingService(
         ticket_repo=ticket_repo,
@@ -74,6 +117,30 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         block_repo=block_repo,
         user_repo=user_repo,
         session_cache=session_cache,
+    )
+    subscription_service = SubscriptionService(
+        subscription_repo=subscription_repo,
+    )
+    karma_service = KarmaService(
+        rating_repo=rating_repo,
+        karma_repo=karma_repo,
+        user_repo=user_repo,
+        session_repo=session_repo,
+    )
+    social_service = SocialService(
+        like_repo=like_repo,
+        friendship_repo=friendship_repo,
+        user_repo=user_repo,
+        block_repo=block_repo,
+        subscription_service=subscription_service,
+    )
+    discovery_service = DiscoveryService(
+        user_repo=user_repo,
+        daily_usage_repo=daily_usage_repo,
+        connection_request_repo=request_repo,
+        friendship_repo=friendship_repo,
+        block_repo=block_repo,
+        subscription_service=subscription_service,
     )
 
     # 4. Build Dispatcher
@@ -88,6 +155,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         session_cache=session_cache,
         chat_relay=chat_relay,
         match_service=match_service,
+        message_repo=message_repo,
+        media_repo=media_repo,
+        like_repo=like_repo,
+        friendship_repo=friendship_repo,
+        request_repo=request_repo,
+        rating_repo=rating_repo,
+        karma_repo=karma_repo,
+        subscription_repo=subscription_repo,
+        daily_usage_repo=daily_usage_repo,
+        outbox_repo=outbox_repo,
+        media_service=media_service,
+        transcript_service=transcript_service,
+        karma_service=karma_service,
+        social_service=social_service,
+        discovery_service=discovery_service,
+        subscription_service=subscription_service,
     )
 
     app.state.bot = bot
@@ -111,13 +194,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # Teardown
     worker_task.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await worker_task
     await conn.close()
     await bot.session.close()
 
 
 app = FastAPI(
     title="LikBy Platform API",
-    description="Privacy-first anonymous social matching platform",
+    description="Production-grade anonymous social discovery and chat platform",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -199,7 +284,7 @@ async def run_polling() -> None:
     print("🚀 Starting LikBy Bot in POLLING mode...")
     print("==================================================")
 
-    # Clean local DB
+    # Initialize SQLite DB
     conn = await init_sqlite_db(settings.database_url)
     user_repo = SqliteUserRepository(conn)
     profile_repo = SqliteProfileRepository(conn)
@@ -208,6 +293,16 @@ async def run_polling() -> None:
     game_repo = SqliteGameRepository(conn)
     block_repo = SqliteBlockRepository(conn)
     report_repo = SqliteReportRepository(conn)
+    message_repo = SqliteMessageRepository(conn)
+    media_repo = SqliteMediaAssetRepository(conn)
+    like_repo = SqliteLikeRepository(conn)
+    friendship_repo = SqliteFriendshipRepository(conn)
+    request_repo = SqliteConnectionRequestRepository(conn)
+    rating_repo = SqliteRatingRepository(conn)
+    karma_repo = SqliteKarmaRepository(conn)
+    subscription_repo = SqliteSubscriptionRepository(conn)
+    daily_usage_repo = SqliteDailyUsageRepository(conn)
+    outbox_repo = SqliteOutboxRepository(conn)
 
     session_cache = ActiveSessionCache()
     bot = create_bot(settings)
@@ -217,11 +312,25 @@ async def run_polling() -> None:
     me = await bot.get_me()
     print(f"🤖 Bot connected as @{me.username} ({me.first_name})")
 
+    media_storage = LocalMediaStorageProvider()
+    media_service = MediaService(
+        provider=media_storage,
+        media_repo=media_repo,
+    )
+    transcript_service = TranscriptService(
+        session_repo=session_repo,
+        message_repo=message_repo,
+        media_repo=media_repo,
+        user_repo=user_repo,
+    )
     chat_relay = ChatRelayService(
         bot=bot,
         session_cache=session_cache,
         session_repo=session_repo,
         user_repo=user_repo,
+        message_repo=message_repo,
+        outbox_repo=outbox_repo,
+        media_service=media_service,
     )
     match_service = MatchmakingService(
         ticket_repo=ticket_repo,
@@ -229,6 +338,30 @@ async def run_polling() -> None:
         block_repo=block_repo,
         user_repo=user_repo,
         session_cache=session_cache,
+    )
+    subscription_service = SubscriptionService(
+        subscription_repo=subscription_repo,
+    )
+    karma_service = KarmaService(
+        rating_repo=rating_repo,
+        karma_repo=karma_repo,
+        user_repo=user_repo,
+        session_repo=session_repo,
+    )
+    social_service = SocialService(
+        like_repo=like_repo,
+        friendship_repo=friendship_repo,
+        user_repo=user_repo,
+        block_repo=block_repo,
+        subscription_service=subscription_service,
+    )
+    discovery_service = DiscoveryService(
+        user_repo=user_repo,
+        daily_usage_repo=daily_usage_repo,
+        connection_request_repo=request_repo,
+        friendship_repo=friendship_repo,
+        block_repo=block_repo,
+        subscription_service=subscription_service,
     )
 
     dp = create_dispatcher(
@@ -242,12 +375,27 @@ async def run_polling() -> None:
         session_cache=session_cache,
         chat_relay=chat_relay,
         match_service=match_service,
+        message_repo=message_repo,
+        media_repo=media_repo,
+        like_repo=like_repo,
+        friendship_repo=friendship_repo,
+        request_repo=request_repo,
+        rating_repo=rating_repo,
+        karma_repo=karma_repo,
+        subscription_repo=subscription_repo,
+        daily_usage_repo=daily_usage_repo,
+        outbox_repo=outbox_repo,
+        media_service=media_service,
+        transcript_service=transcript_service,
+        karma_service=karma_service,
+        social_service=social_service,
+        discovery_service=discovery_service,
+        subscription_service=subscription_service,
     )
 
     worker_task = asyncio.create_task(matchmaker_background_worker(match_service))
 
     try:
-        # Purge stale/buffered pending updates from previous offline sessions
         await bot.delete_webhook(drop_pending_updates=True)
         print("⚡ LikBy Bot is LIVE! Open Telegram and message your bot: https://t.me/LikBy_bot")
         await dp.start_polling(bot, polling_timeout=20, drop_pending_updates=True)

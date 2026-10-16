@@ -24,3 +24,9 @@ class EditProfileStates(StatesGroup):
 class ReportStates(StatesGroup):
     """Reporting flow state machine."""
     waiting_for_reason = State()
+
+
+class SearchStates(StatesGroup):
+    """User ID search state machine."""
+    waiting_for_query = State()
+

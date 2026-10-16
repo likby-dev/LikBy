@@ -25,6 +25,11 @@ class ChatSession(BaseModel):
     ended_by_user_id: Optional[str] = None
     termination_reason: Optional[TerminationReason] = None
 
+    @property
+    def started_at(self) -> datetime:
+        """Session start timestamp alias for created_at."""
+        return self.created_at
+
     @model_validator(mode="after")
     def validate_different_users(self) -> "ChatSession":
         if self.user_a_id == self.user_b_id:

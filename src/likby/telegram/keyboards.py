@@ -75,16 +75,58 @@ def get_interests_keyboard(selected: Sequence[str]) -> InlineKeyboardMarkup:
 
 
 def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
-    """Persistent reply keyboard for Main Menu."""
+    """Persistent reply keyboard for LikBy Main Menu."""
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🎲 Find a Match")],
-            [KeyboardButton(text="🕹 Solo Arcade"), KeyboardButton(text="👤 My Profile")],
-            [KeyboardButton(text="📜 Guidelines"), KeyboardButton(text="❓ Help / About")],
+            [KeyboardButton(text="🎲 Find Someone"), KeyboardButton(text="💬 My Chats")],
+            [KeyboardButton(text="💙 Who Liked Me"), KeyboardButton(text="👥 My Friends")],
+            [KeyboardButton(text="🔍 Search ID"), KeyboardButton(text="📬 Requests")],
+            [KeyboardButton(text="👤 My Profile"), KeyboardButton(text="🌟 My Karma")],
+            [KeyboardButton(text="💎 Subscription"), KeyboardButton(text="🕹 Solo Arcade")],
+            [KeyboardButton(text="🛡 Help & Safety")],
         ],
         resize_keyboard=True,
         is_persistent=True,
     )
+
+
+def get_post_session_keyboard(session_id: str, partner_id: str) -> InlineKeyboardMarkup:
+    """Post-session evaluation and actions keyboard."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="👍 Good Chat (+1)", callback_data=f"rate:{session_id}:like"),
+                InlineKeyboardButton(text="👎 Poor (-1)", callback_data=f"rate:{session_id}:dislike"),
+            ],
+            [
+                InlineKeyboardButton(text="💙 Express Like (Friendship)", callback_data=f"social_like:{session_id}:{partner_id}"),
+            ],
+            [
+                InlineKeyboardButton(text="📜 Export Transcript (.txt)", callback_data=f"transcript:export:{session_id}"),
+            ],
+            [
+                InlineKeyboardButton(text="🎲 Find New Match", callback_data="queue:find_new"),
+            ],
+        ]
+    )
+
+
+def get_subscription_keyboard() -> InlineKeyboardMarkup:
+    """Subscription upgrade and tier options keyboard."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⭐ Upgrade to Premium", callback_data="sub:upgrade:PREMIUM"),
+            ],
+            [
+                InlineKeyboardButton(text="👑 Upgrade to Higher Tier", callback_data="sub:upgrade:HIGHER"),
+            ],
+            [
+                InlineKeyboardButton(text="🔄 Refresh Status", callback_data="sub:status"),
+            ],
+        ]
+    )
+
 
 
 def get_active_chat_keyboard() -> ReplyKeyboardMarkup:

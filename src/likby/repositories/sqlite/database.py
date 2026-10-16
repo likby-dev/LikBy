@@ -137,12 +137,157 @@ CREATE TABLE IF NOT EXISTS reports (
 
 CREATE INDEX IF NOT EXISTS idx_reports_status ON reports(status);
 CREATE INDEX IF NOT EXISTS idx_reports_reported ON reports(reported_id);
+
+-- Messages table
+CREATE TABLE IF NOT EXISTS messages (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    sender_id TEXT NOT NULL,
+    sender_display_id TEXT NOT NULL,
+    sequence INTEGER NOT NULL,
+    message_type TEXT NOT NULL DEFAULT 'TEXT',
+    text TEXT,
+    media_asset_id TEXT,
+    reply_to_message_id TEXT,
+    telegram_message_id INTEGER,
+    delivery_status TEXT NOT NULL DEFAULT 'PENDING',
+    created_at TEXT NOT NULL,
+    delivered_at TEXT,
+    UNIQUE(session_id, sequence)
+);
+
+CREATE INDEX IF NOT EXISTS idx_messages_session_seq ON messages(session_id, sequence);
+CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
+
+-- Media assets table
+CREATE TABLE IF NOT EXISTS media_assets (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    message_id TEXT NOT NULL,
+    storage_provider TEXT NOT NULL DEFAULT 'r2',
+    bucket TEXT NOT NULL,
+    object_key TEXT NOT NULL,
+    mime_type TEXT NOT NULL,
+    size_bytes INTEGER NOT NULL,
+    sha256_hash TEXT,
+    original_filename TEXT,
+    telegram_file_id TEXT,
+    upload_status TEXT NOT NULL DEFAULT 'PENDING',
+    created_at TEXT NOT NULL,
+    retention_state TEXT NOT NULL DEFAULT 'ACTIVE'
+);
+
+CREATE INDEX IF NOT EXISTS idx_media_session ON media_assets(session_id);
+
+-- Likes table
+CREATE TABLE IF NOT EXISTS likes (
+    id TEXT PRIMARY KEY,
+    sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    session_id TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1,
+    created_at TEXT NOT NULL,
+    UNIQUE(sender_id, target_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_likes_target ON likes(target_id);
+
+-- Canonical friendships table
+CREATE TABLE IF NOT EXISTS friendships (
+    id TEXT PRIMARY KEY,
+    user_a_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    user_b_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'ACTIVE',
+    source TEXT NOT NULL DEFAULT 'MUTUAL_LIKE',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(user_a_id, user_b_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_friendships_user_a ON friendships(user_a_id);
+CREATE INDEX IF NOT EXISTS idx_friendships_user_b ON friendships(user_b_id);
+
+-- Connection requests table
+CREATE TABLE IF NOT EXISTS connection_requests (
+    id TEXT PRIMARY KEY,
+    sender_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    target_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    created_at TEXT NOT NULL,
+    resolved_at TEXT
+);
+
+CREATE INDEX IF NOT EXISTS idx_requests_target ON connection_requests(target_id, status);
+
+-- Session ratings table
+CREATE TABLE IF NOT EXISTS session_ratings (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    rater_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    ratee_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    rating TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    UNIQUE(session_id, rater_id)
+);
+
+-- Karma ledger table
+CREATE TABLE IF NOT EXISTS karma_ledger (
+    id TEXT PRIMARY KEY,
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    source_type TEXT NOT NULL,
+    reference_id TEXT,
+    delta INTEGER NOT NULL,
+    idempotency_key TEXT UNIQUE NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_karma_user ON karma_ledger(user_id);
+
+-- Subscriptions table
+CREATE TABLE IF NOT EXISTS subscriptions (
+    user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    tier TEXT NOT NULL DEFAULT 'FREE',
+    max_friends INTEGER NOT NULL DEFAULT 3,
+    daily_searches_limit INTEGER NOT NULL DEFAULT 3,
+    daily_requests_limit INTEGER NOT NULL DEFAULT 5,
+    starts_at TEXT NOT NULL,
+    expires_at TEXT,
+    is_active INTEGER NOT NULL DEFAULT 1
+);
+
+-- Daily usage table
+CREATE TABLE IF NOT EXISTS daily_usage (
+    user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    usage_date TEXT NOT NULL,
+    searches_count INTEGER NOT NULL DEFAULT 0,
+    requests_count INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY(user_id, usage_date)
+);
+
+-- Outbox jobs table
+CREATE TABLE IF NOT EXISTS outbox_jobs (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    message_id TEXT NOT NULL,
+    recipient_tg_id INTEGER NOT NULL,
+    status TEXT NOT NULL DEFAULT 'PENDING',
+    attempts INTEGER NOT NULL DEFAULT 0,
+    max_attempts INTEGER NOT NULL DEFAULT 3,
+    last_error TEXT,
+    next_attempt_at TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_outbox_status_next ON outbox_jobs(status, next_attempt_at);
 """
 
 
 async def init_sqlite_db(db_path: str) -> aiosqlite.Connection:
     """Connect to SQLite and enforce WAL mode, busy timeout, and schema."""
-    clean_path = db_path.replace("sqlite+aiosqlite:///", "")
+    clean_path = db_path
+    for prefix in ("sqlite+aiosqlite:///", "sqlite:///", "sqlite://"):
+        if clean_path.startswith(prefix):
+            clean_path = clean_path[len(prefix):]
     conn = await aiosqlite.connect(clean_path)
     
     # Enable WAL mode for high read concurrency
