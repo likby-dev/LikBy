@@ -131,6 +131,13 @@ class Settings(BaseSettings):
     @field_validator("base_url")
     @classmethod
     def validate_base_url(cls, v: str) -> str:
+        import os
+        render_url = os.environ.get("RENDER_EXTERNAL_URL")
+        if render_url and ("localhost" in v or "127.0.0.1" in v):
+            return render_url.strip().rstrip("/")
+        render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        if render_host and ("localhost" in v or "127.0.0.1" in v):
+            return f"https://{render_host.strip()}".rstrip("/")
         v = v.strip().rstrip("/")
         if "://" in v:
             if not (v.startswith("http://") or v.startswith("https://")):

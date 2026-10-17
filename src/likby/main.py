@@ -403,21 +403,33 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 7. Webhook setup if in webhook mode
     if settings.bot_mode == "webhook":
-        if "localhost" in settings.base_url or "127.0.0.1" in settings.base_url:
+        effective_base_url = (
+            os.environ.get("RENDER_EXTERNAL_URL")
+            or (f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}" if os.environ.get("RENDER_EXTERNAL_HOSTNAME") else None)
+            or settings.base_url
+        ).strip().rstrip("/")
+
+        if "localhost" in effective_base_url or "127.0.0.1" in effective_base_url:
             print(
-                f"⚠️ [Warning] Webhook mode is enabled, but BASE_URL is set to '{settings.base_url}'. "
-                "Telegram requires a public HTTPS URL (e.g. https://likby.onrender.com). Skipping set_webhook."
+                f"⚠️ [Warning] Webhook mode is enabled, but base URL is '{effective_base_url}'. "
+                "Telegram requires a public HTTPS URL (e.g. https://your-service.onrender.com). Skipping set_webhook."
             )
         else:
-            webhook_url = f"{settings.base_url}/api/v1/telegram/webhook"
-            print(f"🔗 Setting Telegram webhook to {webhook_url}...")
-            await bot.set_webhook(
-                url=webhook_url,
-                secret_token=settings.webhook_secret_token.get_secret_value(),
-                allowed_updates=["message", "callback_query"],
-                drop_pending_updates=False,
-            )
-            print("✅ Telegram webhook successfully registered.")
+            if not effective_base_url.startswith("http"):
+                effective_base_url = f"https://{effective_base_url}"
+            webhook_url = f"{effective_base_url}/api/v1/telegram/webhook"
+            secret = settings.webhook_secret_token.get_secret_value()
+            print(f"🔗 Registering Telegram webhook with {webhook_url}...")
+            try:
+                await bot.set_webhook(
+                    url=webhook_url,
+                    secret_token=secret,
+                    allowed_updates=["message", "callback_query"],
+                    drop_pending_updates=False,
+                )
+                print(f"✅ Telegram webhook successfully registered at {webhook_url}")
+            except Exception as exc:
+                print(f"❌ [Telegram Webhook] Failed to register webhook: {exc}")
 
     yield
 
@@ -679,30 +691,104 @@ async def get_firebase_status() -> dict:
 
 
 
+@app.post("/webhook")
 @app.post("/api/v1/telegram/webhook")
 async def telegram_webhook(
     request: Request,
-    x_telegram_bot_api_secret_token: str = Header(None),
+    x_telegram_bot_api_secret_token: Optional[str] = Header(None),
 ) -> Response:
     settings = get_settings()
     expected_token = settings.webhook_secret_token.get_secret_value()
 
     # Verify secret token
-    if x_telegram_bot_api_secret_token != expected_token:
+    if expected_token and x_telegram_bot_api_secret_token != expected_token:
+        print(f"⚠️ [Telegram Webhook] Secret token mismatch! Header: '{x_telegram_bot_api_secret_token}', Expected: '{expected_token}'")
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid secret token",
         )
 
-    data = await request.json()
+    try:
+        data = await request.json()
+    except Exception as parse_err:
+        print(f"❌ [Telegram Webhook] Malformed JSON: {parse_err}")
+        return Response(status_code=status.HTTP_400_BAD_REQUEST)
+
+    update_id = data.get("update_id", "unknown")
+    event_type = "message" if "message" in data else ("callback_query" if "callback_query" in data else list(data.keys()))
+    print(f"📥 [Telegram Webhook] Received update_id={update_id} ({event_type})")
+
     bot: Bot = app.state.bot
     dp: Dispatcher = app.state.dp
 
-    # Non-blocking async background processing
-    update = Update.model_validate(data, context={"bot": bot})
-    asyncio.create_task(dp.feed_update(bot=bot, update=update))
+    # Non-blocking async background processing with error capture
+    async def _safe_feed_update(u_data: dict) -> None:
+        try:
+            update = Update.model_validate(u_data, context={"bot": bot})
+            await dp.feed_update(bot=bot, update=update)
+            print(f"✅ [Telegram Webhook] Completed update_id={update_id}")
+        except Exception as exc:
+            import traceback
+            traceback.print_exc()
+            print(f"❌ [Telegram Webhook] Error processing update_id={update_id}: {exc}")
 
+    asyncio.create_task(_safe_feed_update(data))
     return Response(status_code=status.HTTP_200_OK)
+
+
+@app.get("/api/v1/telegram/webhook-info")
+async def telegram_webhook_info() -> dict:
+    """Diagnostic endpoint to inspect live Telegram Bot API webhook state."""
+    bot: Optional[Bot] = getattr(app.state, "bot", None)
+    if not bot:
+        return {"error": "bot uninitialized"}
+    try:
+        info = await bot.get_webhook_info()
+        return {
+            "url": info.url,
+            "has_custom_certificate": info.has_custom_certificate,
+            "pending_update_count": info.pending_update_count,
+            "last_error_date": info.last_error_date,
+            "last_error_message": info.last_error_message,
+            "max_connections": info.max_connections,
+            "allowed_updates": info.allowed_updates,
+            "ip_address": getattr(info, "ip_address", None),
+        }
+    except Exception as exc:
+        return {"error": str(exc)}
+
+
+@app.post("/api/v1/telegram/set-webhook")
+async def force_set_webhook(url: Optional[str] = None) -> dict:
+    """Manually force Telegram webhook registration with custom or auto-detected URL."""
+    bot: Optional[Bot] = getattr(app.state, "bot", None)
+    if not bot:
+        return {"error": "bot uninitialized"}
+    settings = get_settings()
+    base = (
+        url
+        or os.environ.get("RENDER_EXTERNAL_URL")
+        or (f"https://{os.environ['RENDER_EXTERNAL_HOSTNAME']}" if os.environ.get("RENDER_EXTERNAL_HOSTNAME") else None)
+        or settings.base_url
+    ).strip().rstrip("/")
+    if not base.startswith("http"):
+        base = f"https://{base}"
+    target_url = base if "/webhook" in base else f"{base}/api/v1/telegram/webhook"
+    secret = settings.webhook_secret_token.get_secret_value()
+    try:
+        await bot.set_webhook(
+            url=target_url,
+            secret_token=secret,
+            allowed_updates=["message", "callback_query"],
+            drop_pending_updates=False,
+        )
+        return {
+            "status": "success",
+            "registered_url": target_url,
+            "secret_configured": bool(secret),
+        }
+    except Exception as exc:
+        return {"status": "error", "message": str(exc)}
 
 
 async def run_polling() -> None:
