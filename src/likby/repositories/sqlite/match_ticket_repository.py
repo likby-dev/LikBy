@@ -99,6 +99,16 @@ class SqliteMatchTicketRepository(MatchTicketRepository):
         )
         await self._conn.commit()
 
+    async def reap_expired_tickets(self, now: Optional[datetime] = None) -> int:
+        target_time = (now or datetime.now()).isoformat()
+        async with self._conn.execute(
+            "UPDATE match_tickets SET status = 'EXPIRED' WHERE status = 'WAITING' AND expires_at < ?",
+            (target_time,),
+        ) as cursor:
+            count = cursor.rowcount
+        await self._conn.commit()
+        return count
+
     def _row_to_entity(self, row: tuple) -> MatchTicket:
         return MatchTicket(
             id=row[0],

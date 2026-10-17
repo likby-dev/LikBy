@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     environment: Literal["development", "testing", "staging", "production"] = "development"
     debug: bool = False
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
+    timezone: str = "Asia/Kolkata"
 
     # Server Networking
     host: str = "0.0.0.0"
@@ -36,17 +37,69 @@ class Settings(BaseSettings):
         description="Secret token for Telegram webhook verification",
     )
     bot_mode: Literal["webhook", "polling"] = "polling"
+    telegram_mini_app_url: Optional[str] = Field(
+        default=None,
+        description="Configured Telegram Mini App WebApp URL for LikBy Play",
+    )
+    telegram_max_download_bytes: int = 20971520  # 20 MB
 
-    # Database Configuration
+    # Relational Database Configuration (Supabase PostgreSQL / SQLite)
     database_backend: Literal["sqlite", "postgres", "firestore"] = "sqlite"
     database_url: str = "sqlite+aiosqlite:///likby.db"
     database_direct_url: Optional[str] = None
     db_pool_min_size: int = 2
     db_pool_max_size: int = 10
+    supabase_url: Optional[str] = None
+    supabase_key: Optional[str] = None
+    supabase_publishable_key: Optional[str] = None
+    supabase_secret_key: Optional[SecretStr] = None
+    supabase_db_url: Optional[str] = None
+    supabase_db_sslmode: str = "require"
+    supabase_db_pool_min: int = 1
+    supabase_db_pool_max: int = 5
 
-    # Storage Configuration
+    # Firebase Cloud Firestore Configuration (Conversations & Transcripts)
+    firebase_project_id: Optional[str] = None
+    firestore_database_id: str = "(default)"
+    google_application_credentials: Optional[str] = None
+    firestore_emulator_host: Optional[str] = None
+
+    # Binary Media Storage (Cloudflare R2 / Local Fallback)
     storage_provider: Literal["local", "r2"] = "local"
     media_store_dir: str = "media_store"
+    r2_account_id: Optional[str] = None
+    r2_access_key_id: Optional[str] = None
+    r2_secret_access_key: Optional[SecretStr] = None
+    r2_bucket_name: str = "likby-media"
+    r2_endpoint_url: Optional[str] = None
+    r2_region: str = "auto"
+    r2_presigned_url_ttl_seconds: int = 300
+    r2_max_upload_bytes: int = 20971520  # 20 MB
+
+    # Durable Outbox & Cross-Service Worker Configuration
+    outbox_batch_size: int = 25
+    outbox_poll_interval_seconds: float = 2.0
+    outbox_max_attempts: int = 10
+    outbox_backoff_base_seconds: float = 2.0
+    outbox_backoff_max_seconds: float = 300.0
+    request_timeout_seconds: float = 20.0
+    shutdown_grace_seconds: float = 20.0
+
+    # Social & Entitlements Configuration
+    default_friend_limit: int = 3
+    default_daily_search_limit: int = 3
+    default_daily_request_limit: int = 5
+
+    # Security & Retention Configuration
+    transcript_retention_days: int = 365
+    media_retention_days: int = 365
+    rate_limit_enabled: bool = True
+
+    # Payment Provider Configuration
+    payment_mode: Literal["test", "live"] = "test"
+    razorpay_key_id: Optional[str] = None
+    razorpay_key_secret: Optional[SecretStr] = None
+    razorpay_webhook_secret: Optional[SecretStr] = None
 
     # AI Feature Flags & Keys (Optional)
     ai_enabled: bool = False

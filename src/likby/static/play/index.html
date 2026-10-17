@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>LikBy Play — Every connection has a game 🩵</title>
+  <link rel="stylesheet" href="/play/styles.css">
+  <!-- Telegram WebApp SDK -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+  <div class="app-container" id="app">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="brand-icon">🎮</div>
+        <div>
+          <div class="brand-title">LikBy Play</div>
+          <div class="brand-tagline">Every connection has a game.</div>
+        </div>
+      </div>
+      <div class="user-badge-wrap">
+        <span class="tier-badge" id="userTierBadge">BASE</span>
+        <button class="btn-icon" id="soundToggleBtn" title="Toggle Sound">🔊</button>
+      </div>
+    </header>
+
+    <!-- Daily Duel Allowance Card -->
+    <section class="quota-card" id="quotaCard">
+      <div class="quota-header">
+        <span class="quota-title">Daily Duel Allowance</span>
+        <span class="quota-counter" id="quotaCounterText">5 of 5 remaining</span>
+      </div>
+      <div class="quota-pills" id="quotaPills">
+        <!-- Rendered dynamically -->
+        <div class="quota-pill active"></div>
+        <div class="quota-pill active"></div>
+        <div class="quota-pill active"></div>
+        <div class="quota-pill active"></div>
+        <div class="quota-pill active"></div>
+      </div>
+      <div class="quota-footer">
+        <span id="quotaResetText">Resets at midnight (IST)</span>
+        <button class="btn-link" id="upgradePlanBtn">Get More Duels</button>
+      </div>
+    </section>
+
+    <!-- Featured Hero Banner -->
+    <section class="featured-hero">
+      <span class="featured-badge">FEATURED DUEL</span>
+      <div class="featured-title">Carrom Clash 🥇</div>
+      <div class="featured-desc">Master the board, take precise angles, and pocket the queen with silky physics!</div>
+      <button class="btn-primary" id="featuredPlayBtn">
+        <span>⚔️ Challenge Partner</span>
+      </button>
+    </section>
+
+    <!-- Quick Play Bar -->
+    <section>
+      <div class="section-title">⚡ Quick Play</div>
+      <div class="quick-bar">
+        <div class="quick-chip" data-game="reflex_rush">
+          <span>⚡</span>
+          <span>Reflex Rush</span>
+        </div>
+        <div class="quick-chip" data-game="mindmatch">
+          <span>💭</span>
+          <span>MindMatch</span>
+        </div>
+        <div class="quick-chip" data-game="brain_blitz">
+          <span>🧠</span>
+          <span>Brain Blitz</span>
+        </div>
+        <div class="quick-chip" data-game="connect_four">
+          <span>🔵</span>
+          <span>Connect Four</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- Filter Tabs -->
+    <section>
+      <div class="tab-bar">
+        <button class="tab-btn active" data-filter="all">All Games (17)</button>
+        <button class="tab-btn" data-filter="duel">Duels (11)</button>
+        <button class="tab-btn" data-filter="solo">Solo (6)</button>
+      </div>
+    </section>
+
+    <!-- Game Cards Grid -->
+    <section>
+      <div class="game-grid" id="gameGrid">
+        <!-- Injected dynamically by app.js -->
+      </div>
+    </section>
+  </div>
+
+  <!-- Game Arena Viewport (Overlay) -->
+  <div class="game-viewport" id="gameViewport">
+    <div class="viewport-nav">
+      <div class="viewport-title">
+        <span id="viewportIcon">🎮</span>
+        <span id="viewportTitle">Game Name</span>
+      </div>
+      <div style="display: flex; gap: 8px;">
+        <button class="card-btn" id="exitGameBtn">Leave Game</button>
+      </div>
+    </div>
+    <div class="viewport-body" id="viewportBody">
+      <div class="canvas-container" id="canvasContainer">
+        <!-- Interactive game render injected here -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Invite Partner Modal -->
+  <div class="modal-overlay" id="inviteModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="inviteModalTitle">Challenge Partner</h3>
+        <button class="btn-close" id="closeInviteModal">✕</button>
+      </div>
+      <p style="font-size: 13px; color: var(--likby-muted);">
+        Enter your chat partner's User ID or test partner to start an authoritative duel.
+      </p>
+      <input type="text" class="input-field" id="partnerIdInput" placeholder="Partner User ID (e.g. partner_123)" />
+      <button class="btn-primary" id="sendInviteBtn">Send Challenge</button>
+    </div>
+  </div>
+
+  <!-- Quota Limit Modal -->
+  <div class="modal-overlay" id="quotaExhaustedModal">
+    <div class="modal-box" style="text-align: center;">
+      <div style="font-size: 40px; margin-bottom: 8px;">🩵</div>
+      <h3 class="modal-title">Your next duel is waiting</h3>
+      <p style="font-size: 13px; color: var(--likby-muted); line-height: 1.5; margin: 8px 0;">
+        You've enjoyed today's duels on your current plan. Your solo games are still completely unlimited!
+      </p>
+      <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+        <button class="btn-primary" id="exploreSoloBtn">🧩 Explore Solo Games</button>
+        <button class="card-btn" id="upgradeTiersBtn">✨ Discover LikBy Spark & Premium</button>
+        <button class="btn-link" id="closeQuotaModal">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">Notification message</div>
+
+  <script src="/play/app.js"></script>
+</body>
+</html>

@@ -154,3 +154,10 @@ class SocialService:
         friendship.remove()
         await self._friendship_repo.save(friendship)
         return True, "Friendship removed."
+
+    async def can_add_friend(self, user_id: str) -> bool:
+        """Check if user has remaining friend capacity according to their subscription tier."""
+        limits = await self._subscription_service.get_plan_limits(user_id)
+        max_friends = limits.get("max_friends", 3)
+        current_friends = await self._friendship_repo.count_user_friends(user_id)
+        return current_friends < max_friends

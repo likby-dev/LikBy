@@ -3,6 +3,7 @@ likby.telegram.handlers.start
 Handlers for /start command and 18+ age verification gate.
 """
 
+from typing import Any, Optional
 import uuid
 from aiogram import Router, F
 from aiogram.filters import CommandStart
@@ -24,12 +25,21 @@ async def handle_start(
     state: FSMContext,
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
+    referral_service: Optional[Any] = None,
 ) -> None:
     if not message.from_user:
         return
 
     tg_id = message.from_user.id
     user = await user_repo.get_by_telegram_id(tg_id)
+
+    # Check for referral code in deep link (e.g. /start ref_alice)
+    ref_code = None
+    if message.text and "ref_" in message.text:
+        try:
+            ref_code = message.text.split("ref_")[1].strip().split()[0]
+        except Exception:
+            ref_code = None
 
     if user and user.age_verified and user.state != UserState.ONBOARDING_AGE_GATE:
         profile = await profile_repo.get_by_user_id(user.id)
@@ -50,6 +60,13 @@ async def handle_start(
             telegram_id=tg_id,
         )
         await user_repo.save(user)
+
+    # Register referral intent if incoming from referral link
+    if ref_code and referral_service:
+        try:
+            await referral_service.register_referral_intent(ref_code, user.id)
+        except Exception:
+            pass
 
     await state.set_state(OnboardingStates.waiting_for_age_gate)
     await message.answer(

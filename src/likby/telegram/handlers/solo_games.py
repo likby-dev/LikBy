@@ -29,7 +29,6 @@ _USER_RPS_SCORES: Dict[int, Dict[str, int]] = {}  # tg_id -> {"wins": 0, "losses
 
 @router.message(F.text == "🕹 Solo Arcade")
 @router.message(Command("arcade"))
-@router.message(Command("games"))
 async def open_arcade_menu(message: Message) -> None:
     """Entrypoint to solo games arcade."""
     await message.answer(

@@ -83,6 +83,19 @@ class SqliteChatSessionRepository(ChatSessionRepository):
         )
         await self._conn.commit()
 
+    async def reap_inactive_sessions(self, cutoff_hours: int = 24) -> int:
+        async with self._conn.execute(
+            """
+            UPDATE chat_sessions
+            SET status = 'ENDED', ended_at = CURRENT_TIMESTAMP, termination_reason = 'TIMEOUT'
+            WHERE status = 'ACTIVE' AND datetime(last_activity_at) < datetime('now', '-' || ? || ' hours')
+            """,
+            (cutoff_hours,),
+        ) as cursor:
+            count = cursor.rowcount
+        await self._conn.commit()
+        return count
+
     def _row_to_entity(self, row: tuple) -> ChatSession:
         return ChatSession(
             id=row[0],

@@ -14,7 +14,17 @@ from likby.domain.entities.like import Like
 from likby.domain.entities.match_ticket import MatchTicket
 from likby.domain.entities.media_asset import MediaAsset
 from likby.domain.entities.message import ChatMessage
+from likby.domain.entities.media_quota import MediaQuotaEvent
 from likby.domain.entities.outbox import OutboxJob
+from likby.domain.entities.play_game import (
+    GAME_CATALOGUE,
+    DuelQuotaUsage,
+    GameDefinition,
+    GameInvitation,
+    GameParticipant,
+    GameStatistic,
+    PlayGameSession,
+)
 from likby.domain.entities.profile import Profile
 from likby.domain.entities.rating import SessionRating
 from likby.domain.entities.report import Report
@@ -29,6 +39,13 @@ __all__ = [
     "ChatMessage",
     "MediaAsset",
     "GameSession",
+    "PlayGameSession",
+    "GameDefinition",
+    "GameParticipant",
+    "GameInvitation",
+    "DuelQuotaUsage",
+    "GameStatistic",
+    "GAME_CATALOGUE",
     "UserBlock",
     "Report",
     "Like",
@@ -38,5 +55,6 @@ __all__ = [
     "KarmaLedgerEntry",
     "SubscriptionEntitlement",
     "DailyUsage",
+    "MediaQuotaEvent",
     "OutboxJob",
 ]

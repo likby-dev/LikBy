@@ -77,6 +77,19 @@ class SqliteConnectionRequestRepository(ConnectionRequestRepository):
             rows = await cursor.fetchall()
             return [self._row_to_entity(r) for r in rows]
 
+    async def reap_expired_requests(self, days: int = 7) -> int:
+        async with self._conn.execute(
+            """
+            UPDATE connection_requests
+            SET status = 'EXPIRED', resolved_at = CURRENT_TIMESTAMP
+            WHERE status = 'PENDING' AND datetime(created_at) < datetime('now', '-' || ? || ' days')
+            """,
+            (days,),
+        ) as cursor:
+            count = cursor.rowcount
+        await self._conn.commit()
+        return count
+
     def _row_to_entity(self, row: tuple) -> ConnectionRequest:
         return ConnectionRequest(
             id=row[0],

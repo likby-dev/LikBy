@@ -650,7 +650,11 @@ async def show_help_and_safety(message: Message) -> None:
         "1. <b>Strict Anonymity:</b> Your Telegram account, phone number, and location are never revealed.\n"
         "2. <b>Zero Tolerance:</b> Harassment, hate speech, explicit content, and spam result in immediate suspension.\n"
         "3. <b>Adults Only (18+):</b> Users must be 18 or older.\n"
-        "4. <b>Safety Controls:</b> You can tap <b>⚠️ Report</b> during any chat to instantly disconnect and permanently block a partner.\n\n"
+        "4. <b>Safety Controls:</b> You can tap <b>⚠️ Report</b> during any chat to instantly disconnect and permanently block a partner.\n"
+        "5. <b>Media Protection:</b> All shared photos and videos have saving and forwarding restricted via Telegram Content Protection. LikBy provides no media download buttons.\n"
+        "6. <b>Zero Advertising Policy:</b> LikBy is 100% advertisement-free. We never display third-party advertisements, sponsored messages, or promotional broadcasts.\n"
+        "7. <b>No Disappearing Media:</b> LikBy does not employ view-once or self-destruct timers.\n\n"
+        "<b>Media Allowance:</b> Check your daily quota anytime with /my_media_usage.\n"
         "<b>Need help?</b> Contact LikBy Support or ping @LikBy_bot.",
         parse_mode="HTML",
         reply_markup=get_main_menu_keyboard(),

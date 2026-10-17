@@ -61,6 +61,27 @@ class SqliteOutboxRepository(OutboxRepository):
             rows = await cursor.fetchall()
             return [self._row_to_entity(r) for r in rows]
 
+    async def claim_pending_jobs(self, limit: int = 20) -> List[OutboxJob]:
+        return await self.get_pending_jobs(limit=limit)
+
+    async def mark_completed(self, job_id: str) -> None:
+        await self._conn.execute(
+            "UPDATE outbox_jobs SET status = 'COMPLETED' WHERE id = ?",
+            (job_id,),
+        )
+        await self._conn.commit()
+
+    async def mark_failed(self, job_id: str, error: str, next_attempt_at: datetime) -> None:
+        await self._conn.execute(
+            """
+            UPDATE outbox_jobs
+            SET status = 'FAILED', attempts = attempts + 1, last_error = ?, next_attempt_at = ?
+            WHERE id = ?
+            """,
+            (error, next_attempt_at.isoformat(), job_id),
+        )
+        await self._conn.commit()
+
     async def update_job(self, job: OutboxJob) -> None:
         await self.save(job)
 

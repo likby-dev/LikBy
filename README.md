@@ -3,13 +3,15 @@
 [![Python](https://img.shields.io/badge/Python-3.11%2B-blue.svg)](https://www.python.org/)
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115%2B-009688.svg)](https://fastapi.tiangolo.com/)
 [![aiogram](https://img.shields.io/badge/aiogram-3.15%2B-2CA5E0.svg)](https://docs.aiogram.dev/)
-[![SQLite WAL](https://img.shields.io/badge/SQLite-WAL%20Mode-003B57.svg)](https://sqlite.org/)
+[![Supabase Postgres](https://img.shields.io/badge/Supabase-PostgreSQL-3ECF8E.svg)](https://supabase.com/)
+[![Firebase Firestore](https://img.shields.io/badge/Firebase-Cloud%20Firestore-FFCA28.svg)](https://firebase.google.com/)
 [![Cloudflare R2](https://img.shields.io/badge/Cloudflare%20R2-S3%20Compatible-F38020.svg)](https://developers.cloudflare.com/r2/)
-[![Tests Passing](https://img.shields.io/badge/Tests-53%2F53%20Passing-brightgreen.svg)]()
+[![Render](https://img.shields.io/badge/Render-Deployment%20Ready-46E3B7.svg)](https://render.com/)
+[![Tests Passing](https://img.shields.io/badge/Tests-122%2F122%20Passing-brightgreen.svg)]()
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
 
-> **LikBy** is a production-grade session-based Telegram social discovery, real-time anonymous matching, and social connection platform.
-> Live Telegram Bot: [@LikBy_bot](https://t.me/LikBy_bot)
+> **LikBy** (*Meet. Connect. Play.*) is a premium, privacy-first Telegram social discovery, matching, and 17-game multiplayer platform powered by a shared FastAPI backend.
+> Live Telegram Bot: [@LikBy_bot](https://t.me/LikBy_bot) | [Full Documentation Catalog](docs/README.md)
 
 ---
 
@@ -17,19 +19,19 @@
 
 - [1. Product Overview](#1-product-overview)
 - [2. System Architecture](#2-system-architecture)
-- [3. Core System Flows](#3-core-system-flows)
-  - [3.1 Message Ingestion & Delivery Pipeline](#31-message-ingestion--delivery-pipeline)
-  - [3.2 Standardized Human-Readable Chat Transcript](#32-standardized-human-readable-chat-transcript)
-  - [3.3 Mutual Likes & Canonical Friendship Lifecycle](#33-mutual-likes--canonical-friendship-lifecycle)
-  - [3.4 Discovery, Search Quotas & Connection Requests](#34-discovery-search-quotas--connection-requests)
-  - [3.5 Reputation, Ratings & Auditable Karma Ledger](#35-reputation-ratings--auditable-karma-ledger)
-  - [3.6 Centralized Subscription & Entitlement Engine](#36-centralized-subscription--entitlement-engine)
-- [4. Technology Stack & Component Boundaries](#4-technology-stack--component-boundaries)
+- [3. Technology Allocation & Authority Rules](#3-technology-allocation--authority-rules)
+- [4. Core System Flows](#4-core-system-flows)
+  - [4.1 Message Ingestion & Delivery Pipeline](#41-message-ingestion--delivery-pipeline)
+  - [4.2 Standardized Human-Readable Chat Transcript](#42-standardized-human-readable-chat-transcript)
+  - [4.3 Mutual Likes & Canonical Friendship Lifecycle](#43-mutual-likes--canonical-friendship-lifecycle)
+  - [4.4 Discovery, Search Quotas & Connection Requests](#44-discovery-search-quotas--connection-requests)
+  - [4.5 Reputation, Ratings & Auditable Karma Ledger](#45-reputation-ratings--auditable-karma-ledger)
+  - [4.6 Centralized Subscription & Entitlement Engine](#46-centralized-subscription--entitlement-engine)
 - [5. Database Schema & Storage Design](#5-database-schema--storage-design)
 - [6. Configuration & Environment Variables](#6-configuration--environment-variables)
 - [7. Local Development Quickstart](#7-local-development-quickstart)
 - [8. Testing & QA Automation](#8-testing--qa-automation)
-- [9. Production Deployment Guide (Render & Cloudflare)](#9-production-deployment-guide-render--cloudflare)
+- [9. Production Deployment Guide (Render)](#9-production-deployment-guide-render)
 - [10. Architecture Documentation Index](#10-architecture-documentation-index)
 
 ---
@@ -44,13 +46,13 @@ LikBy provides a safe, welcoming, and privacy-respecting environment where adult
 * 💙 **Mutual-Like Friendships:** Express interest after a chat session. If both users like each other, an atomic canonical friendship is established.
 * 🌟 **Transparent Karma System:** Post-session ratings (+1 Like / -1 Dislike) feed into an immutable, auditable karma ledger with net-contribution reversal protection.
 * 🛡️ **Responsible Moderation:** Bilateral blocking and evidence logging without unverified automated karma penalties.
-* 🕹️ **Casual Solo Arcade & Multiplayer:** Trivia Blitz, Gem Hunter (Mini-Mines), Rock-Paper-Scissors while in matching queues, and in-chat Tic-Tac-Toe.
+* 🕹️ **Casual Solo Arcade & Multiplayer:** 17 games including Trivia Blitz, Gem Hunter, Connect Four, Air Rush, and Stick Arena.
 
 ---
 
 ## 2. System Architecture
 
-LikBy follows a **modular monolith architecture** with explicit boundaries between Telegram interaction adapters, application domain services, repository persistence layers, and external storage engines.
+LikBy implements a **modular monolith** with clear service boundaries and authoritative separation of concerns:
 
 ```mermaid
 graph TD
@@ -73,25 +75,14 @@ graph TD
         SUB[SubscriptionService]
         TRN[TranscriptService]
         MED[MediaService]
-    end
-
-    subgraph Repository Layer
-        UREP[(UserRepository)]
-        SREP[(ChatSessionRepository)]
-        MREP[(MessageRepository)]
-        LREP[(LikeRepository)]
-        FREP[(FriendshipRepository)]
-        QREP[(ConnectionRequestRepository)]
-        RREP[(RatingRepository)]
-        KREP[(KarmaRepository)]
-        SUREP[(SubscriptionRepository)]
-        UREP2[(DailyUsageRepository)]
-        OREP[(OutboxRepository)]
+        OBW[OutboxWorker]
+        REC[ReconciliationService]
     end
 
     subgraph Persistence & Infrastructure
-        SQLITE[(SQLite WAL Database / Firestore)]
-        R2[(Cloudflare R2 Object Storage / Local)]
+        SUPABASE[(Supabase PostgreSQL: Users, Relational State, Quotas, Outbox)]
+        FIRESTORE[(Firebase Cloud Firestore: Ordered Chat Messages & Session Events)]
+        R2[(Cloudflare R2: S3-Compatible Encrypted Private Media Storage)]
         TG_API[Telegram Bot HTTP API]
     end
 
@@ -107,32 +98,31 @@ graph TD
     DP --> KRM
     DP --> SUB
 
-    CR --> MREP
-    CR --> OREP
-    CR --> TRN
+    CR --> FIRESTORE
+    CR --> SUPABASE
     CR --> MED
-    CR -->|Async Send| TG_API
-
-    SOC --> LREP
-    SOC --> FREP
-    SOC --> SUB
-
-    DISC --> UREP2
-    DISC --> QREP
-    DISC --> FREP
-
-    KRM --> RREP
-    KRM --> KREP
-
-    TRN --> MREP
     MED --> R2
-
-    MREP --> SQLITE
-    FREP --> SQLITE
-    LREP --> SQLITE
-    KREP --> SQLITE
-    SREP --> SQLITE
+    
+    OBW --> SUPABASE
+    OBW -->|Async Delivery| TG_API
+    REC --> SUPABASE
+    REC --> FIRESTORE
+    REC --> R2
 ```
+
+---
+
+## 3. Technology Allocation & Authority Rules
+
+| Component | Technology | Authoritative Responsibility |
+| :--- | :--- | :--- |
+| **API & Orchestration** | FastAPI | Validation, business workflows, authentication, rate limits, and service coordination |
+| **Relational Database** | Supabase PostgreSQL | Users, subscriptions, friendships, likes, quotas, ratings, karma, reports, assets metadata, and outbox jobs |
+| **Conversation Database** | Firebase Cloud Firestore | Chat message documents, ordered conversation events, and reconstructable chat history |
+| **Binary Media Storage** | Cloudflare R2 | Actual photos, videos, voice notes, and documents in private buckets with short-lived presigned URLs |
+| **Durable Cross-Service Work** | PostgreSQL Outbox & Workers | Pending operations, exponential retry backoff with jitter, dead-lettering, and reconciliation |
+| **Local Development** | SQLite WAL / Mock Adapters | Rapid hermetic local testing; never a competing production source of truth |
+| **Deployment** | Render | Managed FastAPI web service (`likby-app`) and background worker service (`likby-worker`) |
 
 ---
 
@@ -249,15 +239,59 @@ stateDiagram-v2
 
 ### 3.6 Centralized Subscription & Entitlement Engine
 
-| Feature | Free Tier | Premium Tier | Higher Tier |
-| :--- | :---: | :---: | :---: |
-| **Max Concurrent Friends** | **3** | **10** | **25** |
-| **Daily ID Searches** | **3** / day | **20** / day | **100** / day |
-| **Daily Connection Requests** | **5** / day | **25** / day | **100** / day |
-| **View Incoming Likes** | Included 💙 | Included 💙 | Included 💙 |
-| **Casual Solo Arcade Games** | Included 🕹️ | Included 🕹️ | Included 🕹️ |
+| Feature | LIKBY_BASE | LIKBY_SPARK | LIKBY_PREMIUM | LIKBY_DIAMOND |
+| :--- | :---: | :---: | :---: | :---: |
+| **Daily Multiplayer Duels** | **5** / day | **10** / day | **25** / day | **Unlimited** 👑 |
+| **Solo Games** | **Unlimited** | **Unlimited** | **Unlimited** | **Unlimited** |
+| **Game Catalogue** | **All 17** | **All 17** | **All 17** | **All 17** |
+| **Max Concurrent Friends** | **3** | **10** | **25** | **100** |
+| **Daily ID Searches** | **3** / day | **20** / day | **50** / day | **100** / day |
+| **Daily Connection Requests** | **5** / day | **25** / day | **50** / day | **100** / day |
 
-> **Downgrade Safety:** Expired subscriptions automatically revert feature quotas to the Free tier, but **never delete existing friendships**.
+> **Downgrade Safety:** Expired subscriptions automatically revert feature quotas to the Base tier, but **never delete existing friendships**.
+
+---
+
+### 3.7 LikBy Play — Telegram Multiplayer & Solo Gaming Ecosystem
+
+LikBy Play is a premium social gaming ecosystem built directly into Telegram and Telegram Mini Apps with the core philosophy: *"Every connection has a game."*
+
+#### 17 Complete Game Experiences
+
+* **11 Multiplayer Duel Games:**
+  1. 🥇 **Carrom Clash** — Physics-based carrom board with striker aiming, power control, coin collisions, and queen rules.
+  2. 🏒 **Air Rush** — High-speed arcade air hockey with responsive paddles, puck physics, and 5-goal target condition.
+  3. 🎱 **Pocket Pool** — 8-ball billiards with cue ball aiming, collision physics, solids vs. stripes tracking, and pocketing rules.
+  4. ⚔️ **Stick Arena** — 2D platform brawler with jump/dodge mechanics, light/heavy attacks, knockback, and health bars.
+  5. 🎨 **QuickDraw** — Real-time drawing canvas synchronization with secret word bank and server-side guess evaluation.
+  6. 🔤 **Word Rush** — Shared letter sets and word chains with server-side dictionary verification and streak scoring.
+  7. 🧠 **Brain Blitz** — Fast-paced trivia quiz with curated categories, question timers, and answer hiding until submission.
+  8. ⚡ **Reflex Rush** — Server-scheduled millisecond visual cue competition with false-start detection.
+  9. 🔵 **Connect Four** — Strategic 7x6 four-in-a-row board with turn validation and win/draw detection.
+  10. 💭 **MindMatch** — Social dilemma matching ("Beach Sunset" vs. "Mountain Cabin") with simultaneous reveal and harmony scoring.
+  11. 🕵️ **Mystery Mission** — Cooperative deduction puzzle with partitioned clues (Clue A for P1, Clue B for P2) and stage progression.
+
+* **6 Solo Casual Games (Unlimited for All Tiers):**
+  12. 🧩 **Zen Merge** — 4x4 sliding number tile puzzle with smooth swipe mechanics and high-score tracking.
+  13. 🔎 **Word Hunt** — Hidden word grid matrix with multi-directional word selection and hints.
+  14. 🎨 **Color Flow** — Color and logic flow puzzle with non-overlapping color connections.
+  15. ⛳ **Pocket Golf** — Mini-golf putting green with drag-to-aim power meter and obstacle collision physics.
+  16. ⚡ **Reflex Lab** — Quick reaction and sequence memory training with casual score metrics.
+  17. 🔐 **Daily Mystery** — Logic riddle puzzle with clue checklist, hint mechanics, and answer validation.
+
+#### Authoritative Quota & Fairness Rules
+* **Strict Server-Side Enforcement:** Daily quotas are enforced via FastAPI and PostgreSQL/SQLite transactions; clients cannot manipulate counters via localStorage or cookies.
+* **Asia/Kolkata Daily Boundary:** Quotas calculate against an explicit `Asia/Kolkata` midnight reset window, persisted in UTC.
+* **Atomic Dual-Credit Reservation:** Starting an active duel atomically checks both players' remaining allowances and reserves 1 credit each. If either player lacks credits, the duel is cleanly rejected.
+* **Zero Solo Consumption:** Solo games never consume duel credits (0 credits consumed).
+* **Invitation Protection:** Failed, rejected, or expired game challenges consume zero credits.
+* **Rematch Policy:** Each rematch is an authoritative new match and consumes 1 credit per player.
+
+#### Telegram Mini App Integration
+* **Bot Entrypoints:** `/play`, `/games`, `/duels`, `/solo`, `/mygames`.
+* **Mini App WebApp:** Served statically at `/play/` with dark brand theme (`#050816`), cyan/blue accents, responsive viewport, and audio synth.
+* **HMAC-SHA256 Security:** Raw Telegram `initData` is verified server-side with HMAC-SHA256 signature against the bot token.
+* **Realtime WebSockets:** Live events delivered at `/api/v1/play/ws/{session_id}`.
 
 ---
 
@@ -266,12 +300,13 @@ stateDiagram-v2
 | Layer | Technology | Rationale |
 | :--- | :--- | :--- |
 | **Runtime & Language** | Python 3.11+ / 3.13 | High performance, modern async/await syntax, strong typing |
-| **Web Server** | FastAPI & Uvicorn | Production ASGI server for webhooks and health endpoints |
+| **Web Server** | FastAPI & Uvicorn | Production ASGI server for webhooks, WebSockets, and health endpoints |
 | **Telegram Framework** | aiogram 3.15+ | Modern async Telegram Bot API framework with clean routing & FSM |
-| **Database** | SQLite WAL / aiosqlite | High-concurrency local database with zero-maintenance WAL mode |
+| **Telegram Mini App** | HTML5 / Vanilla CSS / ES6 JS | Lightweight, ultra-responsive Telegram WebApp lobby and 17 interactive games |
+| **Database** | SQLite WAL / Supabase PostgreSQL | High-concurrency ACID transactions for quota reservations and game states |
 | **Cloud Storage** | Cloudflare R2 (S3-compatible) | Zero egress fee object storage for encrypted media archival |
 | **Data Validation** | Pydantic v2 | Strict schema validation and immutable domain entity modeling |
-| **Test Automation** | pytest & pytest-asyncio | 53 unit, integration, and API tests with 100% pass rate |
+| **Test Automation** | pytest & pytest-asyncio | 122 unit, integration, and API tests with 100% pass rate |
 
 ---
 
@@ -293,6 +328,12 @@ The database schema (`src/likby/repositories/sqlite/database.py`) enforces refer
 12. `daily_usage` — Daily search and connection request consumption counters.
 13. `outbox_jobs` — Transactional message delivery queue with retry timestamps.
 14. `reports` & `user_blocks` — Abuse reports and bilateral safety blocklists.
+15. `play_game_sessions` — Authoritative game sessions, state machine, and match scores.
+16. `play_game_participants` — Match participants, roles, joined timestamps, and final rankings.
+17. `game_invitations` — Time-limited duel challenges with status tracking (PENDING, ACCEPTED, REJECTED, EXPIRED).
+18. `duel_quota_usage` — Immutable ledger of dual-participant quota consumption with idempotency keys.
+19. `game_statistics` — Player gaming statistics, win/loss records, and high-scores.
+20. `game_action_events` — Audit trail of timestamped moves and game actions.
 
 ---
 

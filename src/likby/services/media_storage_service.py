@@ -7,7 +7,7 @@ from abc import ABC, abstractmethod
 import hashlib
 import os
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple
 import aiofiles
 from likby.domain.entities.media_asset import MediaAsset
 from likby.domain.enums import MediaUploadStatus
@@ -30,6 +30,11 @@ class MediaStorageProvider(ABC):
     @abstractmethod
     async def delete(self, object_key: str) -> bool:
         """Delete object from storage."""
+        pass
+
+    @abstractmethod
+    def generate_presigned_url(self, object_key: str, expires_in: int = 300) -> Optional[str]:
+        """Generate a time-limited presigned URL for reading media."""
         pass
 
 
@@ -60,6 +65,102 @@ class LocalMediaStorageProvider(MediaStorageProvider):
             target_path.unlink()
             return True
         return False
+
+    def generate_presigned_url(self, object_key: str, expires_in: int = 300) -> Optional[str]:
+        # Local provider mock presigned URL
+        return f"/media/local/{object_key}?expires={expires_in}"
+
+
+class CloudflareR2StorageProvider(MediaStorageProvider):
+    """Cloudflare R2 private S3-compatible object storage provider."""
+
+    def __init__(
+        self,
+        account_id: Optional[str] = None,
+        access_key_id: Optional[str] = None,
+        secret_access_key: Optional[str] = None,
+        bucket_name: str = "likby-media",
+        endpoint_url: Optional[str] = None,
+        region: str = "auto",
+    ) -> None:
+        self._bucket_name = bucket_name
+        self._endpoint_url = endpoint_url or (f"https://{account_id}.r2.cloudflarestorage.com" if account_id else None)
+        self._access_key_id = access_key_id
+        self._secret_access_key = secret_access_key
+        self._region = region
+        self._client = None
+
+        if self._endpoint_url and self._access_key_id and self._secret_access_key:
+            import boto3
+            from botocore.config import Config
+
+            self._client = boto3.client(
+                "s3",
+                endpoint_url=self._endpoint_url,
+                aws_access_key_id=self._access_key_id,
+                aws_secret_access_key=self._secret_access_key,
+                region_name=self._region,
+                config=Config(signature_version="s3v4"),
+            )
+
+    async def upload_bytes(self, object_key: str, data: bytes, mime_type: str) -> bool:
+        if not self._client:
+            return False
+        import asyncio
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: self._client.put_object(
+                    Bucket=self._bucket_name,
+                    Key=object_key,
+                    Body=data,
+                    ContentType=mime_type,
+                ),
+            )
+            return True
+        except Exception:
+            return False
+
+    async def get_bytes(self, object_key: str) -> Optional[bytes]:
+        if not self._client:
+            return None
+        import asyncio
+        loop = asyncio.get_running_loop()
+        try:
+            resp = await loop.run_in_executor(
+                None,
+                lambda: self._client.get_object(Bucket=self._bucket_name, Key=object_key),
+            )
+            return resp["Body"].read()
+        except Exception:
+            return None
+
+    async def delete(self, object_key: str) -> bool:
+        if not self._client:
+            return False
+        import asyncio
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(
+                None,
+                lambda: self._client.delete_object(Bucket=self._bucket_name, Key=object_key),
+            )
+            return True
+        except Exception:
+            return False
+
+    def generate_presigned_url(self, object_key: str, expires_in: int = 300) -> Optional[str]:
+        if not self._client:
+            return None
+        try:
+            return self._client.generate_presigned_url(
+                ClientMethod="get_object",
+                Params={"Bucket": self._bucket_name, "Key": object_key},
+                ExpiresIn=expires_in,
+            )
+        except Exception:
+            return None
 
 
 class MediaService:
@@ -131,3 +232,32 @@ class MediaService:
         if data is None:
             return None
         return asset, data
+
+    async def get_presigned_url(
+        self,
+        asset_id: str,
+        requesting_user_id: str,
+        authorized_user_ids: List[str],
+        expires_in: int = 300,
+    ) -> Optional[str]:
+        """
+        Generate short-lived presigned URL if requesting user is authorized.
+        Enforces strict IDOR/BOLA protection: only session participants or staff may access.
+        """
+        if requesting_user_id not in authorized_user_ids and requesting_user_id != "STAFF_MODERATOR":
+            return None
+
+        asset = await self._media_repo.get_by_id(asset_id)
+        if not asset or asset.upload_status != MediaUploadStatus.ARCHIVED:
+            return None
+
+        return self._provider.generate_presigned_url(asset.object_key, expires_in=expires_in)
+
+    async def verify_object_exists(self, asset_id: str) -> bool:
+        """Verify object exists in storage provider."""
+        asset = await self._media_repo.get_by_id(asset_id)
+        if not asset:
+            return False
+        data = await self._provider.get_bytes(asset.object_key)
+        return data is not None
+

@@ -23,6 +23,11 @@ class OutboxJob(BaseModel):
     next_attempt_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
+    @property
+    def attempt_count(self) -> int:
+        """Alias for attempts count."""
+        return self.attempts
+
     def record_attempt_failure(self, error: str, backoff_seconds: int = 5) -> None:
         """Increment attempt counter and compute backoff schedule."""
         self.attempts += 1

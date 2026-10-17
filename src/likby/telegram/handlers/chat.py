@@ -15,6 +15,7 @@ from likby.repositories.interfaces import (
 from likby.services.chat_relay_service import ChatRelayService
 from likby.services.karma_service import KarmaService
 from likby.services.matchmaking_service import MatchmakingService
+from likby.services.media_quota_service import MediaQuotaService
 from likby.services.social_service import SocialService
 from likby.services.transcript_service import TranscriptService
 from likby.telegram.keyboards import (
@@ -121,81 +122,126 @@ async def handle_next_chat(
     )
 
 
-# --- Media Message Handlers ---
+# --- Media Message Handlers & Quota Inspections ---
+
+@router.message(Command("my_media_usage"))
+@router.message(F.text == "📊 My Media Usage")
+async def handle_my_media_usage(
+    message: Message,
+    user_repo: UserRepository,
+    media_quota_service: MediaQuotaService,
+) -> None:
+    if not message.from_user:
+        return
+    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    if not user:
+        await message.answer("Please type /start to set up your profile.")
+        return
+
+    summary = await media_quota_service.get_user_media_usage_summary(user.id)
+    text = (
+        f"💜 <b>LikBy Media Usage & Protection</b>\n\n"
+        f"<b>Current Plan:</b> {summary['plan_name']}\n"
+        f"<b>Daily Uploads:</b> {summary['uploads_used']} / {summary['uploads_limit']} used ({summary['uploads_remaining']} remaining)\n"
+        f"<b>Daily Received:</b> {summary['received_used']} / {summary['received_limit']} used ({summary['received_remaining']} remaining)\n\n"
+        f"<b>Max Image Size:</b> {summary['max_image_mb']} MB\n"
+        f"<b>Max Video Size:</b> {summary['max_video_mb']} MB\n"
+        f"<b>Next Daily Reset:</b> 00:00 UTC\n\n"
+        f"🛡 <b>Content Protection Active:</b>\n"
+        f"All shared photos, videos, and media have saving and forwarding restricted via Telegram Content Protection.\n"
+        f"<i>Note: Content protection is a platform mitigation; physical hardware capture cannot be universally prevented.</i>\n\n"
+        f"Upgrade your daily allowance anytime with /subscribe."
+    )
+    await message.answer(text, parse_mode="HTML")
+
 
 @router.message(F.photo)
 async def handle_chat_photo(message: Message, chat_relay: ChatRelayService) -> None:
     if not message.from_user or not message.photo:
         return
+    cached = await chat_relay.get_or_warm_session(message.from_user.id)
+    if not cached:
+        await message.answer("You are not currently in an active chat.")
+        return
     highest_res = message.photo[-1]
-    relayed = await chat_relay.relay_media(
+    await chat_relay.relay_media(
         sender_tg_id=message.from_user.id,
         message_type=MessageType.PHOTO,
         file_id=highest_res.file_id,
         caption=message.caption,
+        file_size=highest_res.file_size,
     )
-    if not relayed:
-        await message.answer("You are not currently in an active chat.")
 
 
 @router.message(F.video)
 async def handle_chat_video(message: Message, chat_relay: ChatRelayService) -> None:
     if not message.from_user or not message.video:
         return
-    relayed = await chat_relay.relay_media(
+    cached = await chat_relay.get_or_warm_session(message.from_user.id)
+    if not cached:
+        await message.answer("You are not currently in an active chat.")
+        return
+    await chat_relay.relay_media(
         sender_tg_id=message.from_user.id,
         message_type=MessageType.VIDEO,
         file_id=message.video.file_id,
         caption=message.caption,
         file_name=message.video.file_name,
         mime_type=message.video.mime_type,
+        file_size=message.video.file_size,
     )
-    if not relayed:
-        await message.answer("You are not currently in an active chat.")
 
 
 @router.message(F.voice)
 async def handle_chat_voice(message: Message, chat_relay: ChatRelayService) -> None:
     if not message.from_user or not message.voice:
         return
-    relayed = await chat_relay.relay_media(
+    cached = await chat_relay.get_or_warm_session(message.from_user.id)
+    if not cached:
+        await message.answer("You are not currently in an active chat.")
+        return
+    await chat_relay.relay_media(
         sender_tg_id=message.from_user.id,
         message_type=MessageType.VOICE,
         file_id=message.voice.file_id,
         caption=message.caption,
         mime_type=message.voice.mime_type,
+        file_size=message.voice.file_size,
     )
-    if not relayed:
-        await message.answer("You are not currently in an active chat.")
 
 
 @router.message(F.document)
 async def handle_chat_document(message: Message, chat_relay: ChatRelayService) -> None:
     if not message.from_user or not message.document:
         return
-    relayed = await chat_relay.relay_media(
+    cached = await chat_relay.get_or_warm_session(message.from_user.id)
+    if not cached:
+        await message.answer("You are not currently in an active chat.")
+        return
+    await chat_relay.relay_media(
         sender_tg_id=message.from_user.id,
         message_type=MessageType.DOCUMENT,
         file_id=message.document.file_id,
         caption=message.caption,
         file_name=message.document.file_name,
         mime_type=message.document.mime_type,
+        file_size=message.document.file_size,
     )
-    if not relayed:
-        await message.answer("You are not currently in an active chat.")
 
 
 @router.message(F.sticker)
 async def handle_chat_sticker(message: Message, chat_relay: ChatRelayService) -> None:
     if not message.from_user or not message.sticker:
         return
-    relayed = await chat_relay.relay_media(
+    cached = await chat_relay.get_or_warm_session(message.from_user.id)
+    if not cached:
+        await message.answer("You are not currently in an active chat.")
+        return
+    await chat_relay.relay_media(
         sender_tg_id=message.from_user.id,
         message_type=MessageType.STICKER,
         file_id=message.sticker.file_id,
     )
-    if not relayed:
-        await message.answer("You are not currently in an active chat.")
 
 
 # --- Text Message Handler ---
@@ -217,7 +263,7 @@ async def handle_chat_message(
     menu_buttons = [
         "🎲 Find a Match", "🎲 Find Someone", "💬 My Chats", "💙 Who Liked Me",
         "👥 My Friends", "🔍 Search ID", "📬 Requests", "👤 My Profile",
-        "🌟 My Karma", "💎 Subscription", "🕹 Solo Arcade", "🛡 Help & Safety",
+        "🌟 My Karma", "💎 Subscription", "🎮 LikBy Play", "🕹 Solo Arcade", "🛡 Help & Safety",
         "📜 Guidelines", "❓ Help / About",
     ]
     if text in menu_buttons:

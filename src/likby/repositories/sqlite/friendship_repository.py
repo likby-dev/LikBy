@@ -56,6 +56,19 @@ class SqliteFriendshipRepository(FriendshipRepository):
         canonical_id = f"frd_{u_a}_{u_b}"
         return await self.get_by_id(canonical_id)
 
+    async def add_friendship(self, user_1: str, user_2: str) -> Friendship:
+        """Create and persist an active bilateral friendship."""
+        u_a, u_b = sorted([user_1, user_2])
+        canonical_id = f"frd_{u_a}_{u_b}"
+        frd = Friendship(
+            id=canonical_id,
+            user_a_id=u_a,
+            user_b_id=u_b,
+            status=FriendshipStatus.ACTIVE,
+        )
+        await self.save(frd)
+        return frd
+
     async def get_user_friends(self, user_id: str) -> List[Friendship]:
         async with self._conn.execute(
             """
@@ -68,6 +81,8 @@ class SqliteFriendshipRepository(FriendshipRepository):
         ) as cursor:
             rows = await cursor.fetchall()
             return [self._row_to_entity(r) for r in rows]
+
+    list_friends = get_user_friends
 
     async def count_user_friends(self, user_id: str) -> int:
         async with self._conn.execute(

@@ -4,6 +4,7 @@ Onboarding FSM handlers: Alias, Age, Gender, and Interests selection.
 """
 
 import re
+from typing import Any, Optional
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
@@ -161,6 +162,7 @@ async def finish_interests(
     state: FSMContext,
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
+    referral_service: Optional[Any] = None,
 ) -> None:
     data = await state.get_data()
     selected = list(data.get("selected_interests", []))
@@ -196,6 +198,14 @@ async def finish_interests(
 
     user.transition_state(UserState.MAIN_MENU)
     await user_repo.save(user)
+
+    # Evaluate referral reward for inviter if this user was invited
+    if referral_service:
+        try:
+            await referral_service.evaluate_and_grant_reward(user.id)
+        except Exception:
+            pass
+
     await state.clear()
 
     await callback.message.delete()

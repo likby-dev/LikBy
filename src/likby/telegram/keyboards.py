@@ -3,13 +3,14 @@ likby.telegram.keyboards
 Telegram Reply and Inline keyboard builders for LikBy.
 """
 
-from typing import List, Sequence
+from typing import List, Optional, Sequence
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
     ReplyKeyboardMarkup,
     ReplyKeyboardRemove,
+    WebAppInfo,
 )
 
 
@@ -82,8 +83,8 @@ def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
             [KeyboardButton(text="💙 Who Liked Me"), KeyboardButton(text="👥 My Friends")],
             [KeyboardButton(text="🔍 Search ID"), KeyboardButton(text="📬 Requests")],
             [KeyboardButton(text="👤 My Profile"), KeyboardButton(text="🌟 My Karma")],
-            [KeyboardButton(text="💎 Subscription"), KeyboardButton(text="🕹 Solo Arcade")],
-            [KeyboardButton(text="🛡 Help & Safety")],
+            [KeyboardButton(text="💎 Subscription"), KeyboardButton(text="🎮 LikBy Play")],
+            [KeyboardButton(text="🕹 Solo Arcade"), KeyboardButton(text="🛡 Help & Safety")],
         ],
         resize_keyboard=True,
         is_persistent=True,
@@ -112,17 +113,55 @@ def get_post_session_keyboard(session_id: str, partner_id: str) -> InlineKeyboar
 
 
 def get_subscription_keyboard() -> InlineKeyboardMarkup:
-    """Subscription upgrade and tier options keyboard."""
+    """Authoritative subscription and tier upgrade keyboard."""
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
-                InlineKeyboardButton(text="⭐ Upgrade to Premium", callback_data="sub:upgrade:PREMIUM"),
+                InlineKeyboardButton(text="⚡ LikBy Spark — 15 ⭐️ (24h)", callback_data="sub:buy:SPARK"),
             ],
             [
-                InlineKeyboardButton(text="👑 Upgrade to Higher Tier", callback_data="sub:upgrade:HIGHER"),
+                InlineKeyboardButton(text="🌟 LikBy Premium — 60 ⭐️ (30d)", callback_data="sub:buy:PREMIUM"),
             ],
             [
-                InlineKeyboardButton(text="🔄 Refresh Status", callback_data="sub:status"),
+                InlineKeyboardButton(text="👑 LikBy Diamond — 120 ⭐️ (30d)", callback_data="sub:buy:DIAMOND"),
+            ],
+            [
+                InlineKeyboardButton(text="🎁 Earn Free Spark (Invite Friends)", callback_data="sub:invite"),
+            ],
+            [
+                InlineKeyboardButton(text="📊 My Plan & Quotas", callback_data="sub:myplan"),
+                InlineKeyboardButton(text="🧾 History", callback_data="sub:history"),
+            ],
+            [
+                InlineKeyboardButton(text="📜 Terms & Refunds", callback_data="sub:terms"),
+                InlineKeyboardButton(text="💬 Pay Support", callback_data="sub:paysupport"),
+            ],
+        ]
+    )
+
+
+def get_plan_card_keyboard(plan_code: str) -> InlineKeyboardMarkup:
+    """Action button for a specific plan card."""
+    buttons = []
+    if plan_code.upper() != "BASE":
+        buttons.append([InlineKeyboardButton(text=f"⭐️ Get {plan_code.title()}", callback_data=f"sub:buy:{plan_code.upper()}")])
+    buttons.append([
+        InlineKeyboardButton(text="📋 All Plans", callback_data="sub:plans"),
+        InlineKeyboardButton(text="📊 My Plan", callback_data="sub:myplan"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+def get_referral_keyboard() -> InlineKeyboardMarkup:
+    """Invite & referral sharing keyboard."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⚡ Buy Spark Pass (15 ⭐️)", callback_data="sub:buy:SPARK"),
+            ],
+            [
+                InlineKeyboardButton(text="💎 View All Plans", callback_data="sub:plans"),
+                InlineKeyboardButton(text="📊 My Plan", callback_data="sub:myplan"),
             ],
         ]
     )
@@ -202,6 +241,56 @@ def get_gem_hunter_keyboard(game, show_all: bool = False) -> InlineKeyboardMarku
     controls.append(InlineKeyboardButton(text="🏠 Arcade", callback_data="solo:hub"))
     rows.append(controls)
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_play_hub_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
+    """
+    LikBy Play Ecosystem Navigation Keyboard.
+    Uses WebAppInfo when mini_app_url is provided, with fallback inline actions.
+    """
+    if mini_app_url:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(
+                        text="⚔️ Play Together (11 Duels)",
+                        web_app=WebAppInfo(url=f"{mini_app_url}#duels"),
+                    ),
+                    InlineKeyboardButton(
+                        text="🧩 Play Solo (6 Games)",
+                        web_app=WebAppInfo(url=f"{mini_app_url}#solo"),
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(
+                        text="✨ Game Collection",
+                        web_app=WebAppInfo(url=f"{mini_app_url}#catalogue"),
+                    ),
+                    InlineKeyboardButton(
+                        text="📊 My Progress",
+                        web_app=WebAppInfo(url=f"{mini_app_url}#progress"),
+                    ),
+                ],
+                [
+                    InlineKeyboardButton(text="💎 My Plan & Quota", callback_data="sub:myplan"),
+                ],
+            ]
+        )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="⚔️ Play Together (11 Duels)", callback_data="play:duels"),
+                InlineKeyboardButton(text="🧩 Play Solo (6 Games)", callback_data="play:solo"),
+            ],
+            [
+                InlineKeyboardButton(text="✨ Game Collection", callback_data="play:catalogue"),
+                InlineKeyboardButton(text="📊 My Progress", callback_data="play:progress"),
+            ],
+            [
+                InlineKeyboardButton(text="💎 My Plan & Quota", callback_data="sub:myplan"),
+            ],
+        ]
+    )
 
 
 def get_rps_keyboard() -> InlineKeyboardMarkup:

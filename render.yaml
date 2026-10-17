@@ -10,7 +10,7 @@ services:
     name: likby-app
     runtime: python
     region: oregon
-    plan: free # Upgrade to 'starter' ($7/mo) for 24/7 persistent uptime without sleep
+    plan: starter # Starter plan recommended for 24/7 webhooks without cold starts
     buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
     startCommand: "uvicorn likby.main:app --host 0.0.0.0 --port $PORT --workers 1"
     healthCheckPath: /health/live
@@ -26,51 +26,69 @@ services:
         value: 0.0.0.0
       - key: LOG_LEVEL
         value: INFO
+      - key: TIMEZONE
+        value: Asia/Kolkata
       - key: BOT_TOKEN
-        sync: false # Set securely in Render dashboard (e.g. 123456789:ABCdef...)
+        sync: false # Set securely in Render dashboard
       - key: WEBHOOK_SECRET_TOKEN
-        generateValue: true # Render generates a secure random 32-char secret token
+        generateValue: true # Render generates secure 32-char secret token
       - key: BASE_URL
         fromService:
           type: web
           name: likby-app
-          property: host # Render sets this to your-service.onrender.com
+          property: host
+      - key: TELEGRAM_MINI_APP_URL
+        value: https://likby-app.onrender.com/play
       - key: DATABASE_BACKEND
-        value: sqlite
-      - key: DATABASE_URL
-        value: sqlite+aiosqlite:///likby.db # For persistent disk, use sqlite+aiosqlite:////data/likby.db
+        value: postgres # or sqlite
+      - key: SUPABASE_DB_URL
+        sync: false # Configure connection string from Supabase dashboard
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SECRET_KEY
+        sync: false
+      - key: FIREBASE_PROJECT_ID
+        sync: false
       - key: STORAGE_PROVIDER
-        value: local
-      - key: MEDIA_STORE_DIR
-        value: media_store
-
-    # --------------------------------------------------------------------------
-    # Optional: Persistent Disk (Requires Render Starter plan or above)
-    # Uncomment below to preserve SQLite database and media assets across deploys:
-    # --------------------------------------------------------------------------
-    # disk:
-    #   name: likby-data
-    #   mountPath: /data
-    #   sizeGB: 1
+        value: r2 # "r2" or "local"
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: likby-media
 
   # ============================================================================
-  # Alternative: LikBy Background Worker (Long Polling Mode)
-  # Uncomment this service if you prefer running continuous polling instead of webhooks.
+  # LikBy Background Outbox & Cross-Service Worker
   # ============================================================================
-  # - type: worker
-  #   name: likby-worker
-  #   runtime: python
-  #   region: oregon
-  #   plan: free
-  #   buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
-  #   startCommand: "python -m likby.main --mode polling"
-  #   autoDeploy: true
-  #   envVars:
-  #     - key: PYTHON_VERSION
-  #       value: 3.11.9
-  #     - key: ENVIRONMENT
-  #       value: production
-  #     - key: BOT_MODE
-  #       value: polling
-  #     - key: BOT_TOKEN
-  #       sync: false
+  - type: worker
+    name: likby-worker
+    runtime: python
+    region: oregon
+    plan: starter
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt"
+    startCommand: "python -m likby.worker"
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: ENVIRONMENT
+        value: production
+      - key: BOT_TOKEN
+        sync: false
+      - key: DATABASE_BACKEND
+        value: postgres
+      - key: SUPABASE_DB_URL
+        sync: false
+      - key: STORAGE_PROVIDER
+        value: r2
+      - key: R2_ACCOUNT_ID
+        sync: false
+      - key: R2_ACCESS_KEY_ID
+        sync: false
+      - key: R2_SECRET_ACCESS_KEY
+        sync: false
+      - key: R2_BUCKET_NAME
+        value: likby-media

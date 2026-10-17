@@ -52,23 +52,23 @@ async def test_id_search_daily_quota_and_upgrade(tmp_path):
     await user_repo.save(u_searcher)
     await user_repo.save(u_target)
 
-    # 1. First 3 searches succeed (Free tier limit = 3)
-    for i in range(3):
+    # 1. First 10 searches succeed (LikBy Base tier limit = 10)
+    for i in range(10):
         ok, msg, preview = await discovery.search_user("usr_searcher", "cryptowizard")
         assert ok is True
         assert preview["display_id"] == "@cryptowizard"
         assert preview["presence"] == "Active recently"
 
-    # 2. 4th search fails due to quota
-    ok_4th, msg_4th, _ = await discovery.search_user("usr_searcher", "cryptowizard")
-    assert ok_4th is False
-    assert "quota reached" in msg_4th
+    # 2. 11th search fails due to quota
+    ok_11th, msg_11th, _ = await discovery.search_user("usr_searcher", "cryptowizard")
+    assert ok_11th is False
+    assert "quota reached" in msg_11th
 
-    # 3. Upgrade to Premium expands limit to 20
+    # 3. Upgrade to Premium expands limit to 100
     await sub_service.upgrade_tier("usr_searcher", SubscriptionTier.PREMIUM)
     limits = await sub_service.get_plan_limits("usr_searcher")
     assert limits["tier"] == "PREMIUM"
-    assert limits["daily_searches_limit"] == 20
+    assert limits["daily_searches_limit"] == 100
 
     # 4. Search now succeeds!
     ok_prem, msg_prem, _ = await discovery.search_user("usr_searcher", "cryptowizard")

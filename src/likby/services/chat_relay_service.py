@@ -23,6 +23,7 @@ from likby.repositories.interfaces import (
     OutboxRepository,
     UserRepository,
 )
+from likby.services.media_quota_service import MediaQuotaService
 from likby.services.media_storage_service import MediaService
 from likby.services.session_cache import ActiveSessionCache, CachedSession
 
@@ -39,6 +40,7 @@ class ChatRelayService:
         message_repo: Optional[MessageRepository] = None,
         outbox_repo: Optional[OutboxRepository] = None,
         media_service: Optional[MediaService] = None,
+        media_quota_service: Optional[MediaQuotaService] = None,
     ) -> None:
         self._bot = bot
         self._session_cache = session_cache
@@ -47,6 +49,7 @@ class ChatRelayService:
         self._message_repo = message_repo
         self._outbox_repo = outbox_repo
         self._media_service = media_service
+        self._media_quota_service = media_quota_service
 
     async def get_or_warm_session(self, tg_id: int) -> Optional[CachedSession]:
         """Retrieve active cached session or warm from database."""
@@ -179,10 +182,11 @@ class ChatRelayService:
         file_name: Optional[str] = None,
         mime_type: Optional[str] = None,
         file_bytes: Optional[bytes] = None,
+        file_size: Optional[int] = None,
     ) -> bool:
         """
         Durable relay of media attachments (photo, video, voice, document, sticker)
-        with optional storage archival.
+        with quota enforcement, protected delivery (protect_content=True), and storage archival.
         """
         cached = await self.get_or_warm_session(sender_tg_id)
         if not cached:
@@ -192,12 +196,65 @@ class ChatRelayService:
         sender_user_id = (
             cached.user_a_id if sender_tg_id == cached.user_a_tg_id else cached.user_b_id
         )
+        partner_user_id = (
+            cached.user_b_id if sender_tg_id == cached.user_a_tg_id else cached.user_a_id
+        )
 
         sender_user = await self._user_repo.get_by_id(sender_user_id)
         sender_display = sender_user.display_user_id if sender_user else sender_user_id
 
         msg_id = f"msg_{uuid.uuid4().hex[:12]}"
         asset_id: Optional[str] = None
+
+        # Quota checks & reservation (if quota service is configured)
+        upload_key = f"up_{cached.session_id}_{msg_id}_{file_id[:16]}"
+        recv_key = f"rec_{cached.session_id}_{msg_id}_{partner_user_id}_{file_id[:16]}"
+
+        if self._media_quota_service:
+            limits = await self._media_quota_service.get_user_media_limits(sender_user_id)
+            # File size limit check
+            if file_size is not None:
+                max_bytes = (
+                    limits["max_video_size_bytes"]
+                    if message_type == MessageType.VIDEO
+                    else limits["max_image_size_bytes"]
+                )
+                if file_size > max_bytes:
+                    max_mb = max_bytes // (1024 * 1024)
+                    await self._bot.send_message(
+                        chat_id=sender_tg_id,
+                        text=f"💜 This file exceeds your {limits['display_name']} size limit of {max_mb} MB. Upgrade your plan with /subscribe to send larger files.",
+                    )
+                    return False
+
+            # Check upload quota
+            up_ok, up_used, up_limit, up_reason = await self._media_quota_service.check_upload_quota(
+                user_id=sender_user_id,
+                idempotency_key=upload_key,
+            )
+            if not up_ok:
+                await self._bot.send_message(chat_id=sender_tg_id, text=up_reason)
+                return False
+
+            # Check and reserve recipient receive quota
+            rec_ok, rec_reason = await self._media_quota_service.reserve_receive_quota(
+                recipient_id=partner_user_id,
+                media_file_id=file_id,
+                idempotency_key=recv_key,
+            )
+            if not rec_ok:
+                await self._bot.send_message(
+                    chat_id=sender_tg_id,
+                    text="💜 Your conversation partner has reached today's media receiving limit and cannot receive media at this time.",
+                )
+                return False
+
+            # Commit sender upload quota
+            await self._media_quota_service.reserve_and_commit_upload(
+                user_id=sender_user_id,
+                media_file_id=file_id,
+                idempotency_key=upload_key,
+            )
 
         # Archive media in background if bytes provided and media service available
         if file_bytes and self._media_service:
@@ -231,21 +288,49 @@ class ChatRelayService:
             )
             await self._message_repo.save(message)
 
-        # Forward via Telegram
+        # Forward via Telegram with content protection (protect_content=True)
         tg_msg_id: Optional[int] = None
         try:
             if message_type == MessageType.PHOTO:
-                sent = await self._bot.send_photo(chat_id=partner_tg_id, photo=file_id, caption=caption)
+                sent = await self._bot.send_photo(
+                    chat_id=partner_tg_id,
+                    photo=file_id,
+                    caption=caption,
+                    protect_content=True,
+                )
             elif message_type == MessageType.VIDEO:
-                sent = await self._bot.send_video(chat_id=partner_tg_id, video=file_id, caption=caption)
+                sent = await self._bot.send_video(
+                    chat_id=partner_tg_id,
+                    video=file_id,
+                    caption=caption,
+                    protect_content=True,
+                )
             elif message_type == MessageType.VOICE:
-                sent = await self._bot.send_voice(chat_id=partner_tg_id, voice=file_id, caption=caption)
+                sent = await self._bot.send_voice(
+                    chat_id=partner_tg_id,
+                    voice=file_id,
+                    caption=caption,
+                    protect_content=True,
+                )
             elif message_type == MessageType.DOCUMENT:
-                sent = await self._bot.send_document(chat_id=partner_tg_id, document=file_id, caption=caption)
+                sent = await self._bot.send_document(
+                    chat_id=partner_tg_id,
+                    document=file_id,
+                    caption=caption,
+                    protect_content=True,
+                )
             elif message_type == MessageType.STICKER:
-                sent = await self._bot.send_sticker(chat_id=partner_tg_id, sticker=file_id)
+                sent = await self._bot.send_sticker(
+                    chat_id=partner_tg_id,
+                    sticker=file_id,
+                    protect_content=True,
+                )
             else:
-                sent = await self._bot.send_message(chat_id=partner_tg_id, text=f"[{message_type.value}] {caption or ''}")
+                sent = await self._bot.send_message(
+                    chat_id=partner_tg_id,
+                    text=f"[{message_type.value}] {caption or ''}",
+                    protect_content=True,
+                )
             tg_msg_id = sent.message_id
 
             if self._message_repo:
@@ -254,11 +339,24 @@ class ChatRelayService:
                     status=MessageDeliveryStatus.DELIVERED,
                     telegram_msg_id=tg_msg_id,
                 )
+
+            # Successfully delivered -> commit recipient receive quota
+            if self._media_quota_service:
+                await self._media_quota_service.commit_receive_quota(
+                    recipient_id=partner_user_id,
+                    idempotency_key=recv_key,
+                )
         except Exception:
             if self._message_repo:
                 await self._message_repo.update_delivery_status(
                     message_id=msg_id,
                     status=MessageDeliveryStatus.FAILED,
+                )
+            # Failed delivery -> rollback recipient receive quota (recipient is never charged for failed delivery)
+            if self._media_quota_service:
+                await self._media_quota_service.rollback_receive_quota(
+                    recipient_id=partner_user_id,
+                    idempotency_key=recv_key,
                 )
             return False
 

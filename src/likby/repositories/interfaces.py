@@ -4,6 +4,7 @@ Abstract repository interfaces decoupling domain services from persistence backe
 """
 
 from abc import ABC, abstractmethod
+from datetime import datetime
 from typing import List, Optional
 from likby.domain.entities.user import User
 from likby.domain.entities.profile import Profile
@@ -19,10 +20,14 @@ from likby.domain.entities.friendship import Friendship
 from likby.domain.entities.connection_request import ConnectionRequest
 from likby.domain.entities.rating import SessionRating
 from likby.domain.entities.karma import KarmaLedgerEntry
-from likby.domain.entities.subscription import SubscriptionEntitlement
+from likby.domain.entities.subscription import SubscriptionEntitlement, SubscriptionPlan, ProviderPrice
+from likby.domain.entities.payment import PaymentOrder, PaymentTransaction, UsageCounter, WebhookEventLedger, AuditEvent
+from likby.domain.entities.referral import ReferralReward
 from likby.domain.entities.daily_usage import DailyUsage
+from likby.domain.entities.media_quota import MediaQuotaEvent
 from likby.domain.entities.outbox import OutboxJob
-from likby.domain.enums import MessageDeliveryStatus
+from likby.domain.enums import FeatureKey, MediaQuotaStatus, MessageDeliveryStatus, PaymentProviderType
+
 
 
 class UserRepository(ABC):
@@ -273,6 +278,39 @@ class DailyUsageRepository(ABC):
     async def increment_request(self, user_id: str, usage_date: str) -> int:
         pass
 
+    @abstractmethod
+    async def increment_upload(self, user_id: str, usage_date: str) -> int:
+        pass
+
+    @abstractmethod
+    async def increment_received(self, user_id: str, usage_date: str) -> int:
+        pass
+
+
+class MediaQuotaEventRepository(ABC):
+    @abstractmethod
+    async def record_event(self, event: MediaQuotaEvent) -> bool:
+        """Returns True if newly inserted, False if already exists (idempotency)."""
+        pass
+
+    @abstractmethod
+    async def get_by_idempotency_key(self, idempotency_key: str) -> Optional[MediaQuotaEvent]:
+        pass
+
+    @abstractmethod
+    async def get_user_events_today(self, user_id: str, date_str: str) -> List[MediaQuotaEvent]:
+        pass
+
+    @abstractmethod
+    async def update_status(
+        self,
+        idempotency_key: str,
+        status: MediaQuotaStatus,
+        completed_at: Optional[datetime] = None,
+    ) -> bool:
+        pass
+
+
 
 class OutboxRepository(ABC):
     @abstractmethod
@@ -286,3 +324,195 @@ class OutboxRepository(ABC):
     @abstractmethod
     async def update_job(self, job: OutboxJob) -> None:
         pass
+
+
+class SubscriptionPlanRepository(ABC):
+    @abstractmethod
+    async def get_all_active_plans(self) -> List[SubscriptionPlan]:
+        pass
+
+    @abstractmethod
+    async def get_plan_by_code(self, code: str) -> Optional[SubscriptionPlan]:
+        pass
+
+    @abstractmethod
+    async def get_prices_for_plan(self, plan_id: str, provider: Optional[PaymentProviderType] = None) -> List[ProviderPrice]:
+        pass
+
+    @abstractmethod
+    async def get_price_by_id(self, price_id: str) -> Optional[ProviderPrice]:
+        pass
+
+
+class PaymentOrderRepository(ABC):
+    @abstractmethod
+    async def save(self, order: PaymentOrder) -> None:
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, order_id: str) -> Optional[PaymentOrder]:
+        pass
+
+    @abstractmethod
+    async def get_by_internal_order_id(self, internal_order_id: str) -> Optional[PaymentOrder]:
+        pass
+
+    @abstractmethod
+    async def get_by_provider_order_id(self, provider: PaymentProviderType, provider_order_id: str) -> Optional[PaymentOrder]:
+        pass
+
+    @abstractmethod
+    async def get_by_idempotency_key(self, idempotency_key: str) -> Optional[PaymentOrder]:
+        pass
+
+    @abstractmethod
+    async def get_user_orders(self, user_id: str, limit: int = 20) -> List[PaymentOrder]:
+        pass
+
+
+class PaymentTransactionRepository(ABC):
+    @abstractmethod
+    async def save(self, transaction: PaymentTransaction) -> None:
+        pass
+
+    @abstractmethod
+    async def get_by_id(self, transaction_id: str) -> Optional[PaymentTransaction]:
+        pass
+
+    @abstractmethod
+    async def get_by_provider_payment_id(self, provider_payment_id: str) -> Optional[PaymentTransaction]:
+        pass
+
+    @abstractmethod
+    async def get_by_order_id(self, order_id: str) -> List[PaymentTransaction]:
+        pass
+
+    @abstractmethod
+    async def list_by_user(self, user_id: str) -> List[PaymentTransaction]:
+        pass
+
+
+class UsageCounterRepository(ABC):
+    @abstractmethod
+    async def get_usage(self, user_id: str, feature_key: FeatureKey, period_start: str) -> int:
+        pass
+
+    @abstractmethod
+    async def increment_usage(self, user_id: str, feature_key: FeatureKey, period_start: str, period_end: str, delta: int = 1) -> int:
+        pass
+
+    @abstractmethod
+    async def get_user_daily_summary(self, user_id: str, date_str: str) -> dict:
+        pass
+
+
+class WebhookLedgerRepository(ABC):
+    @abstractmethod
+    async def record_event(self, event: WebhookEventLedger) -> bool:
+        """Returns True if newly inserted, False if already exists (duplicate)."""
+        pass
+
+    @abstractmethod
+    async def get_by_provider_event_id(self, provider: PaymentProviderType, provider_event_id: str) -> Optional[WebhookEventLedger]:
+        pass
+
+
+class AuditEventRepository(ABC):
+    @abstractmethod
+    async def record_event(self, event: AuditEvent) -> None:
+        pass
+
+    @abstractmethod
+    async def get_events_for_entity(self, entity_type: str, entity_id: str) -> List[AuditEvent]:
+        pass
+
+
+class ReferralRewardRepository(ABC):
+    @abstractmethod
+    async def save(self, referral: ReferralReward) -> None:
+        pass
+
+    @abstractmethod
+    async def get_by_invited_user_id(self, invited_user_id: str) -> Optional[ReferralReward]:
+        pass
+
+    @abstractmethod
+    async def count_qualified_in_period(self, referrer_user_id: str, since: str) -> int:
+        pass
+
+    @abstractmethod
+    async def get_user_referrals(self, referrer_user_id: str) -> List[ReferralReward]:
+        pass
+
+
+class PlayGameRepository(ABC):
+    @abstractmethod
+    async def save_session(self, session: "PlayGameSession") -> None:
+        pass
+
+    @abstractmethod
+    async def get_session(self, session_id: str) -> Optional["PlayGameSession"]:
+        pass
+
+    @abstractmethod
+    async def add_participant(self, participant: "GameParticipant") -> None:
+        pass
+
+    @abstractmethod
+    async def get_participants(self, session_id: str) -> List["GameParticipant"]:
+        pass
+
+    @abstractmethod
+    async def save_invitation(self, invitation: "GameInvitation") -> None:
+        pass
+
+    @abstractmethod
+    async def get_invitation(self, invitation_id: str) -> Optional["GameInvitation"]:
+        pass
+
+    @abstractmethod
+    async def get_pending_invitations_for_user(self, user_id: str) -> List["GameInvitation"]:
+        pass
+
+    @abstractmethod
+    async def record_action(
+        self,
+        action_id: str,
+        session_id: str,
+        user_id: str,
+        action_type: str,
+        payload: dict,
+        sequence_num: int,
+    ) -> None:
+        pass
+
+    @abstractmethod
+    async def get_actions(self, session_id: str) -> List[dict]:
+        pass
+
+    @abstractmethod
+    async def record_statistic(self, stat: "GameStatistic") -> None:
+        pass
+
+    @abstractmethod
+    async def get_statistic(self, user_id: str, game_id: "GameType") -> Optional["GameStatistic"]:
+        pass
+
+    @abstractmethod
+    async def get_user_statistics(self, user_id: str) -> List["GameStatistic"]:
+        pass
+
+
+class DuelQuotaRepository(ABC):
+    @abstractmethod
+    async def record_consumption(self, usage: "DuelQuotaUsage") -> bool:
+        pass
+
+    @abstractmethod
+    async def count_duels_in_period(self, user_id: str, period_start: str) -> int:
+        pass
+
+    @abstractmethod
+    async def has_consumed_for_session(self, user_id: str, session_id: str) -> bool:
+        pass
+
