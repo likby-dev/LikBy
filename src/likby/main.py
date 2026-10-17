@@ -799,7 +799,8 @@ async def run_polling() -> None:
     print("==================================================")
 
     # Initialize SQLite DB
-    conn = await init_sqlite_db(settings.database_url)
+    db_target = settings.database_url if (settings.database_url and "sqlite" in settings.database_url) else "likby.db"
+    conn = await init_sqlite_db(db_target)
     user_repo = SqliteUserRepository(conn)
     profile_repo = SqliteProfileRepository(conn)
     ticket_repo = SqliteMatchTicketRepository(conn)
