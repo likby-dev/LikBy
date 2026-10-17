@@ -211,13 +211,17 @@ def test_solo_game_lifecycle_zero_quota_consumed():
         ent_after = client.get("/api/v1/play/entitlements", headers={"X-User-Id": solo_uid}).json()
         assert ent_after["daily_duels_remaining"] == 5
 
-        # Submit move action
-        resp_act = client.post(
-            f"/api/v1/play/duels/{session_id}/action",
-            headers={"X-User-Id": solo_uid},
-            json={"action_type": "slide", "payload": {"direction": "up"}},
-        )
-        assert resp_act.status_code == 200
+        # Submit move action (try directions until valid slide)
+        resp_act = None
+        for d in ("left", "right", "up", "down"):
+            resp_act = client.post(
+                f"/api/v1/play/duels/{session_id}/action",
+                headers={"X-User-Id": solo_uid},
+                json={"action_type": "slide", "payload": {"direction": d}},
+            )
+            if resp_act.status_code == 200:
+                break
+        assert resp_act is not None and resp_act.status_code == 200
 
 
 def test_play_websocket_connection_and_events():
