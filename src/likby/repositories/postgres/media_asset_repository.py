@@ -53,6 +53,19 @@ class PostgresMediaAssetRepository(MediaAssetRepository):
             rows = await conn.fetch(query, session_id)
             return [self._row_to_entity(r) for r in rows]
 
+    async def get_by_message_id(self, message_id: str) -> Optional[MediaAsset]:
+        query = """
+            SELECT id, session_id, message_id, storage_provider, bucket_name as bucket,
+                   object_key, mime_type, size_bytes, sha256 as sha256_hash, original_filename,
+                   telegram_file_id, upload_status, created_at, deleted_at
+            FROM assets WHERE message_id = $1 LIMIT 1
+        """
+        async with self._pool.acquire() as conn:
+            row = await conn.fetchrow(query, message_id)
+            if not row:
+                return None
+            return self._row_to_entity(row)
+
     async def save(self, asset: MediaAsset) -> None:
         query = """
             INSERT INTO assets (
