@@ -3,9 +3,48 @@ likby.repositories.postgres.database
 PostgreSQL / Supabase connection pool management using asyncpg.
 """
 
+import re
 from typing import Optional
+import urllib.parse
 import asyncpg
 from likby.config import Settings
+
+
+def sanitize_postgres_url(raw_url: str) -> str:
+    """
+    Sanitize PostgreSQL / Supabase connection URLs.
+    Strips accidental template brackets (e.g. from [YOUR-PASSWORD] placeholders)
+    and properly percent-encodes special characters in user credentials to prevent
+    urllib.parse / asyncpg bracketed host syntax errors.
+    """
+    cleaned = raw_url.strip().replace("postgresql+asyncpg://", "postgresql://")
+    pattern = re.compile(
+        r"^(?P<scheme>[^:]+)://(?:(?P<user>[^:]+)(?::(?P<password>.*))?@)?(?P<host>[^:/]+)(?::(?P<port>\d+))?(?:/(?P<database>[^?]*))?(?:\?(?P<query>.*))?$"
+    )
+    match = pattern.match(cleaned)
+    if not match:
+        return cleaned
+
+    parts = match.groupdict()
+    user = parts.get("user") or ""
+    pwd = parts.get("password") or ""
+    host = parts.get("host") or ""
+    port_str = f":{parts['port']}" if parts.get("port") else ""
+    db = parts.get("database") or "postgres"
+    query_str = f"?{parts['query']}" if parts.get("query") else ""
+
+    # Strip accidental brackets around password (copied from [YOUR-PASSWORD] template)
+    if pwd.startswith("[") and pwd.endswith("]"):
+        pwd = pwd[1:-1]
+
+    # Decode if partially percent-encoded, then encode cleanly
+    try:
+        pwd = urllib.parse.unquote(pwd)
+    except Exception:
+        pass
+    encoded_pwd = urllib.parse.quote(pwd, safe="")
+
+    return f"{parts['scheme']}://{user}:{encoded_pwd}@{host}{port_str}/{db}{query_str}"
 
 
 class PostgresDatabase:
@@ -24,8 +63,7 @@ class PostgresDatabase:
         if not db_url or "sqlite" in db_url:
             raise ValueError("PostgresDatabase requires a valid PostgreSQL / Supabase connection string.")
 
-        # Clean URL if necessary (strip postgresql+asyncpg:// if provided)
-        clean_url = db_url.replace("postgresql+asyncpg://", "postgresql://")
+        clean_url = sanitize_postgres_url(db_url)
 
         self._pool = await asyncpg.create_pool(
             dsn=clean_url,
