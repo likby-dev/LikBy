@@ -3,10 +3,12 @@ likby.repositories.sqlite.message_repository
 aiosqlite implementation of MessageRepository.
 """
 
-from datetime import datetime
-from typing import List, Optional
+from datetime import datetime, timezone
+import json
+from typing import Any, Dict, List, Optional
 import aiosqlite
 from likby.domain.entities.message import ChatMessage
+from likby.domain.entities.session_event import SessionEvent
 from likby.domain.enums import MessageDeliveryStatus, MessageType
 from likby.repositories.interfaces import MessageRepository
 
@@ -124,3 +126,85 @@ class SqliteMessageRepository(MessageRepository):
             created_at=datetime.fromisoformat(row[11]),
             delivered_at=datetime.fromisoformat(row[12]) if row[12] else None,
         )
+
+    async def save_event(
+        self,
+        session_id: str,
+        event_id: str,
+        event_type: str,
+        details: Optional[Dict[str, Any]] = None,
+        display_text: Optional[str] = None,
+        actor_user_id: Optional[str] = None,
+        sequence: Optional[int] = None,
+    ) -> SessionEvent:
+        now_dt = datetime.now(timezone.utc)
+        payload = details or {}
+        resolved_display = display_text or payload.get("display_text") or f"System event: {event_type}"
+        details_json = json.dumps(payload) if payload else None
+
+        await self._conn.execute(
+            """
+            INSERT INTO session_events (
+                id, session_id, event_type, display_text, sequence,
+                actor_user_id, details, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                display_text = excluded.display_text,
+                details = excluded.details
+            """,
+            (
+                event_id,
+                session_id,
+                event_type,
+                resolved_display,
+                sequence,
+                actor_user_id,
+                details_json,
+                now_dt.isoformat(),
+            ),
+        )
+        await self._conn.commit()
+        return SessionEvent(
+            id=event_id,
+            session_id=session_id,
+            event_type=event_type,
+            display_text=resolved_display,
+            sequence=sequence,
+            metadata=payload,
+            created_at=now_dt,
+        )
+
+    async def get_session_events(
+        self, session_id: str, limit: int = 100, offset: int = 0
+    ) -> List[SessionEvent]:
+        async with self._conn.execute(
+            """
+            SELECT id, session_id, event_type, display_text, sequence,
+                   actor_user_id, details, created_at
+            FROM session_events
+            WHERE session_id = ?
+            ORDER BY COALESCE(sequence, 0) ASC, created_at ASC
+            LIMIT ? OFFSET ?
+            """,
+            (session_id, limit, offset),
+        ) as cursor:
+            rows = await cursor.fetchall()
+            events: List[SessionEvent] = []
+            for r in rows:
+                meta = json.loads(r[6]) if r[6] else {}
+                dt = datetime.fromisoformat(r[7])
+                if dt.tzinfo is None:
+                    dt = dt.replace(tzinfo=timezone.utc)
+                events.append(
+                    SessionEvent(
+                        id=r[0],
+                        session_id=r[1],
+                        event_type=r[2],
+                        display_text=r[3],
+                        sequence=r[4],
+                        metadata=meta,
+                        created_at=dt,
+                    )
+                )
+            return events
+

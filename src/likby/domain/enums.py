@@ -56,6 +56,7 @@ class SessionStatus(str, Enum):
     """Chat session status."""
     ACTIVE = "ACTIVE"
     ENDED = "ENDED"
+    REPORTED = "REPORTED"
 
 
 ChatSessionStatus = SessionStatus

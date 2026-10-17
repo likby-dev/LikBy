@@ -95,6 +95,13 @@ class Settings(BaseSettings):
     media_retention_days: int = 365
     rate_limit_enabled: bool = True
 
+    # Firestore & Transcript Configuration
+    firestore_write_max_attempts: int = 5
+    firestore_retry_base_seconds: float = 1.0
+    firestore_retry_max_seconds: float = 30.0
+    transcript_default_page_size: int = 100
+    transcript_max_page_size: int = 500
+
     # Payment Provider Configuration
     payment_mode: Literal["test", "live"] = "test"
     razorpay_key_id: Optional[str] = None

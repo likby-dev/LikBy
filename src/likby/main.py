@@ -22,6 +22,7 @@ import uvicorn
 
 from likby.api.payments import router as payments_api_router
 from likby.api.play import router as play_api_router
+from likby.api.chat_sessions import router as chat_sessions_api_router
 from likby.config import Settings, get_settings
 from likby.repositories.sqlite.play_game_repository import (
     SqliteDuelQuotaRepository,
@@ -353,6 +354,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.duel_quota_repo = duel_quota_repo
     app.state.gaming_entitlement_service = gaming_entitlement_service
     app.state.play_game_service = play_game_service
+    app.state.session_repo = session_repo
+    app.state.message_repo = message_repo
+    app.state.media_repo = media_repo
+    app.state.transcript_service = transcript_service
 
     # 5. Build Background Services & Workers
     reconciliation_service = ReconciliationService(
@@ -427,9 +432,10 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Register Payments, Subscriptions, and Webhook API router
+# Register Payments, Subscriptions, Webhooks, Play, and Chat Session Transcripts
 app.include_router(payments_api_router)
 app.include_router(play_api_router)
+app.include_router(chat_sessions_api_router)
 
 # Mount LikBy Play Telegram Mini App static assets
 _static_play_dir = os.path.join(os.path.dirname(__file__), "static", "play")

@@ -11,6 +11,13 @@
       "collectionGroup": "messages",
       "queryScope": "COLLECTION",
       "fields": [
+        { "fieldPath": "sequence_number", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "messages",
+      "queryScope": "COLLECTION",
+      "fields": [
         { "fieldPath": "created_at", "order": "ASCENDING" }
       ]
     },
@@ -19,6 +26,28 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "sequence", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "sequence_number", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "created_at", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "chat_sessions",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "participant_ids", "arrayConfig": "CONTAINS" },
+        { "fieldPath": "status", "order": "ASCENDING" }
       ]
     },
     {

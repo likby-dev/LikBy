@@ -5,7 +5,7 @@ Abstract repository interfaces decoupling domain services from persistence backe
 
 from abc import ABC, abstractmethod
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from likby.domain.entities.user import User
 from likby.domain.entities.profile import Profile
 from likby.domain.entities.match_ticket import MatchTicket
@@ -161,6 +161,23 @@ class MessageRepository(ABC):
         telegram_msg_id: Optional[int] = None,
     ) -> None:
         pass
+
+    async def save_event(
+        self,
+        session_id: str,
+        event_id: str,
+        event_type: str,
+        details: Optional[Dict[str, Any]] = None,
+        display_text: Optional[str] = None,
+        actor_user_id: Optional[str] = None,
+        sequence: Optional[int] = None,
+    ) -> Any:
+        return None
+
+    async def get_session_events(
+        self, session_id: str, limit: int = 100, offset: int = 0
+    ) -> List[Any]:
+        return []
 
 
 class MediaAssetRepository(ABC):

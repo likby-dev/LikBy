@@ -56,7 +56,10 @@ class ChatSession(BaseModel):
 
     def end(self, ended_by: Optional[str], reason: TerminationReason) -> None:
         """Terminate the chat session."""
-        self.status = SessionStatus.ENDED
+        if reason == TerminationReason.USER_REPORTED:
+            self.status = SessionStatus.REPORTED
+        else:
+            self.status = SessionStatus.ENDED
         self.ended_by_user_id = ended_by
         self.termination_reason = reason
         self.ended_at = datetime.now(timezone.utc)

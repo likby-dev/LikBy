@@ -161,6 +161,19 @@ CREATE TABLE IF NOT EXISTS messages (
 CREATE INDEX IF NOT EXISTS idx_messages_session_seq ON messages(session_id, sequence);
 CREATE INDEX IF NOT EXISTS idx_messages_created ON messages(created_at);
 
+-- Session events table
+CREATE TABLE IF NOT EXISTS session_events (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+    event_type TEXT NOT NULL,
+    display_text TEXT NOT NULL,
+    sequence INTEGER,
+    actor_user_id TEXT,
+    details TEXT,
+    created_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_session_events_session ON session_events(session_id, sequence);
+
 -- Media assets table
 CREATE TABLE IF NOT EXISTS media_assets (
     id TEXT PRIMARY KEY,

@@ -97,6 +97,14 @@ class ChatRelayService:
             delivery_status=MessageDeliveryStatus.DELIVERED,
         )
         await self._message_repo.save(msg)
+        if hasattr(self._message_repo, "save_event"):
+            await self._message_repo.save_event(
+                session_id=session_id,
+                event_id=f"evt_{uuid.uuid4().hex[:12]}",
+                event_type="SYSTEM_EVENT",
+                display_text=text,
+                sequence=seq,
+            )
         return msg
 
     async def relay_text(self, sender_tg_id: int, text: str) -> bool:

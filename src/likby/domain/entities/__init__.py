@@ -28,6 +28,7 @@ from likby.domain.entities.play_game import (
 from likby.domain.entities.profile import Profile
 from likby.domain.entities.rating import SessionRating
 from likby.domain.entities.report import Report
+from likby.domain.entities.session_event import SessionEvent
 from likby.domain.entities.subscription import SubscriptionEntitlement
 from likby.domain.entities.user import User
 
@@ -37,6 +38,7 @@ __all__ = [
     "MatchTicket",
     "ChatSession",
     "ChatMessage",
+    "SessionEvent",
     "MediaAsset",
     "GameSession",
     "PlayGameSession",

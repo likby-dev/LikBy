@@ -28,50 +28,54 @@ service cloud.firestore {
     }
 
     function isSessionParticipant(sessionId) {
-      return isAuthenticated() && 
-        request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participants;
+      return isAuthenticated() && (
+        (exists(/databases/$(database)/documents/chat_sessions/$(sessionId)) && request.auth.uid in get(/databases/$(database)/documents/chat_sessions/$(sessionId)).data.participant_ids) ||
+        (exists(/databases/$(database)/documents/sessions/$(sessionId)) && request.auth.uid in get(/databases/$(database)/documents/sessions/$(sessionId)).data.participants)
+      );
     }
 
     // ==========================================
-    // SESSIONS & CONVERSATION TOPOLOGY
+    // CHAT SESSIONS & CONVERSATION TOPOLOGY
     // ==========================================
 
-    match /sessions/{sessionId} {
-      // Only authenticated participants or admin staff can read session metadata
+    match /chat_sessions/{sessionId} {
       allow read: if isAuthenticated() && (
-        request.auth.uid in resource.data.participants || isAdmin()
+        request.auth.uid in resource.data.participant_ids || isAdmin()
       );
-      
-      // All writes (creation, sequence allocation, termination) must originate 
-      // authoritatively from FastAPI backend via Firebase Admin SDK
       allow write: if false;
 
-      // ------------------------------------------
-      // Messages Subcollection
-      // sessions/{sessionId}/messages/{messageId}
-      // ------------------------------------------
       match /messages/{messageId} {
-        // Only active session participants or staff can read messages
         allow read: if isAuthenticated() && (
           isSessionParticipant(sessionId) || isAdmin()
         );
-        
-        // Direct client writes are blocked; all message forwarding passes 
-        // through FastAPI validation, rate limiting, and outbox persistence
         allow write: if false;
       }
 
-      // ------------------------------------------
-      // Events Subcollection
-      // sessions/{sessionId}/events/{eventId}
-      // ------------------------------------------
       match /events/{eventId} {
-        // System and moderation events can only be read by authorized participants or staff
         allow read: if isAuthenticated() && (
           isSessionParticipant(sessionId) || isAdmin()
         );
-        
-        // System event writes are strictly server-side
+        allow write: if false;
+      }
+    }
+
+    match /sessions/{sessionId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid in resource.data.participants || isAdmin()
+      );
+      allow write: if false;
+
+      match /messages/{messageId} {
+        allow read: if isAuthenticated() && (
+          isSessionParticipant(sessionId) || isAdmin()
+        );
+        allow write: if false;
+      }
+
+      match /events/{eventId} {
+        allow read: if isAuthenticated() && (
+          isSessionParticipant(sessionId) || isAdmin()
+        );
         allow write: if false;
       }
     }
