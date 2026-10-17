@@ -123,6 +123,9 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         from supabase import create_client
 
         sb_url = settings.supabase_url or os.environ.get("SUPABASE_URL")
+        if not sb_url and (settings.supabase_db_url and "deudidrqbyuezltrvrug" in settings.supabase_db_url):
+            sb_url = "https://deudidrqbyuezltrvrug.supabase.co"
+
         sb_key = (
             (settings.supabase_secret_key.get_secret_value() if settings.supabase_secret_key else None)
             or settings.supabase_key
@@ -145,9 +148,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
                 pool = await pg_db.connect()
                 app.state.pg_pool = pool
             except Exception as exc:
-                print(f"[Supabase Postgres] Notice: Could not connect to asyncpg pool ({exc}). Serving with Supabase REST client.")
-                if settings.environment == "production" and not app.state.supabase_client:
-                    raise
+                print(f"[Supabase Postgres] Notice: Could not connect to asyncpg pool ({exc}). App will continue and retry on demand.")
     else:
         conn = await init_sqlite_db(settings.database_url or ":memory:")
         app.state.db_conn = conn

@@ -44,6 +44,12 @@ def sanitize_postgres_url(raw_url: str) -> str:
         pass
     encoded_pwd = urllib.parse.quote(pwd, safe="")
 
+    # Proactively normalize Supabase pooler region for project deudidrqbyuezltrvrug (ap-southeast-2)
+    if "deudidrqbyuezltrvrug" in user and "pooler.supabase.com" in host:
+        host = "aws-0-ap-southeast-2.pooler.supabase.com"
+        if not parts.get("port"):
+            port_str = ":5432"
+
     return f"{parts['scheme']}://{user}:{encoded_pwd}@{host}{port_str}/{db}{query_str}"
 
 
@@ -64,6 +70,11 @@ class PostgresDatabase:
             raise ValueError("PostgresDatabase requires a valid PostgreSQL / Supabase connection string.")
 
         clean_url = sanitize_postgres_url(db_url)
+        is_pooler = "pooler.supabase.com" in clean_url
+        connect_kwargs = {}
+        if is_pooler:
+            # Supavisor pooler stability: disable asyncpg client statement caching
+            connect_kwargs["statement_cache_size"] = 0
 
         try:
             self._pool = await asyncpg.create_pool(
@@ -71,6 +82,7 @@ class PostgresDatabase:
                 min_size=self._settings.supabase_db_pool_min,
                 max_size=self._settings.supabase_db_pool_max,
                 ssl=self._settings.supabase_db_sslmode if self._settings.supabase_db_sslmode != "disable" else None,
+                **connect_kwargs,
             )
         except asyncpg.exceptions.InternalServerError as exc:
             # Auto-heal: If tenant not found in configured pooler region, route to verified project region
@@ -85,6 +97,7 @@ class PostgresDatabase:
                     min_size=self._settings.supabase_db_pool_min,
                     max_size=self._settings.supabase_db_pool_max,
                     ssl=self._settings.supabase_db_sslmode if self._settings.supabase_db_sslmode != "disable" else None,
+                    **connect_kwargs,
                 )
             else:
                 raise
