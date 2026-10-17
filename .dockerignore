@@ -1,16 +1,45 @@
+# Git & Workspace
 .git
 .gitignore
+.github
+
+# Environment Variables & Secrets
 .env
+.env.*
+!.env.example
+*.pem
+*.key
+firebase-credentials*.json
+service-account*.json
+secrets/
+
+# Databases & Local Storage
 *.db
 *.db-wal
 *.db-shm
+*.db-journal
+likby.db*
 media_store/
+
+# Python & Virtual Environments
 __pycache__/
-*.pyc
-*.pyo
-.pytest_cache/
-.ruff_cache/
-.mypy_cache/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Testing, Tooling & Logs
 tests/
 docs/
 scratch/
+.system_generated_scratch/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+*.log
