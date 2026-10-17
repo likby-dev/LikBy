@@ -3,6 +3,7 @@ likby.repositories.sqlite.database
 SQLite connection initialization, WAL mode configuration, and DDL schema.
 """
 
+from pathlib import Path
 import aiosqlite
 
 
@@ -288,6 +289,9 @@ async def init_sqlite_db(db_path: str) -> aiosqlite.Connection:
     for prefix in ("sqlite+aiosqlite:///", "sqlite:///", "sqlite://"):
         if clean_path.startswith(prefix):
             clean_path = clean_path[len(prefix):]
+    db_file = Path(clean_path)
+    if db_file.parent and str(db_file.parent) not in ("", "."):
+        db_file.parent.mkdir(parents=True, exist_ok=True)
     conn = await aiosqlite.connect(clean_path)
     
     # Enable WAL mode for high read concurrency

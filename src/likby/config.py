@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = "INFO"
 
     # Server Networking
-    host: str = "127.0.0.1"
+    host: str = "0.0.0.0"
     port: int = 8000
     base_url: str = Field(default="http://localhost:8000", description="Base public URL")
 
@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     database_direct_url: Optional[str] = None
     db_pool_min_size: int = 2
     db_pool_max_size: int = 10
+
+    # Storage Configuration
+    storage_provider: Literal["local", "r2"] = "local"
+    media_store_dir: str = "media_store"
 
     # AI Feature Flags & Keys (Optional)
     ai_enabled: bool = False
@@ -67,9 +71,13 @@ class Settings(BaseSettings):
     @field_validator("base_url")
     @classmethod
     def validate_base_url(cls, v: str) -> str:
-        if not (v.startswith("http://") or v.startswith("https://")):
-            raise ValueError("BASE_URL must be a valid HTTP or HTTPS URL.")
-        return v.rstrip("/")
+        v = v.strip().rstrip("/")
+        if "://" in v:
+            if not (v.startswith("http://") or v.startswith("https://")):
+                raise ValueError("BASE_URL must be a valid HTTP or HTTPS URL.")
+        else:
+            v = f"https://{v}"
+        return v
 
 
 @lru_cache

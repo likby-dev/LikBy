@@ -15,6 +15,15 @@ def test_health_live():
         assert response.json() == {"status": "ok"}
 
 
+def test_root_endpoint():
+    with TestClient(app) as client:
+        response = client.get("/")
+        assert response.status_code == 200
+        data = response.json()
+        assert data["app"] == "LikBy Platform"
+        assert data["status"] == "online"
+
+
 def test_webhook_rejects_missing_or_invalid_secret_token():
     with TestClient(app) as client:
         # No header

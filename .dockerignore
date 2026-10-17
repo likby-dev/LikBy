@@ -1,0 +1,16 @@
+.git
+.gitignore
+.env
+*.db
+*.db-wal
+*.db-shm
+media_store/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+tests/
+docs/
+scratch/

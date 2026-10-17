@@ -363,39 +363,82 @@ python -m pytest --cov=likby --cov-report=term-missing
 
 ### Verified Test Results
 ```text
-============================= 53 passed in 18.56s =============================
+============================= 55 passed in 12.53s =============================
 tests/integration/test_api.py::test_health_live PASSED
+tests/integration/test_api.py::test_root_endpoint PASSED
 tests/integration/test_api.py::test_webhook_rejects_missing_or_invalid_secret_token PASSED
 tests/integration/test_new_repositories.py::test_message_and_outbox_repositories PASSED
 tests/integration/test_new_repositories.py::test_social_and_subscription_repositories PASSED
 tests/integration/test_sqlite_repositories.py::test_user_repository_crud PASSED
 tests/integration/test_sqlite_repositories.py::test_report_repository PASSED
+tests/unit/test_config.py::test_render_host_auto_prefixes_https PASSED
 tests/unit/test_transcript.py::test_transcript_formatting_specification PASSED
 tests/unit/test_media_archival.py::test_media_archival_and_hash_calculation PASSED
 tests/unit/test_karma_service.py::test_session_rating_and_karma_lifecycle PASSED
 tests/unit/test_social_service.py::test_mutual_like_friendship_and_capacity_limits PASSED
 tests/unit/test_discovery_and_subscriptions.py::test_id_search_daily_quota_and_upgrade PASSED
-... (53 total test cases passed)
+... (55 total test cases passed with 100% pass rate)
 ```
 
 ---
 
-## 9. Production Deployment Guide (Render & Cloudflare)
+## 9. Production Deployment Guide (Render)
 
-### Deploying on Render
+LikBy is pre-configured for seamless zero-downtime deployment on [Render](https://render.com).
 
-1. Create a **New Web Service** connected to `https://github.com/likby-dev/LikBy`.
-2. Select Environment: **Python 3**.
-3. Build Command: `pip install -e .`
-4. Start Command: `uvicorn likby.main:app --host 0.0.0.0 --port 10000`
-5. Configure Environment Variables in Render Dashboard:
-   * `BOT_TOKEN`: Your Telegram Bot API token.
+### Option A: Render Blueprint (Recommended — 1-Click Setup)
+
+Render will automatically parse [`render.yaml`](render.yaml) to configure the web service, health checks, ports, and environment variables:
+
+1. Log in to [dashboard.render.com](https://dashboard.render.com).
+2. Click **New +** $\to$ **Blueprint**.
+3. Connect your GitHub repository (`https://github.com/likby-dev/LikBy`).
+4. Render detects `render.yaml`. Enter your `BOT_TOKEN` (from `@BotFather`).
+5. Click **Apply**. Render will automatically build, deploy, configure the Telegram Webhook, and launch the service!
+
+### Option B: Manual Web Service Setup
+
+If you prefer manual configuration:
+
+1. Click **New +** $\to$ **Web Service**.
+2. Connect your GitHub repository: `https://github.com/likby-dev/LikBy`.
+3. Configure the service settings:
+   * **Runtime**: `Python 3`
+   * **Build Command**: `pip install --upgrade pip && pip install -r requirements.txt`
+   * **Start Command**: `uvicorn likby.main:app --host 0.0.0.0 --port $PORT --workers 1`
+   * **Health Check Path**: `/health/live`
+4. In the **Environment Variables** tab, add:
+   * `PYTHON_VERSION`: `3.11.9`
+   * `ENVIRONMENT`: `production`
    * `BOT_MODE`: `webhook`
-   * `BASE_URL`: `https://your-service.onrender.com`
-   * `WEBHOOK_SECRET_TOKEN`: A secure random token.
-   * `STORAGE_PROVIDER`: `r2`
-   * `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`.
-6. Health Check Path: `/health/ready`
+   * `BOT_TOKEN`: `<your-telegram-bot-token-from-botfather>`
+   * `WEBHOOK_SECRET_TOKEN`: `<generate-a-random-32-char-hex-string>`
+   * `BASE_URL`: `https://<your-app-name>.onrender.com`
+   * `DATABASE_URL`: `sqlite+aiosqlite:///likby.db`
+5. Click **Deploy Web Service**.
+
+### Option C: Docker Container Deployment
+
+LikBy includes a production [`Dockerfile`](Dockerfile) and [`.dockerignore`](.dockerignore):
+1. In Render, select **Docker** as the runtime.
+2. Render builds the container and runs the healthcheck automatically.
+
+### Verifying the Live Deployment
+
+Once deployed, verify your service:
+```bash
+# 1. Check Root Endpoint
+curl -s https://<your-service>.onrender.com/
+# Returns: {"app":"LikBy Platform","status":"online","version":"0.1.0",...}
+
+# 2. Check Liveness Probe
+curl -i https://<your-service>.onrender.com/health/live
+# Returns: HTTP/1.1 200 OK
+
+# 3. Verify Telegram Webhook Registration
+curl -s "https://api.telegram.org/bot<YOUR_BOT_TOKEN>/getWebhookInfo"
+# Confirms url: https://<your-service>.onrender.com/api/v1/telegram/webhook
+```
 
 ---
 

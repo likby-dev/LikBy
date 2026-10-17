@@ -35,3 +35,12 @@ def test_invalid_base_url_raises_error():
             base_url="ftp://invalid-url.com",
         )
     assert "BASE_URL must be a valid HTTP or HTTPS URL" in str(exc_info.value)
+
+
+def test_render_host_auto_prefixes_https():
+    settings = Settings(
+        bot_token=SecretStr("123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"),
+        base_url="likby-app.onrender.com",
+    )
+    assert settings.base_url == "https://likby-app.onrender.com"
+

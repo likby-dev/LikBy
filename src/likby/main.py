@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import contextlib
 from contextlib import asynccontextmanager
+import os
 import sys
 from typing import AsyncGenerator
 
@@ -91,7 +92,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     session_cache = ActiveSessionCache()
     bot = create_bot(settings)
 
-    media_storage = LocalMediaStorageProvider()
+    media_storage = LocalMediaStorageProvider(base_dir=settings.media_store_dir)
     media_service = MediaService(
         provider=media_storage,
         media_repo=media_repo,
@@ -182,13 +183,21 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     # 6. Webhook setup if in webhook mode
     if settings.bot_mode == "webhook":
-        webhook_url = f"{settings.base_url}/api/v1/telegram/webhook"
-        await bot.set_webhook(
-            url=webhook_url,
-            secret_token=settings.webhook_secret_token.get_secret_value(),
-            allowed_updates=["message", "callback_query"],
-            drop_pending_updates=False,
-        )
+        if "localhost" in settings.base_url or "127.0.0.1" in settings.base_url:
+            print(
+                f"⚠️ [Warning] Webhook mode is enabled, but BASE_URL is set to '{settings.base_url}'. "
+                "Telegram requires a public HTTPS URL (e.g. https://likby.onrender.com). Skipping set_webhook."
+            )
+        else:
+            webhook_url = f"{settings.base_url}/api/v1/telegram/webhook"
+            print(f"🔗 Setting Telegram webhook to {webhook_url}...")
+            await bot.set_webhook(
+                url=webhook_url,
+                secret_token=settings.webhook_secret_token.get_secret_value(),
+                allowed_updates=["message", "callback_query"],
+                drop_pending_updates=False,
+            )
+            print("✅ Telegram webhook successfully registered.")
 
     yield
 
@@ -206,6 +215,18 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+
+@app.get("/")
+async def root() -> dict:
+    return {
+        "app": "LikBy Platform",
+        "status": "online",
+        "version": "0.1.0",
+        "bot": "https://t.me/LikBy_bot",
+        "health": "/health/live",
+        "docs": "/docs",
+    }
 
 
 @app.get("/health/live")
@@ -312,7 +333,7 @@ async def run_polling() -> None:
     me = await bot.get_me()
     print(f"🤖 Bot connected as @{me.username} ({me.first_name})")
 
-    media_storage = LocalMediaStorageProvider()
+    media_storage = LocalMediaStorageProvider(base_dir=settings.media_store_dir)
     media_service = MediaService(
         provider=media_storage,
         media_repo=media_repo,
@@ -408,14 +429,18 @@ async def run_polling() -> None:
 
 
 def main() -> None:
+    settings = get_settings()
+    env_port = int(os.environ.get("PORT", settings.port))
+
     parser = argparse.ArgumentParser(description="LikBy Service Runner")
     parser.add_argument("--mode", choices=["webhook", "polling"], default=None)
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default=None)
+    parser.add_argument("--port", type=int, default=None)
     args = parser.parse_args()
 
-    settings = get_settings()
     mode = args.mode or settings.bot_mode
+    host = args.host or settings.host or "0.0.0.0"
+    port = args.port or env_port
 
     if mode == "polling":
         try:
@@ -423,7 +448,8 @@ def main() -> None:
         except (KeyboardInterrupt, SystemExit):
             print("\n👋 LikBy Bot stopped gracefully.")
     else:
-        uvicorn.run("likby.main:app", host=args.host, port=args.port, reload=False)
+        print(f"🚀 Starting LikBy Webhook Server on http://{host}:{port}")
+        uvicorn.run("likby.main:app", host=host, port=port, reload=False)
 
 
 if __name__ == "__main__":
