@@ -34,10 +34,10 @@ RUN pip install --upgrade pip setuptools wheel
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy package configuration and source for editable/wheel install
-COPY pyproject.toml .
+# Copy package configuration, readme and source for non-editable production wheel install
+COPY pyproject.toml README.md ./
 COPY src/ ./src/
-RUN pip install --no-cache-dir --no-deps -e .
+RUN pip install --no-cache-dir --no-deps .
 
 
 # ------------------------------------------------------------------------------
@@ -57,7 +57,8 @@ ENV PYTHONUNBUFFERED=1 \
     PORT=8000 \
     HOST=0.0.0.0 \
     ENVIRONMENT=production \
-    PATH="/opt/venv/bin:$PATH"
+    PATH="/opt/venv/bin:$PATH" \
+    PYTHONPATH="/app/src:$PYTHONPATH"
 
 # Install only essential runtime dependencies (curl for container health probes)
 RUN apt-get update && apt-get install -y --no-install-recommends \
