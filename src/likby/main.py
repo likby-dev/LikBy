@@ -134,19 +134,24 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         else:
             app.state.supabase_client = None
 
+        # Initialize hermetic in-memory transient store for local sqlite repos
+        conn = await init_sqlite_db(":memory:")
+        app.state.db_conn = conn
+
         if settings.supabase_db_url or (settings.database_url and "postgres" in settings.database_url):
-            from likby.repositories.postgres.database import PostgresDatabase
-            pg_db = PostgresDatabase(settings)
-            pool = await pg_db.connect()
-            app.state.db_conn = pool
-            conn = pool
-        else:
-            # Hermetic in-memory transient store (zero disk writes)
-            conn = await init_sqlite_db(":memory:")
-            app.state.db_conn = conn
+            try:
+                from likby.repositories.postgres.database import PostgresDatabase
+                pg_db = PostgresDatabase(settings)
+                pool = await pg_db.connect()
+                app.state.pg_pool = pool
+            except Exception as exc:
+                print(f"[Supabase Postgres] Notice: Could not connect to asyncpg pool ({exc}). Serving with Supabase REST client.")
+                if settings.environment == "production" and not app.state.supabase_client:
+                    raise
     else:
         conn = await init_sqlite_db(settings.database_url or ":memory:")
         app.state.db_conn = conn
+
 
     # 2. Build Repositories
     user_repo = SqliteUserRepository(conn)

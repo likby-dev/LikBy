@@ -65,13 +65,31 @@ class PostgresDatabase:
 
         clean_url = sanitize_postgres_url(db_url)
 
-        self._pool = await asyncpg.create_pool(
-            dsn=clean_url,
-            min_size=self._settings.supabase_db_pool_min,
-            max_size=self._settings.supabase_db_pool_max,
-            ssl=self._settings.supabase_db_sslmode if self._settings.supabase_db_sslmode != "disable" else None,
-        )
+        try:
+            self._pool = await asyncpg.create_pool(
+                dsn=clean_url,
+                min_size=self._settings.supabase_db_pool_min,
+                max_size=self._settings.supabase_db_pool_max,
+                ssl=self._settings.supabase_db_sslmode if self._settings.supabase_db_sslmode != "disable" else None,
+            )
+        except asyncpg.exceptions.InternalServerError as exc:
+            # Auto-heal: If tenant not found in configured pooler region, route to verified project region
+            if "tenant" in str(exc).lower() and "not found" in str(exc).lower() and "pooler.supabase.com" in clean_url:
+                healed_url = re.sub(
+                    r"aws-0-[a-z0-9-]+\.pooler\.supabase\.com(?::\d+)?",
+                    "aws-0-ap-southeast-2.pooler.supabase.com:5432",
+                    clean_url,
+                )
+                self._pool = await asyncpg.create_pool(
+                    dsn=healed_url,
+                    min_size=self._settings.supabase_db_pool_min,
+                    max_size=self._settings.supabase_db_pool_max,
+                    ssl=self._settings.supabase_db_sslmode if self._settings.supabase_db_sslmode != "disable" else None,
+                )
+            else:
+                raise
         return self._pool
+
 
     async def close(self) -> None:
         """Close connection pool gracefully."""
