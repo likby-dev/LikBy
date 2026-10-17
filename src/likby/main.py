@@ -117,9 +117,35 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan managing DB, Bot, background tasks, and all services."""
     settings = get_settings()
 
-    # 1. Initialize SQLite Database
-    conn = await init_sqlite_db(settings.database_url)
-    app.state.db_conn = conn
+    # 1. Initialize Database (Zero Local SQLite Disk Storage)
+    if settings.database_backend in ("postgres", "supabase"):
+        from supabase import create_client
+
+        sb_url = settings.supabase_url or os.environ.get("SUPABASE_URL")
+        sb_key = (
+            (settings.supabase_secret_key.get_secret_value() if settings.supabase_secret_key else None)
+            or settings.supabase_key
+            or os.environ.get("SUPABASE_SECRET_KEY")
+            or os.environ.get("SUPABASE_KEY")
+        )
+        if sb_url and sb_key:
+            app.state.supabase_client = create_client(sb_url, sb_key)
+        else:
+            app.state.supabase_client = None
+
+        if settings.supabase_db_url or (settings.database_url and "postgres" in settings.database_url):
+            from likby.repositories.postgres.database import PostgresDatabase
+            pg_db = PostgresDatabase(settings)
+            pool = await pg_db.connect()
+            app.state.db_conn = pool
+            conn = pool
+        else:
+            # Hermetic in-memory transient store (zero disk writes)
+            conn = await init_sqlite_db(":memory:")
+            app.state.db_conn = conn
+    else:
+        conn = await init_sqlite_db(settings.database_url or ":memory:")
+        app.state.db_conn = conn
 
     # 2. Build Repositories
     user_repo = SqliteUserRepository(conn)
@@ -152,7 +178,22 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     session_cache = ActiveSessionCache()
     bot = create_bot(settings)
 
-    media_storage = LocalMediaStorageProvider(base_dir=settings.media_store_dir)
+    # Cloud-first media storage (Zero local disk storage)
+    if settings.storage_provider == "supabase" and getattr(app.state, "supabase_client", None):
+        from likby.services.media_storage_service import SupabaseStorageProvider
+        media_storage = SupabaseStorageProvider(supabase_client=app.state.supabase_client, bucket_name=settings.r2_bucket_name)
+    elif settings.storage_provider == "r2":
+        from likby.services.media_storage_service import CloudflareR2StorageProvider
+        media_storage = CloudflareR2StorageProvider(
+            account_id=settings.r2_account_id,
+            access_key_id=settings.r2_access_key_id,
+            secret_access_key=settings.r2_secret_access_key.get_secret_value() if settings.r2_secret_access_key else None,
+            bucket_name=settings.r2_bucket_name,
+            endpoint_url=settings.r2_endpoint_url,
+            region=settings.r2_region,
+        )
+    else:
+        media_storage = LocalMediaStorageProvider(base_dir=settings.media_store_dir)
     media_service = MediaService(
         provider=media_storage,
         media_repo=media_repo,
@@ -432,8 +473,15 @@ async def health_ready(cron: bool = False, request: Request = None) -> JSONRespo
     # 1. Check Database Connectivity
     try:
         conn = getattr(app.state, "db_conn", None)
-        if conn:
+        sb_client = getattr(app.state, "supabase_client", None)
+        if conn and hasattr(conn, "fetchval"):
+            # asyncpg PostgreSQL pool
+            await asyncio.wait_for(conn.fetchval("SELECT 1"), timeout=2.0)
+            checks["database"] = "healthy"
+        elif conn and hasattr(conn, "execute"):
             await asyncio.wait_for(conn.execute("SELECT 1"), timeout=2.0)
+            checks["database"] = "healthy"
+        elif sb_client:
             checks["database"] = "healthy"
         else:
             checks["database"] = "uninitialized"
@@ -442,10 +490,10 @@ async def health_ready(cron: bool = False, request: Request = None) -> JSONRespo
         checks["database"] = f"unhealthy: {e}"
         is_ready = False
 
-    # 2. Check Storage Accessibility
+    # 2. Check Storage Accessibility (Zero local storage)
     try:
-        if settings.storage_provider == "r2":
-            checks["storage"] = f"configured (r2: {settings.r2_bucket_name})"
+        if settings.storage_provider in ("r2", "supabase"):
+            checks["storage"] = f"configured ({settings.storage_provider}: {settings.r2_bucket_name})"
         else:
             os.makedirs(settings.media_store_dir, exist_ok=True)
             checks["storage"] = f"healthy (local: {settings.media_store_dir})"

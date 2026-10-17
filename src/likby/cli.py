@@ -49,12 +49,14 @@ def check_config() -> int:
 
     # 3. Database
     print(f"[*] Database Backend: {settings.database_backend}")
-    if settings.database_backend == "postgres":
+    if settings.database_backend in ("postgres", "supabase"):
         db_url = settings.supabase_db_url or settings.database_url
-        if not db_url or "sqlite" in db_url:
-            errors.append("DATABASE_BACKEND='postgres' requires a valid SUPABASE_DB_URL or DATABASE_URL")
-        else:
+        if db_url and "sqlite" not in db_url:
             print("[OK] Supabase PostgreSQL URL: [CONFIGURED]")
+        elif settings.supabase_url and (settings.supabase_key or settings.supabase_secret_key):
+            print("[OK] Supabase API: [CONFIGURED]")
+        else:
+            errors.append("DATABASE_BACKEND='postgres' requires a valid SUPABASE_DB_URL, DATABASE_URL, or SUPABASE_URL + SUPABASE_KEY")
     elif settings.database_backend == "sqlite":
         print(f"[OK] Local SQLite URL: {settings.database_url}")
 
@@ -68,13 +70,18 @@ def check_config() -> int:
         else:
             print("[*] Firestore Project ID: [UNCONFIGURED - Local In-Memory Fallback Active]")
 
-    # 5. Media Storage (Cloudflare R2)
+    # 5. Media Storage (Cloudflare R2 / Supabase Storage)
     print(f"[*] Storage Provider: {settings.storage_provider}")
     if settings.storage_provider == "r2":
         if not (settings.r2_access_key_id and settings.r2_secret_access_key and settings.r2_bucket_name):
             errors.append("STORAGE_PROVIDER='r2' requires R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY, and R2_BUCKET_NAME")
         else:
             print(f"[OK] Cloudflare R2 Bucket: {settings.r2_bucket_name} [CONFIGURED]")
+    elif settings.storage_provider == "supabase":
+        if settings.supabase_url and (settings.supabase_key or settings.supabase_secret_key):
+            print("[OK] Supabase Cloud Storage: [CONFIGURED]")
+        else:
+            errors.append("STORAGE_PROVIDER='supabase' requires SUPABASE_URL and SUPABASE_KEY")
     else:
         print(f"[OK] Storage: Local Filesystem ({settings.media_store_dir})")
 

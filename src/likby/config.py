@@ -43,9 +43,9 @@ class Settings(BaseSettings):
     )
     telegram_max_download_bytes: int = 20971520  # 20 MB
 
-    # Relational Database Configuration (Supabase PostgreSQL / SQLite)
-    database_backend: Literal["sqlite", "postgres", "firestore"] = "sqlite"
-    database_url: str = "sqlite+aiosqlite:///likby.db"
+    # Relational Database Configuration (Supabase PostgreSQL / Cloud)
+    database_backend: Literal["sqlite", "postgres", "supabase", "firestore"] = "postgres"
+    database_url: str = ""
     database_direct_url: Optional[str] = None
     db_pool_min_size: int = 2
     db_pool_max_size: int = 10
@@ -64,8 +64,8 @@ class Settings(BaseSettings):
     google_application_credentials: Optional[str] = None
     firestore_emulator_host: Optional[str] = None
 
-    # Binary Media Storage (Cloudflare R2 / Local Fallback)
-    storage_provider: Literal["local", "r2"] = "local"
+    # Binary Media Storage (Supabase Storage / Cloudflare R2)
+    storage_provider: Literal["local", "r2", "supabase"] = "supabase"
     media_store_dir: str = "media_store"
     r2_account_id: Optional[str] = None
     r2_access_key_id: Optional[str] = None

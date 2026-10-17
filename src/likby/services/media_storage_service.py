@@ -163,6 +163,66 @@ class CloudflareR2StorageProvider(MediaStorageProvider):
             return None
 
 
+class SupabaseStorageProvider(MediaStorageProvider):
+    """Supabase Cloud Storage bucket provider (Zero local disk storage)."""
+
+    def __init__(self, supabase_client: Optional[object] = None, bucket_name: str = "likby-media") -> None:
+        self._client = supabase_client
+        self._bucket_name = bucket_name
+
+    async def upload_bytes(self, object_key: str, data: bytes, mime_type: str) -> bool:
+        if not self._client:
+            return False
+        import asyncio
+        loop = asyncio.get_running_loop()
+        try:
+            def _sync_upload():
+                return self._client.storage.from_(self._bucket_name).upload(
+                    path=object_key,
+                    file=data,
+                    file_options={"content-type": mime_type, "upsert": "true"},
+                )
+            await loop.run_in_executor(None, _sync_upload)
+            return True
+        except Exception:
+            return False
+
+    async def get_bytes(self, object_key: str) -> Optional[bytes]:
+        if not self._client:
+            return None
+        import asyncio
+        loop = asyncio.get_running_loop()
+        try:
+            def _sync_download():
+                return self._client.storage.from_(self._bucket_name).download(object_key)
+            return await loop.run_in_executor(None, _sync_download)
+        except Exception:
+            return None
+
+    async def delete(self, object_key: str) -> bool:
+        if not self._client:
+            return False
+        import asyncio
+        loop = asyncio.get_running_loop()
+        try:
+            def _sync_delete():
+                return self._client.storage.from_(self._bucket_name).remove([object_key])
+            await loop.run_in_executor(None, _sync_delete)
+            return True
+        except Exception:
+            return False
+
+    def generate_presigned_url(self, object_key: str, expires_in: int = 300) -> Optional[str]:
+        if not self._client:
+            return None
+        try:
+            res = self._client.storage.from_(self._bucket_name).create_signed_url(object_key, expires_in)
+            return res.get("signedURL") or res.get("signedUrl")
+        except Exception:
+            return None
+
+
+
 class MediaService:
     """Manages media asset archival lifecycle and metadata linking."""
 
