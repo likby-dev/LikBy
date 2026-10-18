@@ -70,26 +70,25 @@ async def close_arcade(callback: CallbackQuery) -> None:
 
 
 # ============================================================================
-# TRIVIA BLITZ
+# LIKBY PLAY MINI APP REDIRECT
 # ============================================================================
 
-@router.callback_query(F.data == "solo:trivia:new")
+@router.callback_query(F.data.in_(["solo:trivia:new", "solo:gem:new", "solo:rps:new"]))
 async def start_new_trivia(callback: CallbackQuery) -> None:
     await callback.answer()
-    if not callback.from_user or not callback.message:
+    if not callback.message:
         return
-
-    q_idx, question = get_random_question()
-    streak = _USER_TRIVIA_STREAKS.get(callback.from_user.id, 0)
-
-    kb = get_trivia_keyboard(q_idx, question.options)
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
     await safe_edit_text(
         callback.message,
-        f"🎯 <b>Trivia Blitz</b> ({question.category})\n"
-        f"🔥 <i>Current Streak: {streak}</i>\n\n"
-        f"<b>{question.prompt}</b>",
+        "🚀 <b>LikBy Play Mini App</b>\n\n"
+        "All casual puzzles, brainteasers, and multiplayer duels are available exclusively inside the <b>LikBy Play Mini App</b> with smooth animations and sound synthesis!\n\n"
+        "• 🧩 <b>6 Unlimited Solo Games:</b> Zen Merge, Word Hunt, Color Flow, Pocket Golf & more!\n"
+        "• ⚔️ <b>11 Multiplayer Duels:</b> Connect Four, Carrom Clash, Air Rush, Pocket Pool & more!\n\n"
+        "<i>Tap below to launch LikBy Play:</i>",
         parse_mode="HTML",
-        reply_markup=kb,
+        reply_markup=get_play_hub_keyboard(mini_app_url),
     )
 
 

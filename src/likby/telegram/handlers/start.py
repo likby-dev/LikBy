@@ -43,15 +43,69 @@ async def handle_start(
 
     if user and user.age_verified and user.state != UserState.ONBOARDING_AGE_GATE:
         profile = await profile_repo.get_by_user_id(user.id)
-        name = profile.display_name if profile else "Friend"
-        await state.clear()
-        await message.answer(
-            f"👋 <b>Welcome back, {name}!</b>\n\n"
-            "Ready for a conversation? Tap <b>🎲 Find a Match</b> below.",
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
-        )
-        return
+        if profile:
+            await state.clear()
+            tier_name = "BASE"
+            if subscription_service:
+                try:
+                    limits = await subscription_service.get_plan_limits(user.id)
+                    tier_name = limits.get("display_name", limits.get("tier", "BASE")).upper()
+                except Exception:
+                    tier_name = "BASE"
+
+            unique_tag = f"@{user.unique_id or profile.unique_id}" if (user.unique_id or profile.unique_id) else "<i>Not set</i>"
+            interests_str = ", ".join(profile.interests).title() if profile.interests else "None selected"
+            gender_str = profile.gender.value.replace("_", " ").title()
+            karma = user.karma_score
+            karma_badge = (
+                "Elite Match Priority 🌟"
+                if karma >= 250
+                else ("Trusted Member ✨" if karma >= 100 else "Good Standing")
+            )
+
+            await message.answer(
+                f"👋 <b>Welcome back to LikBy, {profile.display_name}!</b> ✨\n\n"
+                f"🔒 <b>Your Profile is Safely Preserved in Memory:</b>\n"
+                f"• 👤 <b>Display Name:</b> {profile.display_name}\n"
+                f"• 🆔 <b>Permanent ID:</b> {unique_tag} 🔒 <i>(Immutable)</i>\n"
+                f"• 🎂 <b>Age & Gender:</b> {profile.age} • {gender_str}\n"
+                f"• 🎯 <b>Interests ({len(profile.interests)}):</b> {interests_str}\n"
+                f"• 🌟 <b>Karma Standing:</b> {karma} / 500 ({karma_badge})\n"
+                f"• 👑 <b>Membership Tier:</b> {tier_name}\n\n"
+                f"🛡 <b>Privacy & Security Shield:</b>\n"
+                f"• 🚫 Real Telegram @username & phone number are 100% hidden\n"
+                f"• 🔐 Ephemeral zero-log messaging & content-protected media\n"
+                f"• 🎮 LikBy Play Mini App is ready for live duels & solo puzzles\n\n"
+                f"Ready for a connection? Tap <b>🎲 Find Match</b> below to start chatting!",
+                parse_mode="HTML",
+                reply_markup=get_main_menu_keyboard(),
+            )
+            return
+
+        # User is age-verified, but profile setup was incomplete (e.g. chat cleared midway)
+        if user.unique_id:
+            await state.update_data(unique_id=user.unique_id)
+            await state.set_state(OnboardingStates.waiting_for_age)
+            await message.answer(
+                f"👋 <b>Welcome back to LikBy!</b>\n\n"
+                f"Your permanent handle <b>@{user.unique_id}</b> is securely preserved in memory 🔒.\n\n"
+                f"Let's complete your remaining profile details:\n"
+                f"🎂 <b>How old are you?</b>\n"
+                f"<i>(Please enter your age as a number, e.g. 24)</i>",
+                parse_mode="HTML",
+            )
+            return
+        else:
+            await state.set_state(OnboardingStates.waiting_for_alias)
+            await message.answer(
+                "👋 <b>Welcome back to LikBy!</b>\n\n"
+                "Your 18+ age verification is already confirmed ✅.\n\n"
+                "🏷 <b>Choose your Display Name:</b>\n"
+                "Pick a name or alias for your profile (2-30 characters).\n"
+                "<i>(Names can have duplicates and can be updated anytime in your profile.)</i>",
+                parse_mode="HTML",
+            )
+            return
 
     # New or unverified user
     if not user:
@@ -72,9 +126,10 @@ async def handle_start(
     await message.answer(
         "👋 <b>Welcome to LikBy.</b>\n\n"
         "LikBy connects you with compatible people for <b>100% anonymous, real-time conversations</b>.\n\n"
-        "🔒 <b>Our core promise:</b>\n"
-        "• We never reveal your Telegram username or phone number.\n"
-        "• Chat messages are never stored permanently in our database.\n"
+        "🔒 <b>Our Core Privacy Promise:</b>\n"
+        "• We <b>never</b> reveal your real Telegram username or phone number.\n"
+        "• Chat messages are never permanently stored in our databases.\n"
+        "• All media is content-protected against casual forwarding or saving.\n"
         "• You can exit, skip, or block at any moment.\n\n"
         "⚠️ <i>To ensure a safe environment, you must be 18 years or older.</i>",
         parse_mode="HTML",

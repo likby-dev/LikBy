@@ -46,10 +46,14 @@ async def start_game(
     tg_id = event.from_user.id
     cached = await chat_relay.get_or_warm_session(tg_id)
     if not cached:
+        settings = get_settings()
+        mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
         await message.answer(
             "⚔️ <b>Multiplayer Duels require an active conversation partner!</b>\n\n"
-            "Tap <b>🎲 Find Match</b> below to connect with an anonymous partner, or open <b>🎮 LikBy Play</b> to enjoy unlimited solo games!",
+            "• Connect with an anonymous conversation partner via <b>🎲 Find Match</b> to duel live in chat!\n"
+            "• Or enjoy our <b>6 unlimited Solo Games</b> right now in the <b>LikBy Play App</b>:",
             parse_mode="HTML",
+            reply_markup=get_play_hub_keyboard(mini_app_url),
         )
         return
 

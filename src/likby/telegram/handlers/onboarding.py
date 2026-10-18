@@ -3,6 +3,7 @@ likby.telegram.handlers.onboarding
 Onboarding FSM handlers: Alias, Age, Gender, and Interests selection.
 """
 
+import html
 import re
 from typing import Any, Optional
 from aiogram import Router, F
@@ -12,6 +13,7 @@ from likby.domain.entities.profile import Profile
 from likby.domain.enums import Gender, GenderPreference, UserState
 from likby.repositories.interfaces import ProfileRepository, UserRepository
 from likby.telegram.keyboards import (
+    AVAILABLE_INTERESTS,
     get_gender_keyboard,
     get_interests_keyboard,
     get_main_menu_keyboard,
@@ -22,21 +24,56 @@ from likby.telegram.utils import safe_edit_reply_markup, safe_edit_text
 router = Router(name="onboarding")
 
 UNIQUE_ID_REGEX = re.compile(r"^[a-zA-Z0-9_]{3,20}$")
+RESERVED_UNIQUE_IDS = {
+    "admin", "administrator", "system", "likby", "support",
+    "moderator", "mod", "help", "official", "telegram",
+    "bot", "anonymous", "root", "dev", "null", "undefined",
+    "security", "staff", "owner",
+}
 
 
 @router.message(OnboardingStates.waiting_for_alias)
 async def process_alias(message: Message, state: FSMContext) -> None:
-    alias = (message.text or "").strip()
-    if len(alias) < 2 or len(alias) > 30:
+    raw_alias = (message.text or "").strip()
+    clean_alias = re.sub(r"\s+", " ", raw_alias)
+
+    if len(clean_alias) < 2:
         await message.answer(
-            "⚠️ Name must be between 2 and 30 characters. Please choose a different name:"
+            "⚠️ <b>Display Name is too short.</b>\n"
+            "Please enter a name with at least 2 characters:",
+            parse_mode="HTML",
         )
         return
 
-    await state.update_data(alias=alias)
+    if len(clean_alias) > 30:
+        await message.answer(
+            "⚠️ <b>Display Name is too long.</b>\n"
+            "Please enter a name with 30 characters or fewer:",
+            parse_mode="HTML",
+        )
+        return
+
+    if clean_alias.startswith("/"):
+        await message.answer(
+            "⚠️ <b>Display Name cannot start with a slash (/).</b>\n"
+            "Please enter your preferred nickname or alias:",
+            parse_mode="HTML",
+        )
+        return
+
+    if not any(c.isalnum() for c in clean_alias):
+        await message.answer(
+            "⚠️ <b>Display Name must contain letters or numbers.</b>\n"
+            "Please enter a valid nickname or alias:",
+            parse_mode="HTML",
+        )
+        return
+
+    safe_alias = html.escape(clean_alias)
+    await state.update_data(alias=safe_alias)
     await state.set_state(OnboardingStates.waiting_for_unique_id)
     await message.answer(
-        f"Nice to meet you, <b>{alias}</b>! ✨\n\n"
+        f"Nice to meet you, <b>{safe_alias}</b>! ✨\n\n"
         "🆔 <b>Now, choose your Unique ID:</b>\n"
         "Create a unique handle for your account (e.g. <code>alex_99</code>, <code>skywalker</code>).\n\n"
         "📌 <b>Rules:</b>\n"
@@ -55,28 +92,45 @@ async def process_unique_id(
     user_repo: UserRepository,
 ) -> None:
     raw_id = (message.text or "").strip()
-    clean_id = raw_id.lstrip("@").lower()
+    clean_id = raw_id.lstrip("@").lower().strip()
 
     if not UNIQUE_ID_REGEX.match(clean_id):
         await message.answer(
             "⚠️ <b>Invalid Unique ID format.</b>\n\n"
             "• Must be 3 to 20 characters long\n"
             "• Only letters (a-z), numbers (0-9), and underscores (_)\n"
+            "• No spaces, periods, or special characters\n"
             "• Example: <code>alex_99</code> or <code>sam2024</code>\n\n"
             "Please choose a valid Unique ID:",
             parse_mode="HTML",
         )
         return
 
+    if clean_id in RESERVED_UNIQUE_IDS:
+        await message.answer(
+            f"⚠️ <b>@{clean_id} is a reserved system identifier.</b>\n\n"
+            "Please choose a different personal handle:",
+            parse_mode="HTML",
+        )
+        return
+
     # Check case-insensitive uniqueness in database
     existing_user = await user_repo.get_by_unique_id(clean_id)
-    if existing_user:
+    current_tg_id = message.from_user.id if message.from_user else 0
+    if existing_user and existing_user.telegram_id != current_tg_id:
         await message.answer(
             f"⚠️ <b>@{clean_id} is already taken!</b>\n\n"
             "Another user has already claimed this Unique ID. Please choose a different handle:",
             parse_mode="HTML",
         )
         return
+
+    # Lock to user entity immediately so it persists in memory & DB across restarts
+    if message.from_user:
+        u = await user_repo.get_by_telegram_id(message.from_user.id)
+        if u:
+            u.unique_id = clean_id
+            await user_repo.save(u)
 
     await state.update_data(unique_id=clean_id)
     await state.set_state(OnboardingStates.waiting_for_age)
@@ -93,12 +147,28 @@ async def process_unique_id(
 async def process_age(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()
     if not text.isdigit():
-        await message.answer("⚠️ Please enter your age as a whole number (e.g. 25):")
+        await message.answer(
+            "⚠️ <b>Please enter your age as a whole number</b> (e.g. 24):\n\n"
+            "<i>This is used solely to match you within appropriate peer age brackets.</i>",
+            parse_mode="HTML",
+        )
         return
 
     age = int(text)
-    if age < 18 or age > 120:
-        await message.answer("⚠️ You must be at least 18 years old to use LikBy:")
+    if age < 18:
+        await message.answer(
+            "🛑 <b>Age Requirement (18+):</b>\n\n"
+            "LikBy is strictly for adults aged 18 and older. For user safety and privacy, accounts under 18 cannot be created.\n\n"
+            "Thank you for understanding.",
+            parse_mode="HTML",
+        )
+        return
+
+    if age > 99:
+        await message.answer(
+            "⚠️ <b>Please enter a realistic age between 18 and 99:</b>",
+            parse_mode="HTML",
+        )
         return
 
     await state.update_data(age=age)
@@ -179,20 +249,24 @@ async def finish_interests(
     if not user:
         return
 
-    unique_id = data.get("unique_id")
+    unique_id = data.get("unique_id") or user.unique_id
     if unique_id:
         user.unique_id = unique_id
+
+    alias = data.get("alias") or f"User_{user.id[-4:]}"
+    age = data.get("age") or 21
+    gender_val = data.get("gender", Gender.OTHER.value)
 
     profile = Profile(
         user_id=user.id,
         unique_id=unique_id,
-        display_name=data["alias"],
-        age=data["age"],
-        gender=Gender(data["gender"]),
+        display_name=alias,
+        age=age,
+        gender=Gender(gender_val),
         interests=selected,
         preferred_gender_filter=[GenderPreference.ANY],
-        min_age_filter=max(18, data["age"] - 7),
-        max_age_filter=min(99, data["age"] + 7),
+        min_age_filter=max(18, age - 7),
+        max_age_filter=min(99, age + 7),
     )
     await profile_repo.save(profile)
 
@@ -210,13 +284,21 @@ async def finish_interests(
 
     await callback.message.delete()
     unique_tag = f"@{profile.unique_id}" if profile.unique_id else "<i>Not set</i>"
+    gender_label = profile.gender.value.replace("_", " ").title()
+    interests_label = ", ".join(profile.interests).title()
+
     await callback.message.answer(
-        f"🎉 <b>Profile created successfully!</b>\n\n"
-        f"• <b>Name:</b> {profile.display_name} <i>(non-unique)</i>\n"
-        f"• <b>Unique ID:</b> {unique_tag} 🔒 <i>(Permanent — cannot be edited)</i>\n"
-        f"• <b>Age:</b> {profile.age}\n"
-        f"• <b>Interests:</b> {', '.join(profile.interests).title()}\n\n"
-        "Tap <b>🎲 Find a Match</b> below whenever you're ready to start chatting!",
+        f"🎉 <b>Profile Created & Safely Saved in Memory!</b> ✨\n\n"
+        f"• 👤 <b>Display Name:</b> {profile.display_name}\n"
+        f"• 🆔 <b>Permanent ID:</b> {unique_tag} 🔒 <i>(Immutable — cannot be edited)</i>\n"
+        f"• 🎂 <b>Age & Gender:</b> {profile.age} • {gender_label}\n"
+        f"• 🎯 <b>Interests ({len(profile.interests)}):</b> {interests_label}\n"
+        f"• 🌟 <b>Karma Standing:</b> {user.karma_score} / 500 (Good Standing ✨)\n\n"
+        f"🔒 <b>Privacy Shield Guarantee:</b>\n"
+        f"• 🛡 Your Telegram username and phone number are 100% confidential and hidden.\n"
+        f"• 💬 Conversations are ephemeral with zero permanent database chat logs.\n"
+        f"• 🎮 All 17 games are ready to play in the <b>LikBy Play Mini App</b>!\n\n"
+        f"Tap <b>🎲 Find Match</b> below whenever you're ready to start chatting!",
         parse_mode="HTML",
         reply_markup=get_main_menu_keyboard(),
     )
