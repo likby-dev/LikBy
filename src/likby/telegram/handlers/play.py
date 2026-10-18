@@ -29,34 +29,42 @@ WELCOME_TEXT = (
 )
 
 
-@router.message(F.text == "🎮 LikBy Play")
+@router.message(F.text.in_(["🎮 LikBy Play", "🎮 Games & Arcade", "🎮 Play", "🕹 Solo Arcade"]))
 @router.message(Command("play"))
 @router.message(Command("games"))
+@router.message(Command("arcade"))
+@router.callback_query(F.data == "play:hub")
 async def play_hub_command(
-    message: Message,
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     gaming_entitlement_service: Optional[GamingEntitlementService] = None,
 ) -> None:
-    """Primary entry point to LikBy Play."""
+    """Primary entry point to LikBy Play & Gaming Hub."""
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+
     settings = get_settings()
     mini_app_url = settings.telegram_mini_app_url
 
     quota_line = ""
-    if message.from_user and gaming_entitlement_service:
-        user = await user_repo.get_by_telegram_id(message.from_user.id)
+    tg_id = event.from_user.id if event.from_user else 0
+    if tg_id and user_repo and gaming_entitlement_service:
+        user = await user_repo.get_by_telegram_id(tg_id)
         if user:
             ent = await gaming_entitlement_service.get_user_entitlements(user.id)
             rem = ent["daily_duels_remaining"]
             lim = ent["daily_duels_limit"]
             lim_str = "Unlimited 👑" if lim == -1 else f"{lim}"
             rem_str = "Unlimited" if rem == -1 else f"{rem}/{lim_str}"
-            quota_line = f"\n\n🎯 <b>Today's Duel Allowance:</b> <code>{rem_str}</code> remaining\n🧩 <b>Solo Games:</b> <code>Unlimited</code>"
+            quota_line = f"\n\n🎯 <b>Today's Duel Allowance:</b> <code>{rem_str}</code> remaining\n🧩 <b>Solo Games:</b> <code>Unlimited (Free)</code>"
 
-    await message.answer(
-        f"{WELCOME_TEXT}{quota_line}",
-        parse_mode="HTML",
-        reply_markup=get_play_hub_keyboard(mini_app_url),
-    )
+    text = f"{WELCOME_TEXT}{quota_line}"
+    kb = get_play_hub_keyboard(mini_app_url)
+    if isinstance(event, CallbackQuery) and event.message:
+        await event.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+    else:
+        await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
 @router.message(Command("duels"))

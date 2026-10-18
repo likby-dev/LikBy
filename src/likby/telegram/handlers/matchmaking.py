@@ -21,7 +21,8 @@ router = Router(name="matchmaking")
 from likby.services.chat_relay_service import ChatRelayService
 
 
-@router.message(F.text.in_(["🎲 Find Someone", "🎲 Find a Match"]))
+@router.message(F.text.in_(["🎲 Find Match", "🎲 Find Someone", "🎲 Find a Match"]))
+@router.message(Command("match"))
 @router.message(Command("find"))
 @router.callback_query(F.data == "queue:find_new")
 async def start_search(
@@ -35,10 +36,10 @@ async def start_search(
     if isinstance(event, CallbackQuery):
         await event.answer()
 
-    if not message.from_user:
+    if not event.from_user:
         return
 
-    tg_id = message.from_user.id
+    tg_id = event.from_user.id
     user = await user_repo.get_by_telegram_id(tg_id)
     if not user:
         await message.answer("Please type /start to set up your profile first.")

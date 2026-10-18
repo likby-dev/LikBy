@@ -1,13 +1,16 @@
 """
 likby.telegram.handlers.menu
-Handlers for Main Menu options: Profile, Karma, Who Liked Me, Friends, Search ID, Requests, Subscription, and Safety.
+Authoritative handlers for LikBy Navigation Hubs:
+- 👤 Profile & VIP Hub (Profile, Karma, Settings, VIP Plans, Safety)
+- 👥 Connections Hub (Friends, Requests, Who Liked Me, ID Search, Referrals)
+- 💬 My Chats Hub (Active conversation controls, instant matchmaking, transcripts)
 """
 
+from typing import Optional
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
-from likby.domain.enums import SubscriptionTier
 from likby.repositories.interfaces import (
     ChatSessionRepository,
     ProfileRepository,
@@ -18,57 +21,112 @@ from likby.services.karma_service import KarmaService
 from likby.services.social_service import SocialService
 from likby.services.subscription_service import SubscriptionService
 from likby.telegram.keyboards import (
+    get_chat_hub_keyboard,
+    get_connections_hub_keyboard,
     get_main_menu_keyboard,
-    get_subscription_keyboard,
+    get_profile_vip_keyboard,
 )
 from likby.telegram.states import EditProfileStates, SearchStates
+from likby.telegram.utils import safe_edit_text
 
 router = Router(name="menu")
 
 
-# --- 1. My Profile ---
+async def send_or_edit(
+    event: Message | CallbackQuery,
+    text: str,
+    reply_markup: Optional[InlineKeyboardMarkup] = None,
+) -> None:
+    """Helper to send a new message or cleanly edit an existing inline card in-place."""
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+        if event.message:
+            await safe_edit_text(
+                event.message,
+                text,
+                parse_mode="HTML",
+                reply_markup=reply_markup,
+            )
+    else:
+        await event.answer(
+            text,
+            parse_mode="HTML",
+            reply_markup=reply_markup,
+        )
 
-@router.message(F.text == "👤 My Profile")
+
+# ==============================================================================
+# 1. 👤 Profile & VIP Hub
+# ==============================================================================
+
+@router.message(F.text.in_(["👤 Profile & VIP", "👤 My Profile", "👤 Profile", "👤 Account"]))
 @router.message(Command("profile"))
-async def show_profile(
-    message: Message,
+@router.message(Command("account"))
+@router.callback_query(F.data == "vip:hub")
+async def show_profile_vip_hub(
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
+    subscription_service: SubscriptionService,
+    social_service: SocialService,
 ) -> None:
-    if not message.from_user:
+    """Consolidated Profile & VIP Membership Hub."""
+    user_tg = event.from_user
+    if not user_tg:
         return
 
-    tg_id = message.from_user.id
+    tg_id = user_tg.id
     user = await user_repo.get_by_telegram_id(tg_id)
     if not user:
-        await message.answer("Please type /start to create your profile.")
+        if isinstance(event, Message):
+            await event.answer("Please type /start to create your profile.")
+        else:
+            await event.answer("Please type /start to create your profile.", show_alert=True)
         return
 
     profile = await profile_repo.get_by_user_id(user.id)
     if not profile:
-        await message.answer("Please type /start to complete your profile.")
+        if isinstance(event, Message):
+            await event.answer("Please type /start to complete your profile.")
+        else:
+            await event.answer("Please type /start to complete your profile.", show_alert=True)
         return
 
-    interests_str = ", ".join(profile.interests).title() if profile.interests else "None"
-    unique_tag = f"@{user.unique_id or profile.unique_id}" if (user.unique_id or profile.unique_id) else "<i>Not set</i>"
+    limits = await subscription_service.get_plan_limits(user.id)
+    friends = await social_service.get_user_friends(user.id)
 
-    edit_kb = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="✏️ Edit Display Name", callback_data="profile:edit_name")],
-        ]
+    tier_name = limits.get("display_name", limits.get("tier", "Base")).upper()
+    unique_tag = f"@{user.unique_id or profile.unique_id}" if (user.unique_id or profile.unique_id) else "<i>Not set</i>"
+    interests_str = ", ".join(profile.interests).title() if profile.interests else "None selected"
+    gender_str = profile.gender.value.replace("_", " ").title()
+
+    # Dynamic Karma Status Badge
+    karma = user.karma_score
+    if karma >= 250:
+        karma_badge = "Elite Match Priority 🌟"
+    elif karma >= 100:
+        karma_badge = "Trusted Member ✨"
+    else:
+        karma_badge = "Good Standing"
+
+    text = (
+        f"👤 <b>LikBy Profile & VIP Membership</b>\n\n"
+        f"• <b>Display Name:</b> {profile.display_name}\n"
+        f"• <b>Permanent ID:</b> {unique_tag} 🔒 <i>(Immutable)</i>\n"
+        f"• <b>Age & Gender:</b> {profile.age} • {gender_str}\n"
+        f"• <b>Interests:</b> {interests_str}\n"
+        f"• <b>Karma Reputation:</b> {karma} / 500 ({karma_badge})\n\n"
+        f"👑 <b>Current Tier:</b> <b>{tier_name}</b>\n"
+        f"• <b>Friends Quota:</b> {len(friends)} / {limits['max_friends']} slots used\n"
+        f"• <b>Daily Searches:</b> {limits['daily_searches_limit']} / day\n"
+        f"• <b>Daily Duels:</b> {limits.get('daily_duel_limit', 5)} / day\n\n"
+        f"<i>🔒 Your Telegram username and phone number are never shared.</i>"
     )
 
-    await message.answer(
-        f"👤 <b>Your LikBy Profile</b>\n\n"
-        f"• <b>Name:</b> {profile.display_name} <i>(non-unique)</i>\n"
-        f"• <b>Unique ID:</b> {unique_tag} 🔒 <i>(Permanent — cannot be edited)</i>\n"
-        f"• <b>Age:</b> {profile.age}\n"
-        f"• <b>Gender:</b> {profile.gender.value.replace('_', ' ').title()}\n"
-        f"• <b>Interests:</b> {interests_str}\n"
-        f"• <b>Karma Score:</b> {user.karma_score} 🌟\n\n"
-        f"<i>Your Telegram username and phone number are never shared.</i>",
-        parse_mode="HTML",
-        reply_markup=edit_kb,
+    await send_or_edit(
+        event,
+        text,
+        reply_markup=get_profile_vip_keyboard(tier_code=limits.get("tier", "BASE")),
     )
 
 
@@ -79,6 +137,7 @@ async def start_edit_name(
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
 ) -> None:
+    """Prompt user to change their display name."""
     await callback.answer()
     if not callback.from_user or not callback.message:
         return
@@ -93,13 +152,21 @@ async def start_edit_name(
 
     await state.set_state(EditProfileStates.waiting_for_new_name)
     unique_tag = f"@{user.unique_id or profile.unique_id}" if (user.unique_id or profile.unique_id) else "Not set"
+
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Back to Profile Hub", callback_data="vip:hub")]
+        ]
+    )
+
     await callback.message.answer(
         f"✏️ <b>Change Display Name</b>\n\n"
         f"Current Name: <b>{profile.display_name}</b>\n"
         f"Unique ID: <b>{unique_tag}</b> 🔒 <i>(Permanent — cannot be edited)</i>\n\n"
         f"Please send your new display name (2-30 characters):\n"
-        f"<i>(Multiple users may share the same display name.)</i>",
+        f"<i>(Type /cancel to abort.)</i>",
         parse_mode="HTML",
+        reply_markup=cancel_kb,
     )
 
 
@@ -110,10 +177,21 @@ async def process_new_name(
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
 ) -> None:
-    new_name = (message.text or "").strip()
-    if len(new_name) < 2 or len(new_name) > 30:
+    """Validate and persist new display name."""
+    raw_text = (message.text or "").strip()
+    if raw_text == "/cancel":
+        await state.clear()
+        cancel_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Return to Profile Hub", callback_data="vip:hub")]
+            ]
+        )
+        await message.answer("Display name change cancelled.", reply_markup=cancel_kb)
+        return
+
+    if len(raw_text) < 2 or len(raw_text) > 30:
         await message.answer(
-            "⚠️ Display name must be between 2 and 30 characters. Please try again:"
+            "⚠️ Display name must be between 2 and 30 characters. Please try again (or /cancel):"
         )
         return
 
@@ -128,35 +206,48 @@ async def process_new_name(
     if not profile:
         return
 
-    profile.update_display_name(new_name)
+    profile.update_display_name(raw_text)
     await profile_repo.save(profile)
     await state.clear()
 
     unique_tag = f"@{user.unique_id or profile.unique_id}" if (user.unique_id or profile.unique_id) else "Not set"
+    done_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Return to Profile Hub", callback_data="vip:hub")]
+        ]
+    )
     await message.answer(
         f"✅ <b>Display Name Updated!</b>\n\n"
-        f"• <b>New Name:</b> {profile.display_name} <i>(non-unique)</i>\n"
-        f"• <b>Unique ID:</b> {unique_tag} 🔒 <i>(Permanent — cannot be edited)</i>",
+        f"• <b>New Name:</b> {profile.display_name}\n"
+        f"• <b>Unique ID:</b> {unique_tag} 🔒",
         parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(),
+        reply_markup=done_kb,
     )
 
 
-# --- 2. My Karma ---
+# ==============================================================================
+# 2. 🌟 My Karma & Reputation
+# ==============================================================================
 
 @router.message(F.text == "🌟 My Karma")
 @router.message(Command("karma"))
+@router.callback_query(F.data == "vip:karma")
 async def show_karma(
-    message: Message,
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     karma_service: KarmaService,
 ) -> None:
-    if not message.from_user:
+    """Displays user reputation score and recent activity ledger."""
+    user_tg = event.from_user
+    if not user_tg:
         return
 
-    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    user = await user_repo.get_by_telegram_id(user_tg.id)
     if not user:
-        await message.answer("Please type /start first.")
+        if isinstance(event, Message):
+            await event.answer("Please type /start first.")
+        else:
+            await event.answer("Please type /start first.", show_alert=True)
         return
 
     summary = await karma_service.get_user_karma_summary(user.id)
@@ -172,140 +263,168 @@ async def show_karma(
     else:
         history_text = "\n\n<i>No recent karma adjustments recorded.</i>"
 
-    await message.answer(
+    back_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Back to Profile Hub", callback_data="vip:hub")]
+        ]
+    )
+
+    text = (
         f"🌟 <b>Your LikBy Karma & Reputation</b>\n\n"
         f"Current Karma Score: <b>{score}</b> / 500\n\n"
         f"<b>How Karma Works:</b>\n"
-        f"• Good chat rating: <b>+1</b>\n"
-        f"• Disliked chat rating: <b>-1</b>\n"
-        f"• Respectful chatting builds higher matchmaking priority!"
-        f"{history_text}",
-        parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(),
+        f"• Good chat rating (👍): <b>+1</b>\n"
+        f"• Disliked chat rating (👎): <b>-1</b>\n"
+        f"• Higher scores build faster matchmaking and elite priority!"
+        f"{history_text}"
     )
 
+    await send_or_edit(event, text, reply_markup=back_kb)
 
-# --- 3. Who Liked Me ---
 
-@router.message(F.text == "💙 Who Liked Me")
-@router.message(Command("likes"))
-async def show_who_liked_me(
-    message: Message,
+# ==============================================================================
+# 3. 🛡 Help & Safety Guidelines
+# ==============================================================================
+
+@router.message(F.text.in_(["🛡 Help & Safety", "📜 Guidelines"]))
+@router.message(Command("guidelines"))
+@router.message(Command("help"))
+@router.message(Command("safety"))
+@router.callback_query(F.data == "vip:safety")
+async def show_help_and_safety(event: Message | CallbackQuery) -> None:
+    """Presents platform safety standards, zero ads policy, and guidelines."""
+    back_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Back to Profile Hub", callback_data="vip:hub")]
+        ]
+    )
+
+    text = (
+        "🛡️ <b>LikBy Safety & Community Guidelines</b>\n\n"
+        "LikBy is built on privacy, mutual respect, and safe discovery.\n\n"
+        "<b>Core Principles:</b>\n"
+        "1. <b>Strict Anonymity:</b> Your Telegram account, phone number, and location are never revealed.\n"
+        "2. <b>Zero Tolerance:</b> Harassment, hate speech, and spam result in immediate suspension.\n"
+        "3. <b>Adults Only (18+):</b> Users must be 18 or older.\n"
+        "4. <b>Safety Controls:</b> You can tap <b>⚠️ Report</b> during any chat to instantly disconnect and permanently block a partner.\n"
+        "5. <b>Content Protection:</b> Outbound media is protected with Telegram Content Protection to deter saving and forwarding.\n"
+        "6. <b>Zero-Advertising Policy:</b> LikBy is 100% advertisement-free. We never show sponsored ads or third-party promotional broadcasts.\n"
+        "7. <b>Permanent Persistence:</b> LikBy does not employ disappearing or view-once timers.\n\n"
+        "<b>Media Allowance:</b> Check your daily quota anytime with /my_media_usage.\n"
+        "<b>Need help?</b> Contact LikBy Support anytime via /support."
+    )
+
+    await send_or_edit(event, text, reply_markup=back_kb)
+
+
+# ==============================================================================
+# 4. 👥 Connections & Social Hub
+# ==============================================================================
+
+@router.message(F.text.in_(["👥 Connections", "👥 Social", "👥 Friends & Social"]))
+@router.message(Command("connections"))
+@router.message(Command("social"))
+@router.callback_query(F.data == "conn:hub")
+async def show_connections_hub(
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
+    profile_repo: ProfileRepository,
     social_service: SocialService,
+    discovery_service: DiscoveryService,
+    subscription_service: SubscriptionService,
 ) -> None:
-    if not message.from_user:
+    """Consolidated interactive Social & Connections Hub."""
+    user_tg = event.from_user
+    if not user_tg:
         return
 
-    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    user = await user_repo.get_by_telegram_id(user_tg.id)
     if not user:
-        await message.answer("Please type /start first.")
+        if isinstance(event, Message):
+            await event.answer("Please type /start first.")
+        else:
+            await event.answer("Please type /start first.", show_alert=True)
         return
 
+    profile = await profile_repo.get_by_user_id(user.id)
+    unique_tag = f"@{user.unique_id or (profile.unique_id if profile else '')}" if (user.unique_id or (profile and profile.unique_id)) else "Not set"
+
+    friends = await social_service.get_user_friends(user.id)
+    reqs = await discovery_service.get_incoming_requests(user.id)
     likes = await social_service.get_who_liked_me(user.id)
-    if not likes:
-        await message.answer(
-            "💙 <b>Who Liked You</b>\n\n"
-            "You have no pending likes at the moment.\n"
-            "Keep chatting and express interest to discover mutual matches!",
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
-        )
-        return
+    limits = await subscription_service.get_plan_limits(user.id)
 
-    text = f"💙 <b>Who Liked You ({len(likes)} Pending)</b>\n\n"
-    buttons = []
-    for lk in likes:
-        text += f"• <b>{lk['sender_display_id']}</b> expressed interest!\n"
-        buttons.append([
-            InlineKeyboardButton(
-                text=f"💙 Like Back ({lk['sender_display_id']})",
-                callback_data=f"like_back:{lk['sender_id']}",
-            )
-        ])
-
-    await message.answer(
-        text,
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
+    text = (
+        f"👥 <b>Connections & Social Hub</b>\n\n"
+        f"Manage your private network, friend requests, and admirers:\n\n"
+        f"• <b>My Friends:</b> <b>{len(friends)} / {limits['max_friends']}</b> slots used\n"
+        f"• <b>Incoming Requests:</b> <b>{len(reqs)}</b> waiting\n"
+        f"• <b>Who Liked You:</b> <b>{len(likes)}</b> admirers ✨\n"
+        f"• <b>Your Unique Handle:</b> <code>{unique_tag}</code>\n\n"
+        f"<i>Select an option below to explore your connections:</i>"
     )
 
-
-@router.callback_query(F.data.startswith("like_back:"))
-async def handle_like_back_callback(
-    callback: CallbackQuery,
-    user_repo: UserRepository,
-    social_service: SocialService,
-) -> None:
-    if not callback.data or not callback.from_user:
-        return
-
-    target_id = callback.data.split(":")[1]
-    user = await user_repo.get_by_telegram_id(callback.from_user.id)
-    if not user:
-        await callback.answer("User profile not found.")
-        return
-
-    success, msg, friendship = await social_service.express_like(
-        sender_id=user.id,
-        target_id=target_id,
+    kb = get_connections_hub_keyboard(
+        friends_count=len(friends),
+        requests_count=len(reqs),
+        likes_count=len(likes),
     )
-    await callback.answer(msg, show_alert=True)
-    if callback.message:
-        await callback.message.edit_text(
-            f"💙 <b>Response Sent:</b> {msg}",
-            parse_mode="HTML",
-        )
 
+    await send_or_edit(event, text, reply_markup=kb)
 
-# --- 4. My Friends ---
 
 @router.message(F.text == "👥 My Friends")
 @router.message(Command("friends"))
+@router.callback_query(F.data == "conn:friends")
 async def show_friends(
-    message: Message,
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     social_service: SocialService,
     subscription_service: SubscriptionService,
 ) -> None:
-    if not message.from_user:
+    """Displays friends list with removal actions and Back to Connections button."""
+    user_tg = event.from_user
+    if not user_tg:
         return
 
-    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    user = await user_repo.get_by_telegram_id(user_tg.id)
     if not user:
-        await message.answer("Please type /start first.")
+        if isinstance(event, Message):
+            await event.answer("Please type /start first.")
+        else:
+            await event.answer("Please type /start first.", show_alert=True)
         return
 
     friends = await social_service.get_user_friends(user.id)
     limits = await subscription_service.get_plan_limits(user.id)
     max_friends = limits["max_friends"]
 
+    buttons = []
     if not friends:
-        await message.answer(
+        text = (
             f"👥 <b>My Friends</b> (0 / {max_friends} slots used)\n\n"
             f"You don't have any friends yet.\n"
-            f"When you and your chat partner both like each other, you become friends! 💙",
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
+            f"When you and your chat partner both like each other, you become friends! 💙"
         )
-        return
-
-    text = f"👥 <b>My Friends ({len(friends)} / {max_friends} slots used)</b>\n\n"
-    buttons = []
-    for f in friends:
-        text += f"• <b>{f['display_id']}</b> (Friends since {f['since']})\n"
         buttons.append([
-            InlineKeyboardButton(
-                text=f"❌ Remove {f['display_id']}",
-                callback_data=f"friend:remove:{f['friend_user_id']}",
-            )
+            InlineKeyboardButton(text="🔍 Search ID", callback_data="conn:search"),
+            InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub"),
+        ])
+    else:
+        text = f"👥 <b>My Friends ({len(friends)} / {max_friends} slots used)</b>\n\n"
+        for f in friends:
+            text += f"• <b>{f['display_id']}</b> (Friends since {f['since']})\n"
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"❌ Remove {f['display_id']}",
+                    callback_data=f"friend:remove:{f['friend_user_id']}",
+                )
+            ])
+        buttons.append([
+            InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub"),
         ])
 
-    await message.answer(
-        text,
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-    )
+    await send_or_edit(event, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
 
 
 @router.callback_query(F.data.startswith("friend:remove:"))
@@ -314,6 +433,7 @@ async def handle_remove_friend_callback(
     user_repo: UserRepository,
     social_service: SocialService,
 ) -> None:
+    """Removes a friend and updates view with back navigation."""
     if not callback.data or not callback.from_user:
         return
 
@@ -325,38 +445,222 @@ async def handle_remove_friend_callback(
     success, msg = await social_service.remove_friend(user.id, friend_id)
     await callback.answer(msg, show_alert=True)
     if callback.message and success:
-        await callback.message.edit_text(f"👥 {msg}")
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Back to Friends", callback_data="conn:friends")],
+                [InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")],
+            ]
+        )
+        await safe_edit_text(callback.message, f"👥 {msg}", reply_markup=back_kb)
 
 
-# --- 5. Search ID & Connections ---
+@router.message(F.text == "📬 Requests")
+@router.message(Command("requests"))
+@router.callback_query(F.data == "conn:requests")
+async def show_requests(
+    event: Message | CallbackQuery,
+    user_repo: UserRepository,
+    discovery_service: DiscoveryService,
+) -> None:
+    """Lists incoming connection requests with Accept/Decline actions."""
+    user_tg = event.from_user
+    if not user_tg:
+        return
+
+    user = await user_repo.get_by_telegram_id(user_tg.id)
+    if not user:
+        if isinstance(event, Message):
+            await event.answer("Please type /start first.")
+        else:
+            await event.answer("Please type /start first.", show_alert=True)
+        return
+
+    reqs = await discovery_service.get_incoming_requests(user.id)
+    buttons = []
+    if not reqs:
+        text = "📬 <b>Connection Requests</b>\n\nNo pending connection requests."
+        buttons.append([InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")])
+    else:
+        text = f"📬 <b>Pending Requests ({len(reqs)})</b>\n\n"
+        for r in reqs:
+            text += f"• <b>{r['sender_display_id']}</b> sent an invite ({r['created_at']})\n"
+            buttons.append([
+                InlineKeyboardButton(text=f"✅ Accept ({r['sender_display_id']})", callback_data=f"req:accept:{r['request_id']}"),
+                InlineKeyboardButton(text="❌ Decline", callback_data=f"req:reject:{r['request_id']}"),
+            ])
+        buttons.append([InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")])
+
+    await send_or_edit(event, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@router.callback_query(F.data.startswith("req:accept:"))
+async def handle_accept_request_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    discovery_service: DiscoveryService,
+) -> None:
+    """Accepts an incoming connection request."""
+    if not callback.data or not callback.from_user:
+        return
+
+    request_id = callback.data.split(":")[2]
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+
+    success, msg, _ = await discovery_service.accept_connection_request(request_id, user.id)
+    await callback.answer(msg, show_alert=True)
+    if callback.message:
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Back to Requests", callback_data="conn:requests")],
+                [InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")],
+            ]
+        )
+        await safe_edit_text(callback.message, f"📬 {msg}", reply_markup=back_kb)
+
+
+@router.callback_query(F.data.startswith("req:reject:"))
+async def handle_reject_request_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    discovery_service: DiscoveryService,
+) -> None:
+    """Rejects an incoming connection request."""
+    if not callback.data or not callback.from_user:
+        return
+
+    request_id = callback.data.split(":")[2]
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+
+    success, msg = await discovery_service.reject_connection_request(request_id, user.id)
+    await callback.answer(msg, show_alert=True)
+    if callback.message:
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Back to Requests", callback_data="conn:requests")],
+                [InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")],
+            ]
+        )
+        await safe_edit_text(callback.message, f"📬 {msg}", reply_markup=back_kb)
+
+
+@router.message(F.text == "💙 Who Liked Me")
+@router.message(Command("likes"))
+@router.callback_query(F.data == "conn:likes")
+async def show_who_liked_me(
+    event: Message | CallbackQuery,
+    user_repo: UserRepository,
+    social_service: SocialService,
+) -> None:
+    """Lists users who liked this profile with Like Back actions."""
+    user_tg = event.from_user
+    if not user_tg:
+        return
+
+    user = await user_repo.get_by_telegram_id(user_tg.id)
+    if not user:
+        if isinstance(event, Message):
+            await event.answer("Please type /start first.")
+        else:
+            await event.answer("Please type /start first.", show_alert=True)
+        return
+
+    likes = await social_service.get_who_liked_me(user.id)
+    buttons = []
+    if not likes:
+        text = (
+            "💙 <b>Who Liked You</b>\n\n"
+            "You have no pending likes at the moment.\n"
+            "Keep chatting and express interest to discover mutual matches!"
+        )
+        buttons.append([InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")])
+    else:
+        text = f"💙 <b>Who Liked You ({len(likes)} Pending)</b>\n\n"
+        for lk in likes:
+            text += f"• <b>{lk['sender_display_id']}</b> expressed interest!\n"
+            buttons.append([
+                InlineKeyboardButton(
+                    text=f"💙 Like Back ({lk['sender_display_id']})",
+                    callback_data=f"like_back:{lk['sender_id']}",
+                )
+            ])
+        buttons.append([InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")])
+
+    await send_or_edit(event, text, reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons))
+
+
+@router.callback_query(F.data.startswith("like_back:"))
+async def handle_like_back_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    social_service: SocialService,
+) -> None:
+    """Responds with reciprocal like."""
+    if not callback.data or not callback.from_user:
+        return
+
+    target_id = callback.data.split(":")[1]
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        await callback.answer("User profile not found.", show_alert=True)
+        return
+
+    success, msg, _ = await social_service.express_like(
+        sender_id=user.id,
+        target_id=target_id,
+    )
+    await callback.answer(msg, show_alert=True)
+    if callback.message:
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Back to Likes", callback_data="conn:likes")],
+                [InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")],
+            ]
+        )
+        await safe_edit_text(callback.message, f"💙 <b>Response Sent:</b> {msg}", reply_markup=back_kb)
+
 
 @router.message(F.text == "🔍 Search ID")
 @router.message(Command("search"))
+@router.callback_query(F.data == "conn:search")
 async def start_search_id(
-    message: Message,
+    event: Message | CallbackQuery,
     state: FSMContext,
     user_repo: UserRepository,
     subscription_service: SubscriptionService,
 ) -> None:
-    if not message.from_user:
+    """Initiates handle/ID lookup state."""
+    user_tg = event.from_user
+    if not user_tg:
         return
 
-    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    user = await user_repo.get_by_telegram_id(user_tg.id)
     if not user:
-        await message.answer("Please type /start first.")
+        if isinstance(event, Message):
+            await event.answer("Please type /start first.")
+        else:
+            await event.answer("Please type /start first.", show_alert=True)
         return
 
     limits = await subscription_service.get_plan_limits(user.id)
     daily_limit = limits["daily_searches_limit"]
 
     await state.set_state(SearchStates.waiting_for_query)
-    await message.answer(
+    text = (
         f"🔍 <b>Search User by ID or Handle</b>\n\n"
         f"Enter a permanent handle (e.g. <code>@unique_handle</code>) or LikBy ID:\n"
         f"<i>(Daily search quota: {daily_limit} searches per day)</i>\n\n"
-        f"Send the handle or type /cancel to abort.",
-        parse_mode="HTML",
+        f"Send the handle now, or tap below to cancel."
     )
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Cancel & Return to Connections", callback_data="conn:hub")]
+        ]
+    )
+    await send_or_edit(event, text, reply_markup=cancel_kb)
 
 
 @router.message(SearchStates.waiting_for_query)
@@ -366,10 +670,16 @@ async def process_search_query(
     user_repo: UserRepository,
     discovery_service: DiscoveryService,
 ) -> None:
+    """Processes search query and returns preview card."""
     query = (message.text or "").strip()
     if query == "/cancel":
         await state.clear()
-        await message.answer("Search cancelled.", reply_markup=get_main_menu_keyboard())
+        cancel_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Return to Connections", callback_data="conn:hub")]
+            ]
+        )
+        await message.answer("Search cancelled.", reply_markup=cancel_kb)
         return
 
     if not message.from_user:
@@ -385,8 +695,14 @@ async def process_search_query(
     )
     await state.clear()
 
+    back_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")]
+        ]
+    )
+
     if not success or not preview:
-        await message.answer(f"❌ {msg}", reply_markup=get_main_menu_keyboard())
+        await message.answer(f"❌ {msg}", reply_markup=back_kb)
         return
 
     friend_status = "Yes (Friends 💙)" if preview["is_friend"] else "Not Friends"
@@ -402,6 +718,7 @@ async def process_search_query(
                     callback_data=f"connect:send:{preview['user_id']}",
                 )
             ])
+    buttons.append([InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")])
 
     await message.answer(
         f"🔍 <b>User Found</b>\n\n"
@@ -409,7 +726,7 @@ async def process_search_query(
         f"• <b>Activity:</b> {preview['presence']}\n"
         f"• <b>Friendship:</b> {friend_status}",
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons) if buttons else None,
+        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
     )
 
 
@@ -419,6 +736,7 @@ async def handle_send_connection_request(
     user_repo: UserRepository,
     discovery_service: DiscoveryService,
 ) -> None:
+    """Sends connection request from search result."""
     if not callback.data or not callback.from_user:
         return
 
@@ -433,229 +751,56 @@ async def handle_send_connection_request(
     )
     await callback.answer(msg, show_alert=True)
     if callback.message:
-        await callback.message.edit_text(f"📬 {msg}")
-
-
-# --- 6. Connection Requests ---
-
-@router.message(F.text == "📬 Requests")
-@router.message(Command("requests"))
-async def show_requests(
-    message: Message,
-    user_repo: UserRepository,
-    discovery_service: DiscoveryService,
-) -> None:
-    if not message.from_user:
-        return
-
-    user = await user_repo.get_by_telegram_id(message.from_user.id)
-    if not user:
-        await message.answer("Please type /start first.")
-        return
-
-    reqs = await discovery_service.get_incoming_requests(user.id)
-    if not reqs:
-        await message.answer(
-            "📬 <b>Connection Requests</b>\n\nNo pending connection requests.",
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
+        back_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub")]
+            ]
         )
-        return
-
-    text = f"📬 <b>Pending Requests ({len(reqs)})</b>\n\n"
-    buttons = []
-    for r in reqs:
-        text += f"• <b>{r['sender_display_id']}</b> sent you an invite ({r['created_at']})\n"
-        buttons.append([
-            InlineKeyboardButton(text=f"✅ Accept ({r['sender_display_id']})", callback_data=f"req:accept:{r['request_id']}"),
-            InlineKeyboardButton(text=f"❌ Decline", callback_data=f"req:reject:{r['request_id']}"),
-        ])
-
-    await message.answer(
-        text,
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup(inline_keyboard=buttons),
-    )
+        await safe_edit_text(callback.message, f"📬 {msg}", reply_markup=back_kb)
 
 
-@router.callback_query(F.data.startswith("req:accept:"))
-async def handle_accept_request_callback(
-    callback: CallbackQuery,
-    user_repo: UserRepository,
-    discovery_service: DiscoveryService,
-) -> None:
-    if not callback.data or not callback.from_user:
-        return
+# ==============================================================================
+# 5. 💬 My Chats Hub
+# ==============================================================================
 
-    request_id = callback.data.split(":")[2]
-    user = await user_repo.get_by_telegram_id(callback.from_user.id)
-    if not user:
-        return
-
-    success, msg, _ = await discovery_service.accept_connection_request(request_id, user.id)
-    await callback.answer(msg, show_alert=True)
-    if callback.message:
-        await callback.message.edit_text(f"📬 {msg}")
-
-
-@router.callback_query(F.data.startswith("req:reject:"))
-async def handle_reject_request_callback(
-    callback: CallbackQuery,
-    user_repo: UserRepository,
-    discovery_service: DiscoveryService,
-) -> None:
-    if not callback.data or not callback.from_user:
-        return
-
-    request_id = callback.data.split(":")[2]
-    user = await user_repo.get_by_telegram_id(callback.from_user.id)
-    if not user:
-        return
-
-    success, msg = await discovery_service.reject_connection_request(request_id, user.id)
-    await callback.answer(msg, show_alert=True)
-    if callback.message:
-        await callback.message.edit_text(f"📬 {msg}")
-
-
-# --- 7. Subscription & Entitlements ---
-
-@router.message(F.text == "💎 Subscription")
-@router.message(Command("subscription"))
-async def show_subscription(
-    message: Message,
-    user_repo: UserRepository,
-    subscription_service: SubscriptionService,
-) -> None:
-    if not message.from_user:
-        return
-
-    user = await user_repo.get_by_telegram_id(message.from_user.id)
-    if not user:
-        await message.answer("Please type /start first.")
-        return
-
-    limits = await subscription_service.get_plan_limits(user.id)
-    tier = limits["tier"]
-    max_friends = limits["max_friends"]
-    daily_searches = limits["daily_searches_limit"]
-    daily_requests = limits["daily_requests_limit"]
-
-    await message.answer(
-        f"💎 <b>LikBy Subscription & Entitlements</b>\n\n"
-        f"Active Plan: <b>{tier.upper()}</b>\n\n"
-        f"<b>Current Feature Limits:</b>\n"
-        f"• Max Friends: <b>{max_friends}</b>\n"
-        f"• Daily ID Searches: <b>{daily_searches} / day</b>\n"
-        f"• Daily Connection Requests: <b>{daily_requests} / day</b>\n"
-        f"• View Incoming Likes: <b>Included</b> 💙\n\n"
-        f"Upgrade your tier to increase your limits:",
-        parse_mode="HTML",
-        reply_markup=get_subscription_keyboard(),
-    )
-
-
-@router.callback_query(F.data.startswith("sub:upgrade:"))
-async def handle_upgrade_callback(
-    callback: CallbackQuery,
-    user_repo: UserRepository,
-    subscription_service: SubscriptionService,
-) -> None:
-    if not callback.data or not callback.from_user:
-        return
-
-    tier_str = callback.data.split(":")[2]
-    user = await user_repo.get_by_telegram_id(callback.from_user.id)
-    if not user:
-        return
-
-    new_tier = SubscriptionTier(tier_str)
-    ent = await subscription_service.upgrade_tier(user.id, new_tier, duration_days=30)
-    await callback.answer(f"Upgraded to {new_tier.value.upper()}!", show_alert=True)
-
-    if callback.message:
-        await callback.message.edit_text(
-            f"🎉 <b>Subscription Upgraded to {new_tier.value.upper()}!</b>\n\n"
-            f"• Max Friends: <b>{ent.max_friends}</b>\n"
-            f"• Daily ID Searches: <b>{ent.daily_searches_limit}</b>\n"
-            f"• Daily Requests: <b>{ent.daily_requests_limit}</b>\n\n"
-            f"Valid for 30 days. Thank you for supporting LikBy! 💙",
-            parse_mode="HTML",
-        )
-
-
-@router.callback_query(F.data == "sub:status")
-async def handle_sub_status_callback(
-    callback: CallbackQuery,
-    user_repo: UserRepository,
-    subscription_service: SubscriptionService,
-) -> None:
-    if not callback.from_user:
-        return
-
-    user = await user_repo.get_by_telegram_id(callback.from_user.id)
-    if not user:
-        return
-
-    limits = await subscription_service.get_plan_limits(user.id)
-    await callback.answer(f"Active Plan: {limits['tier'].upper()}", show_alert=True)
-
-
-# --- 8. My Chats ---
-
-@router.message(F.text == "💬 My Chats")
+@router.message(F.text.in_(["💬 My Chats", "💬 Chats"]))
 @router.message(Command("chats"))
+@router.callback_query(F.data == "chat:hub")
 async def show_my_chats(
-    message: Message,
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     session_repo: ChatSessionRepository,
 ) -> None:
-    if not message.from_user:
+    """Conversations Hub: Inspects active session or offers matchmaking CTA."""
+    user_tg = event.from_user
+    if not user_tg:
         return
 
-    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    user = await user_repo.get_by_telegram_id(user_tg.id)
     if not user:
-        await message.answer("Please type /start first.")
+        if isinstance(event, Message):
+            await event.answer("Please type /start first.")
+        else:
+            await event.answer("Please type /start first.", show_alert=True)
         return
 
     active_session = await session_repo.get_active_by_user_id(user.id)
     if active_session:
-        await message.answer(
-            f"💬 <b>Active Chat Session:</b> <code>{active_session.id}</code>\n"
-            f"You are currently chatting with an anonymous partner.\n"
-            f"Send messages in chat or tap <b>🚫 End Chat</b> to finish.",
-            parse_mode="HTML",
+        text = (
+            f"💬 <b>Active Chat Session</b>\n\n"
+            f"• <b>Session ID:</b> <code>{active_session.id}</code>\n"
+            f"• <b>Status:</b> 🟢 Live & Connected\n"
+            f"• <b>Partner:</b> Anonymous Partner\n\n"
+            f"Type and send any message directly to chat with your partner.\n"
+            f"Use the interactive controls below to play, skip, or end:"
         )
+        kb = get_chat_hub_keyboard(is_active=True, session_id=active_session.id)
     else:
-        await message.answer(
+        text = (
             "💬 <b>Chat Sessions</b>\n\n"
             "You have no active chat session right now.\n"
-            "Tap <b>🎲 Find Someone</b> to start a new anonymous chat!",
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
+            "Tap <b>🎲 Find Match</b> below to connect with an anonymous partner!"
         )
+        kb = get_chat_hub_keyboard(is_active=False)
 
-
-# --- 9. Help & Guidelines ---
-
-@router.message(F.text == "🛡 Help & Safety")
-@router.message(F.text == "📜 Guidelines")
-@router.message(Command("guidelines"))
-@router.message(Command("help"))
-async def show_help_and_safety(message: Message) -> None:
-    await message.answer(
-        "🛡️ <b>LikBy Safety & Guidelines</b>\n\n"
-        "LikBy is built on privacy, mutual respect, and safe discovery.\n\n"
-        "<b>Core Principles:</b>\n"
-        "1. <b>Strict Anonymity:</b> Your Telegram account, phone number, and location are never revealed.\n"
-        "2. <b>Zero Tolerance:</b> Harassment, hate speech, explicit content, and spam result in immediate suspension.\n"
-        "3. <b>Adults Only (18+):</b> Users must be 18 or older.\n"
-        "4. <b>Safety Controls:</b> You can tap <b>⚠️ Report</b> during any chat to instantly disconnect and permanently block a partner.\n"
-        "5. <b>Media Protection:</b> All shared photos and videos have saving and forwarding restricted via Telegram Content Protection. LikBy provides no media download buttons.\n"
-        "6. <b>Zero Advertising Policy:</b> LikBy is 100% advertisement-free. We never display third-party advertisements, sponsored messages, or promotional broadcasts.\n"
-        "7. <b>No Disappearing Media:</b> LikBy does not employ view-once or self-destruct timers.\n\n"
-        "<b>Media Allowance:</b> Check your daily quota anytime with /my_media_usage.\n"
-        "<b>Need help?</b> Contact LikBy Support or ping @LikBy_bot.",
-        parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(),
-    )
+    await send_or_edit(event, text, reply_markup=kb)

@@ -29,15 +29,20 @@ router = Router(name="chat")
 
 @router.message(F.text == "🚫 End Chat")
 @router.message(Command("stop"))
+@router.callback_query(F.data == "chat:end")
 async def handle_stop_chat(
-    message: Message,
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     chat_relay: ChatRelayService,
 ) -> None:
-    if not message.from_user:
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+
+    if not event.from_user:
         return
 
-    tg_id = message.from_user.id
+    tg_id = event.from_user.id
     user = await user_repo.get_by_telegram_id(tg_id)
     if user:
         user.transition_state(UserState.MAIN_MENU)
@@ -71,17 +76,22 @@ async def handle_stop_chat(
 
 @router.message(F.text == "⏭ Next Chat")
 @router.message(Command("next"))
+@router.callback_query(F.data == "chat:next")
 async def handle_next_chat(
-    message: Message,
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
     chat_relay: ChatRelayService,
     match_service: MatchmakingService,
 ) -> None:
-    if not message.from_user:
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+
+    if not event.from_user:
         return
 
-    tg_id = message.from_user.id
+    tg_id = event.from_user.id
     user = await user_repo.get_by_telegram_id(tg_id)
     if not user:
         return
@@ -261,9 +271,10 @@ async def handle_chat_message(
 
     # Ignore system menu commands that might fall through
     menu_buttons = [
-        "🎲 Find a Match", "🎲 Find Someone", "💬 My Chats", "💙 Who Liked Me",
+        "🎲 Find Match", "🎲 Find a Match", "🎲 Find Someone", "💬 My Chats", "👥 Connections",
+        "👤 Profile & VIP", "🎮 LikBy Play", "💙 Who Liked Me",
         "👥 My Friends", "🔍 Search ID", "📬 Requests", "👤 My Profile",
-        "🌟 My Karma", "💎 Subscription", "🎮 LikBy Play", "🕹 Solo Arcade", "🛡 Help & Safety",
+        "🌟 My Karma", "💎 Subscription", "🕹 Solo Arcade", "🛡 Help & Safety",
         "📜 Guidelines", "❓ Help / About",
     ]
     if text in menu_buttons:
@@ -272,7 +283,7 @@ async def handle_chat_message(
     relayed = await chat_relay.relay_text(sender_tg_id=tg_id, text=text)
     if not relayed:
         await message.answer(
-            "You are not currently in an active chat.\nTap <b>🎲 Find Someone</b> to connect!",
+            "You are not currently in an active chat.\nTap <b>🎲 Find Match</b> to connect!",
             parse_mode="HTML",
             reply_markup=get_main_menu_keyboard(),
         )

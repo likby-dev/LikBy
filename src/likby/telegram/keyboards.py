@@ -76,18 +76,96 @@ def get_interests_keyboard(selected: Sequence[str]) -> InlineKeyboardMarkup:
 
 
 def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
-    """Persistent reply keyboard for LikBy Main Menu."""
+    """
+    World-class 5-button persistent main menu keyboard for LikBy.
+    Row 1: [ 🎲 Find Match ] (Hero CTA)
+    Row 2: [ 💬 My Chats ]   [ 👥 Connections ]
+    Row 3: [ 🎮 LikBy Play ] [ 👤 Profile & VIP ]
+    """
     return ReplyKeyboardMarkup(
         keyboard=[
-            [KeyboardButton(text="🎲 Find Someone"), KeyboardButton(text="💬 My Chats")],
-            [KeyboardButton(text="💙 Who Liked Me"), KeyboardButton(text="👥 My Friends")],
-            [KeyboardButton(text="🔍 Search ID"), KeyboardButton(text="📬 Requests")],
-            [KeyboardButton(text="👤 My Profile"), KeyboardButton(text="🌟 My Karma")],
-            [KeyboardButton(text="💎 Subscription"), KeyboardButton(text="🎮 LikBy Play")],
-            [KeyboardButton(text="🕹 Solo Arcade"), KeyboardButton(text="🛡 Help & Safety")],
+            [KeyboardButton(text="🎲 Find Match")],
+            [KeyboardButton(text="💬 My Chats"), KeyboardButton(text="👥 Connections")],
+            [KeyboardButton(text="🎮 LikBy Play"), KeyboardButton(text="👤 Profile & VIP")],
         ],
         resize_keyboard=True,
         is_persistent=True,
+    )
+
+
+def get_connections_hub_keyboard(
+    friends_count: int = 0,
+    requests_count: int = 0,
+    likes_count: int = 0,
+) -> InlineKeyboardMarkup:
+    """Consolidated Social & Connections Hub interactive dashboard."""
+    friends_label = f"👥 Friends ({friends_count})" if friends_count > 0 else "👥 My Friends"
+    requests_label = f"📬 Requests ({requests_count}) 🔔" if requests_count > 0 else "📬 Requests"
+    likes_label = f"💙 Who Liked Me ({likes_count}) ✨" if likes_count > 0 else "💙 Who Liked Me"
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=friends_label, callback_data="conn:friends"),
+                InlineKeyboardButton(text=requests_label, callback_data="conn:requests"),
+            ],
+            [
+                InlineKeyboardButton(text=likes_label, callback_data="conn:likes"),
+                InlineKeyboardButton(text="🔍 Search ID", callback_data="conn:search"),
+            ],
+            [
+                InlineKeyboardButton(text="🎁 Invite Friends (Free Spark Pass)", callback_data="sub:invite"),
+            ],
+        ]
+    )
+
+
+def get_profile_vip_keyboard(tier_code: str = "BASE") -> InlineKeyboardMarkup:
+    """Consolidated Profile & VIP Membership Hub interactive dashboard."""
+    upgrade_btn_text = "👑 VIP Plans & Upgrades" if tier_code.upper() == "BASE" else f"💎 Manage {tier_code.title()} Tier"
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✏️ Edit Display Name", callback_data="profile:edit_name"),
+                InlineKeyboardButton(text="🌟 Karma Reputation", callback_data="vip:karma"),
+            ],
+            [
+                InlineKeyboardButton(text=upgrade_btn_text, callback_data="sub:plans"),
+                InlineKeyboardButton(text="📊 Quotas & Usage", callback_data="sub:myplan"),
+            ],
+            [
+                InlineKeyboardButton(text="🛡 Safety & Guidelines", callback_data="vip:safety"),
+                InlineKeyboardButton(text="💬 Support & Help", callback_data="sub:paysupport"),
+            ],
+        ]
+    )
+
+
+def get_chat_hub_keyboard(is_active: bool = False, session_id: Optional[str] = None) -> InlineKeyboardMarkup:
+    """Conversation Hub interactive controls."""
+    if is_active:
+        return InlineKeyboardMarkup(
+            inline_keyboard=[
+                [
+                    InlineKeyboardButton(text="🎮 Play Game with Partner", callback_data="chat:game"),
+                    InlineKeyboardButton(text="⏭ Next Chat", callback_data="chat:next"),
+                ],
+                [
+                    InlineKeyboardButton(text="📜 Export Transcript", callback_data=f"transcript:export:{session_id}" if session_id else "chat:transcript"),
+                    InlineKeyboardButton(text="🚫 End Conversation", callback_data="chat:end"),
+                ],
+            ]
+        )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎲 Find a Match Now", callback_data="queue:find_new"),
+            ],
+            [
+                InlineKeyboardButton(text="👥 My Friends", callback_data="conn:friends"),
+                InlineKeyboardButton(text="🕹 Solo Arcade", callback_data="solo:hub"),
+            ],
+        ]
     )
 
 
@@ -136,6 +214,9 @@ def get_subscription_keyboard() -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="📜 Terms & Refunds", callback_data="sub:terms"),
                 InlineKeyboardButton(text="💬 Pay Support", callback_data="sub:paysupport"),
             ],
+            [
+                InlineKeyboardButton(text="« Back to Profile Hub", callback_data="vip:hub"),
+            ],
         ]
     )
 
@@ -148,6 +229,9 @@ def get_plan_card_keyboard(plan_code: str) -> InlineKeyboardMarkup:
     buttons.append([
         InlineKeyboardButton(text="📋 All Plans", callback_data="sub:plans"),
         InlineKeyboardButton(text="📊 My Plan", callback_data="sub:myplan"),
+    ])
+    buttons.append([
+        InlineKeyboardButton(text="« Back to Profile Hub", callback_data="vip:hub"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -162,6 +246,9 @@ def get_referral_keyboard() -> InlineKeyboardMarkup:
             [
                 InlineKeyboardButton(text="💎 View All Plans", callback_data="sub:plans"),
                 InlineKeyboardButton(text="📊 My Plan", callback_data="sub:myplan"),
+            ],
+            [
+                InlineKeyboardButton(text="« Back to Connections", callback_data="conn:hub"),
             ],
         ]
     )
@@ -197,7 +284,10 @@ def get_solo_hub_keyboard() -> InlineKeyboardMarkup:
             [InlineKeyboardButton(text="🎯 Trivia Blitz", callback_data="solo:trivia:new")],
             [InlineKeyboardButton(text="💎 Gem Hunter (Mini Mines)", callback_data="solo:gem:new")],
             [InlineKeyboardButton(text="🪨 Rock Paper Scissors", callback_data="solo:rps:new")],
-            [InlineKeyboardButton(text="❌ Close Arcade", callback_data="solo:close")],
+            [
+                InlineKeyboardButton(text="« Back to Games Hub", callback_data="play:hub"),
+                InlineKeyboardButton(text="❌ Close", callback_data="solo:close"),
+            ],
         ]
     )
 
@@ -245,52 +335,29 @@ def get_gem_hunter_keyboard(game, show_all: bool = False) -> InlineKeyboardMarku
 
 def get_play_hub_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """
-    LikBy Play Ecosystem Navigation Keyboard.
+    Consolidated LikBy Play Ecosystem Navigation Keyboard.
     Uses WebAppInfo when mini_app_url is provided, with fallback inline actions.
     """
+    rows = []
     if mini_app_url:
-        return InlineKeyboardMarkup(
-            inline_keyboard=[
-                [
-                    InlineKeyboardButton(
-                        text="⚔️ Play Together (11 Duels)",
-                        web_app=WebAppInfo(url=f"{mini_app_url}#duels"),
-                    ),
-                    InlineKeyboardButton(
-                        text="🧩 Play Solo (6 Games)",
-                        web_app=WebAppInfo(url=f"{mini_app_url}#solo"),
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(
-                        text="✨ Game Collection",
-                        web_app=WebAppInfo(url=f"{mini_app_url}#catalogue"),
-                    ),
-                    InlineKeyboardButton(
-                        text="📊 My Progress",
-                        web_app=WebAppInfo(url=f"{mini_app_url}#progress"),
-                    ),
-                ],
-                [
-                    InlineKeyboardButton(text="💎 My Plan & Quota", callback_data="sub:myplan"),
-                ],
-            ]
-        )
-    return InlineKeyboardMarkup(
-        inline_keyboard=[
-            [
-                InlineKeyboardButton(text="⚔️ Play Together (11 Duels)", callback_data="play:duels"),
-                InlineKeyboardButton(text="🧩 Play Solo (6 Games)", callback_data="play:solo"),
-            ],
-            [
-                InlineKeyboardButton(text="✨ Game Collection", callback_data="play:catalogue"),
-                InlineKeyboardButton(text="📊 My Progress", callback_data="play:progress"),
-            ],
-            [
-                InlineKeyboardButton(text="💎 My Plan & Quota", callback_data="sub:myplan"),
-            ],
-        ]
-    )
+        rows.append([
+            InlineKeyboardButton(
+                text="🚀 Open LikBy Play (Mini App)",
+                web_app=WebAppInfo(url=mini_app_url),
+            )
+        ])
+    rows.append([
+        InlineKeyboardButton(text="⚔️ 2-Player Duels (11 Games)", callback_data="play:duels"),
+        InlineKeyboardButton(text="🕹 Solo Casual Games", callback_data="solo:hub"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="✨ Game Collection", callback_data="play:catalogue"),
+        InlineKeyboardButton(text="📊 My Progress & Stats", callback_data="play:progress"),
+    ])
+    rows.append([
+        InlineKeyboardButton(text="💎 Upgrade Gaming Quota (VIP)", callback_data="sub:plans"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
 def get_rps_keyboard() -> InlineKeyboardMarkup:

@@ -29,6 +29,8 @@ router = Router(name="payments")
 # --- 1. /plans & 💎 Subscription Menu ---
 
 @router.message(Command("plans"))
+@router.message(Command("subscription"))
+@router.message(Command("vip"))
 @router.message(F.text == "💎 Subscription")
 @router.callback_query(F.data == "sub:plans")
 async def show_plans_command(
