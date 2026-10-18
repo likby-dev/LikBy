@@ -3,12 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>LikBy Play — Every connection has a game 🩵</title>
+  <meta name="theme-color" content="#030712">
+  <title>LikBy Play — World-Class Telegram Gaming Ecosystem 🎮</title>
   <link rel="stylesheet" href="/play/styles.css">
   <!-- Telegram WebApp SDK -->
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
 </head>
 <body>
+  <!-- Ambient Particle Canvas for 60fps Micro-Animations -->
+  <canvas id="ambientCanvas"></canvas>
+
   <div class="app-container" id="app">
     <!-- Header -->
     <header class="header">
@@ -28,11 +32,10 @@
     <!-- Daily Duel Allowance Card -->
     <section class="quota-card" id="quotaCard">
       <div class="quota-header">
-        <span class="quota-title">Daily Duel Allowance</span>
+        <span class="quota-title">⚔️ Daily Duel Allowance</span>
         <span class="quota-counter" id="quotaCounterText">5 of 5 remaining</span>
       </div>
       <div class="quota-pills" id="quotaPills">
-        <!-- Rendered dynamically -->
         <div class="quota-pill active"></div>
         <div class="quota-pill active"></div>
         <div class="quota-pill active"></div>
@@ -40,40 +43,50 @@
         <div class="quota-pill active"></div>
       </div>
       <div class="quota-footer">
-        <span id="quotaResetText">Resets at midnight (IST)</span>
-        <button class="btn-link" id="upgradePlanBtn">Get More Duels</button>
+        <span id="quotaResetText">Resets at 00:00 UTC (Midnight IST)</span>
+        <button class="btn-link" id="upgradePlanBtn">Get More Duels ⭐️</button>
       </div>
     </section>
 
     <!-- Featured Hero Banner -->
     <section class="featured-hero">
-      <span class="featured-badge">FEATURED DUEL</span>
+      <span class="featured-badge">FEATURED TOURNAMENT DUEL</span>
       <div class="featured-title">Carrom Clash 🥇</div>
-      <div class="featured-desc">Master the board, take precise angles, and pocket the queen with silky physics!</div>
+      <div class="featured-desc">
+        Take angles, master the board with silky friction physics, and pocket the queen!
+      </div>
       <button class="btn-primary" id="featuredPlayBtn">
-        <span>⚔️ Challenge Partner</span>
+        <span>⚔️ Play Duel Now</span>
       </button>
     </section>
 
     <!-- Quick Play Bar -->
     <section>
-      <div class="section-title">⚡ Quick Play</div>
+      <div class="section-title">⚡ Instant Quick Play</div>
       <div class="quick-bar">
-        <div class="quick-chip" data-game="reflex_rush">
-          <span>⚡</span>
-          <span>Reflex Rush</span>
-        </div>
-        <div class="quick-chip" data-game="mindmatch">
-          <span>💭</span>
-          <span>MindMatch</span>
-        </div>
-        <div class="quick-chip" data-game="brain_blitz">
-          <span>🧠</span>
-          <span>Brain Blitz</span>
+        <div class="quick-chip" data-game="carrom_clash">
+          <span>🎯</span>
+          <span>Carrom Clash</span>
         </div>
         <div class="quick-chip" data-game="connect_four">
           <span>🔵</span>
           <span>Connect Four</span>
+        </div>
+        <div class="quick-chip" data-game="air_rush">
+          <span>🏒</span>
+          <span>Air Rush</span>
+        </div>
+        <div class="quick-chip" data-game="zen_merge">
+          <span>🧩</span>
+          <span>Zen Merge (2048)</span>
+        </div>
+        <div class="quick-chip" data-game="stick_arena">
+          <span>🤺</span>
+          <span>Stick Arena</span>
+        </div>
+        <div class="quick-chip" data-game="reflex_rush">
+          <span>⚡</span>
+          <span>Reflex Rush</span>
         </div>
       </div>
     </section>
@@ -82,8 +95,8 @@
     <section>
       <div class="tab-bar">
         <button class="tab-btn active" data-filter="all">All Games (17)</button>
-        <button class="tab-btn" data-filter="duel">Duels (11)</button>
-        <button class="tab-btn" data-filter="solo">Solo (6)</button>
+        <button class="tab-btn" data-filter="duel">⚔️ Duels (11)</button>
+        <button class="tab-btn" data-filter="solo">🕹 Solo (6)</button>
       </div>
     </section>
 
@@ -95,51 +108,58 @@
     </section>
   </div>
 
-  <!-- Game Arena Viewport (Overlay) -->
+  <!-- Full-Screen Interactive Game Viewport / Arena -->
   <div class="game-viewport" id="gameViewport">
     <div class="viewport-nav">
-      <div class="viewport-title">
-        <span id="viewportIcon">🎮</span>
-        <span id="viewportTitle">Game Name</span>
+      <div class="viewport-title-wrap">
+        <span class="viewport-icon" id="viewportIcon">🎮</span>
+        <div>
+          <div class="viewport-title" id="viewportTitle">Game Name</div>
+          <span class="viewport-turn-badge" id="viewportTurnBadge">Your Turn ⚡</span>
+        </div>
       </div>
       <div style="display: flex; gap: 8px;">
-        <button class="card-btn" id="exitGameBtn">Leave Game</button>
+        <button class="btn-icon" id="arenaSoundBtn">🔊</button>
+        <button class="btn-secondary" id="exitGameBtn" style="padding: 6px 14px; font-size: 12px;">Leave</button>
       </div>
     </div>
     <div class="viewport-body" id="viewportBody">
       <div class="canvas-container" id="canvasContainer">
-        <!-- Interactive game render injected here -->
+        <!-- Interactive game render dynamically injected -->
       </div>
     </div>
   </div>
 
-  <!-- Invite Partner Modal -->
+  <!-- Challenge Partner Modal -->
   <div class="modal-overlay" id="inviteModal">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title" id="inviteModalTitle">Challenge Partner</h3>
+        <h3 class="modal-title" id="inviteModalTitle">⚔️ Challenge Partner</h3>
         <button class="btn-close" id="closeInviteModal">✕</button>
       </div>
-      <p style="font-size: 13px; color: var(--likby-muted);">
-        Enter your chat partner's User ID or test partner to start an authoritative duel.
+      <p style="font-size: 13px; color: var(--likby-text-muted); line-height: 1.5;">
+        Challenge your chat partner or enter a User ID to start a live duel:
       </p>
-      <input type="text" class="input-field" id="partnerIdInput" placeholder="Partner User ID (e.g. partner_123)" />
-      <button class="btn-primary" id="sendInviteBtn">Send Challenge</button>
+      <input type="text" class="input-field" id="partnerIdInput" placeholder="Partner User ID (or 'practice_bot')" />
+      <div style="display: flex; gap: 10px;">
+        <button class="btn-primary" id="sendInviteBtn" style="flex: 2;">Challenge Partner</button>
+        <button class="btn-secondary" id="practiceDuelBtn" style="flex: 1;">Practice</button>
+      </div>
     </div>
   </div>
 
   <!-- Quota Limit Modal -->
   <div class="modal-overlay" id="quotaExhaustedModal">
     <div class="modal-box" style="text-align: center;">
-      <div style="font-size: 40px; margin-bottom: 8px;">🩵</div>
-      <h3 class="modal-title">Your next duel is waiting</h3>
-      <p style="font-size: 13px; color: var(--likby-muted); line-height: 1.5; margin: 8px 0;">
-        You've enjoyed today's duels on your current plan. Your solo games are still completely unlimited!
+      <div style="font-size: 42px; margin-bottom: 6px;">⚡</div>
+      <h3 class="modal-title">Daily Duel Allowance Reached</h3>
+      <p style="font-size: 13px; color: var(--likby-text-muted); line-height: 1.5; margin: 8px 0;">
+        You've used all duel credits for today on your current plan. Solo games are <b>100% unlimited</b>, or upgrade your VIP tier for more plays!
       </p>
       <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
-        <button class="btn-primary" id="exploreSoloBtn">🧩 Explore Solo Games</button>
-        <button class="card-btn" id="upgradeTiersBtn">✨ Discover LikBy Spark & Premium</button>
-        <button class="btn-link" id="closeQuotaModal">Close</button>
+        <button class="btn-primary" id="exploreSoloBtn">🕹 Play Unlimited Solo Games</button>
+        <button class="btn-secondary" id="upgradeTiersBtn">👑 Upgrade to VIP Tier</button>
+        <button class="btn-link" id="closeQuotaModal">Maybe Later</button>
       </div>
     </div>
   </div>

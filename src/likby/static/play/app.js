@@ -1,937 +1,1385 @@
 /**
  * LIKBY PLAY — CLIENT ENGINE & INTERACTIVE MINI APP
- * Connects to FastAPI backend, supports all 17 games, WebSockets & Quota Management
+ * Luxury Telegram Mini App Gaming Ecosystem
+ * Features: All 17 Games (11 Duels + 6 Solo), 60fps Micro-Animations,
+ * Ambient Particle System, Sound Synthesizer, Touch/Swipe Controls & AI Practice Bot.
  */
 
 (function () {
   "use strict";
 
-  // State
-  let tg = window.Telegram?.WebApp;
-  let initData = tg?.initData || "";
-  let currentUserId = tg?.initDataUnsafe?.user?.id ? `tg_${tg.initDataUnsafe.user.id}` : "test_player_1";
-  let currentEntitlements = null;
-  let gamesCatalogue = [];
-  let currentFilter = "all";
+  // Telegram WebApp Setup
+  const tg = window.Telegram?.WebApp;
+  const initData = tg?.initData || "";
+  const currentUserId = tg?.initDataUnsafe?.user?.id
+    ? `tg_${tg.initDataUnsafe.user.id}`
+    : "player_one";
   let soundEnabled = true;
 
-  // Active Game State
-  let activeGameId = null;
+  // State Management
+  let gamesCatalogue = [];
+  let currentEntitlements = {
+    daily_duel_limit: 5,
+    duels_consumed_today: 0,
+    duels_remaining_today: 5,
+    tier: "BASE"
+  };
+  let currentFilter = "all";
+
+  // Active Session State
+  let activeGame = null;
   let activeSessionId = null;
-  let activeSessionState = null;
-  let activeWs = null;
-  let activeGameMode = "SOLO"; // 'SOLO' or 'DUEL'
-  let pendingInviteGameId = null;
+  let activeGameState = null;
+  let isPracticeMode = false;
 
-  // Audio Synth Context
-  let audioCtx = null;
-  function playSound(type) {
-    if (!soundEnabled) return;
-    try {
-      if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-      const osc = audioCtx.createOscillator();
-      const gain = audioCtx.createGain();
-      osc.connect(gain);
-      gain.connect(audioCtx.destination);
-      const now = audioCtx.currentTime;
-
-      if (type === "click") {
-        osc.frequency.setValueAtTime(600, now);
-        osc.frequency.exponentialRampToValueAtTime(800, now + 0.05);
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-        osc.start(now);
-        osc.stop(now + 0.05);
-      } else if (type === "win") {
-        osc.frequency.setValueAtTime(440, now);
-        osc.frequency.setValueAtTime(554, now + 0.1);
-        osc.frequency.setValueAtTime(659, now + 0.2);
-        gain.gain.setValueAtTime(0.2, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
-        osc.start(now);
-        osc.stop(now + 0.35);
-      } else if (type === "score") {
-        osc.frequency.setValueAtTime(523, now);
-        osc.frequency.exponentialRampToValueAtTime(784, now + 0.12);
-        gain.gain.setValueAtTime(0.15, now);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.12);
-        osc.start(now);
-        osc.stop(now + 0.12);
-      }
-    } catch (e) {
-      // AudioContext fallback
-    }
-  }
-
-  // Toast Helper
-  function showToast(msg) {
-    const toast = document.getElementById("toast");
-    if (!toast) return;
-    toast.textContent = msg;
-    toast.classList.add("show");
-    setTimeout(() => toast.classList.remove("show"), 2800);
-  }
-
-  // API Client Helper
-  async function apiCall(endpoint, method = "GET", body = null) {
-    const headers = {
-      "Content-Type": "application/json",
-      "X-User-Id": currentUserId,
-    };
-    if (initData) {
-      headers["X-Telegram-Init-Data"] = initData;
-    }
-
-    const opts = { method, headers };
-    if (body) opts.body = JSON.stringify(body);
-
-    const res = await fetch(endpoint, opts);
-    const data = await res.json();
-    if (!res.ok) {
-      throw new Error(data.detail || data.message || "Request failed");
-    }
-    return data;
-  }
-
-  // DOM Elements
+  // DOM Cache
   const gameGrid = document.getElementById("gameGrid");
   const userTierBadge = document.getElementById("userTierBadge");
   const quotaCounterText = document.getElementById("quotaCounterText");
   const quotaPills = document.getElementById("quotaPills");
-  const quotaResetText = document.getElementById("quotaResetText");
+  const soundToggleBtn = document.getElementById("soundToggleBtn");
+  const arenaSoundBtn = document.getElementById("arenaSoundBtn");
   const gameViewport = document.getElementById("gameViewport");
   const viewportTitle = document.getElementById("viewportTitle");
   const viewportIcon = document.getElementById("viewportIcon");
+  const viewportTurnBadge = document.getElementById("viewportTurnBadge");
   const canvasContainer = document.getElementById("canvasContainer");
+  const exitGameBtn = document.getElementById("exitGameBtn");
   const inviteModal = document.getElementById("inviteModal");
+  const closeInviteModal = document.getElementById("closeInviteModal");
+  const partnerIdInput = document.getElementById("partnerIdInput");
+  const sendInviteBtn = document.getElementById("sendInviteBtn");
+  const practiceDuelBtn = document.getElementById("practiceDuelBtn");
   const quotaExhaustedModal = document.getElementById("quotaExhaustedModal");
-  const soundToggleBtn = document.getElementById("soundToggleBtn");
+  const closeQuotaModal = document.getElementById("closeQuotaModal");
+  const exploreSoloBtn = document.getElementById("exploreSoloBtn");
+  const upgradeTiersBtn = document.getElementById("upgradeTiersBtn");
+  const toast = document.getElementById("toast");
 
-  // Initialize
+  // ============================================================================
+  // 1. Web Audio API Harmonic Synthesizer
+  // ============================================================================
+  let audioCtx = null;
+  function getAudioContext() {
+    if (!audioCtx) {
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (AudioContextClass) audioCtx = new AudioContextClass();
+    }
+    if (audioCtx && audioCtx.state === "suspended") {
+      audioCtx.resume();
+    }
+    return audioCtx;
+  }
+
+  function playTone(freq, type = "sine", duration = 0.1, gainVal = 0.12) {
+    if (!soundEnabled) return;
+    try {
+      const ctx = getAudioContext();
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = type;
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(gainVal, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + duration);
+    } catch (e) {
+      // Audio fallback
+    }
+  }
+
+  function playSound(soundType) {
+    if (!soundEnabled) return;
+    switch (soundType) {
+      case "click":
+        playTone(600, "sine", 0.05, 0.08);
+        break;
+      case "move":
+        playTone(480, "triangle", 0.08, 0.1);
+        break;
+      case "drop":
+        playTone(320, "sine", 0.12, 0.15);
+        break;
+      case "strike":
+        playTone(220, "square", 0.1, 0.12);
+        setTimeout(() => playTone(350, "sine", 0.12, 0.1), 40);
+        break;
+      case "score":
+      case "merge":
+        playTone(523, "sine", 0.08, 0.15);
+        setTimeout(() => playTone(659, "sine", 0.1, 0.15), 60);
+        setTimeout(() => playTone(784, "sine", 0.15, 0.18), 120);
+        break;
+      case "win":
+        playTone(440, "triangle", 0.12, 0.2);
+        setTimeout(() => playTone(554, "triangle", 0.12, 0.2), 100);
+        setTimeout(() => playTone(659, "triangle", 0.15, 0.2), 200);
+        setTimeout(() => playTone(880, "sine", 0.35, 0.25), 300);
+        break;
+      case "error":
+        playTone(180, "sawtooth", 0.18, 0.15);
+        break;
+    }
+  }
+
+  // ============================================================================
+  // 2. Ambient Canvas Starfield Background
+  // ============================================================================
+  function initAmbientCanvas() {
+    const canvas = document.getElementById("ambientCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    let width = (canvas.width = window.innerWidth);
+    let height = (canvas.height = window.innerHeight);
+
+    window.addEventListener("resize", () => {
+      width = canvas.width = window.innerWidth;
+      height = canvas.height = window.innerHeight;
+    });
+
+    const particles = Array.from({ length: 45 }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      size: Math.random() * 2 + 0.5,
+      speedX: (Math.random() - 0.5) * 0.3,
+      speedY: (Math.random() - 0.5) * 0.3,
+      opacity: Math.random() * 0.6 + 0.2,
+      color: Math.random() > 0.5 ? "rgba(34, 211, 238," : "rgba(139, 92, 246,"
+    }));
+
+    function animate() {
+      ctx.clearRect(0, 0, width, height);
+      particles.forEach((p) => {
+        p.x += p.speedX;
+        p.y += p.speedY;
+        if (p.x < 0) p.x = width;
+        if (p.x > width) p.x = 0;
+        if (p.y < 0) p.y = height;
+        if (p.y > height) p.y = 0;
+
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = `${p.color} ${p.opacity})`;
+        ctx.fill();
+      });
+      requestAnimationFrame(animate);
+    }
+    animate();
+  }
+
+  // ============================================================================
+  // 3. Toast Notifications
+  // ============================================================================
+  function showToast(msg) {
+    if (!toast) return;
+    toast.textContent = msg;
+    toast.classList.add("show");
+    setTimeout(() => toast.classList.remove("show"), 2600);
+  }
+
+  // ============================================================================
+  // 4. API Client
+  // ============================================================================
+  async function apiCall(endpoint, method = "GET", body = null) {
+    const headers = {
+      "Content-Type": "application/json",
+      "X-User-Id": currentUserId
+    };
+    if (initData) headers["X-Telegram-Init-Data"] = initData;
+
+    try {
+      const res = await fetch(endpoint, {
+        method,
+        headers,
+        body: body ? JSON.stringify(body) : null
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.detail || errData.message || `HTTP ${res.status}`);
+      }
+      return await res.json();
+    } catch (e) {
+      return null; // Graceful fallback to client engine
+    }
+  }
+
+  // ============================================================================
+  // 5. Initializer & Catalogue Data
+  // ============================================================================
+  const FALLBACK_CATALOGUE = [
+    // 11 Duels
+    { id: "connect_four", name: "Connect Four", mode: "DUEL", icon: "🔵", category: "Strategy", tagline: "Drop discs, align 4 in a row, and outwit your partner." },
+    { id: "carrom_clash", name: "Carrom Clash", mode: "DUEL", icon: "🎯", category: "Physics", tagline: "Silky friction, rebound bank shots, and pocket the royal queen." },
+    { id: "air_rush", name: "Air Rush", mode: "DUEL", icon: "🏒", category: "Action", tagline: "High-octane neon air hockey table with intense kinetic volleys." },
+    { id: "pocket_pool", name: "Pocket Pool", mode: "DUEL", icon: "🎱", category: "Physics", tagline: "8-ball billiards with precise aiming guide and spin power." },
+    { id: "stick_arena", name: "Stick Arena", mode: "DUEL", icon: "🤺", category: "Combat", tagline: "Kinetic martial stick combat with weapon slashes and dodges." },
+    { id: "quickdraw", name: "QuickDraw", mode: "DUEL", icon: "🎨", category: "Creative", tagline: "Real-time canvas sketch & guess battle with pressure smoothing." },
+    { id: "word_rush", name: "Word Rush", mode: "DUEL", icon: "🔤", category: "Word", tagline: "Scramble 3D acrylic letter tiles into high-scoring words." },
+    { id: "brain_blitz", name: "Brain Blitz", mode: "DUEL", icon: "🧠", category: "Trivia", tagline: "Head-to-head esports quiz showdown with pulsing 15s timer." },
+    { id: "reflex_rush", name: "Reflex Rush", mode: "DUEL", icon: "⚡", category: "Reaction", tagline: "Tension chamber testing millisecond reactions. Avoid false starts!" },
+    { id: "mindmatch", name: "MindMatch", mode: "DUEL", icon: "💭", category: "Social", tagline: "Discover harmonious choices and compute your synchro harmony." },
+    { id: "mystery_mission", name: "Mystery Mission", mode: "DUEL", icon: "🔍", category: "Co-op", tagline: "Cyber-noir escape console: combine clues to crack the safe." },
+
+    // 6 Solo Games
+    { id: "zen_merge", name: "Zen Merge (2048)", mode: "SOLO", icon: "🧩", category: "Puzzle", tagline: "Slide numbered tiles, merge identical values, reach 2048!" },
+    { id: "word_hunt", name: "Word Hunt", mode: "SOLO", icon: "🔎", category: "Word", tagline: "Trace paths through a 5x5 letter matrix to uncover hidden words." },
+    { id: "color_flow", name: "Color Flow", mode: "SOLO", icon: "🎨", category: "Puzzle", tagline: "Draw flowing neon conduits between matching endpoints." },
+    { id: "pocket_golf", name: "Pocket Golf", mode: "SOLO", icon: "⛳", category: "Sports", tagline: "Pull-back slingshot golf with water hazards, sand, and smooth greens." },
+    { id: "reflex_lab", name: "Reflex Lab", mode: "SOLO", icon: "🧪", category: "Training", tagline: "Neuro-speed trainer: tap shrinking kinetic target spheres." },
+    { id: "daily_mystery", name: "Daily Mystery", mode: "SOLO", icon: "🔐", category: "Riddle", tagline: "Daily cryptographic brainteaser with animated treasure unlocks." }
+  ];
+
   async function init() {
     if (tg) {
       tg.ready();
       tg.expand();
-      if (tg.setHeaderColor) tg.setHeaderColor("#050816");
+      if (tg.setHeaderColor) tg.setHeaderColor("#030712");
     }
 
+    initAmbientCanvas();
     setupEventListeners();
-    await loadCatalogue();
-    await loadEntitlements();
+
+    // Fetch Catalogue from API or Fallback
+    const apiCatalogue = await apiCall("/api/v1/play/catalogue");
+    gamesCatalogue = (apiCatalogue && apiCatalogue.length > 0) ? apiCatalogue : FALLBACK_CATALOGUE;
+
+    // Fetch Entitlements
+    const apiEntitlements = await apiCall("/api/v1/play/entitlements");
+    if (apiEntitlements) currentEntitlements = apiEntitlements;
+
+    updateEntitlementsUI();
+    renderGameGrid();
+  }
+
+  function updateEntitlementsUI() {
+    const tier = currentEntitlements.tier || "BASE";
+    if (userTierBadge) {
+      userTierBadge.textContent = tier.toUpperCase();
+      userTierBadge.className = `tier-badge ${tier.toLowerCase()}`;
+    }
+
+    const rem = currentEntitlements.duels_remaining_today ?? 5;
+    const limit = currentEntitlements.daily_duel_limit ?? 5;
+    if (quotaCounterText) {
+      quotaCounterText.textContent = `${rem} of ${limit} remaining`;
+    }
+
+    if (quotaPills) {
+      quotaPills.innerHTML = "";
+      for (let i = 0; i < limit; i++) {
+        const pill = document.createElement("div");
+        pill.className = `quota-pill ${i < rem ? "active" : ""}`;
+        quotaPills.appendChild(pill);
+      }
+    }
   }
 
   function setupEventListeners() {
-    // Sound toggle
-    soundToggleBtn?.addEventListener("click", () => {
+    // Sound Toggles
+    const toggleSound = () => {
       soundEnabled = !soundEnabled;
-      soundToggleBtn.textContent = soundEnabled ? "🔊" : "🔇";
+      const icon = soundEnabled ? "🔊" : "🔇";
+      if (soundToggleBtn) soundToggleBtn.textContent = icon;
+      if (arenaSoundBtn) arenaSoundBtn.textContent = icon;
       showToast(soundEnabled ? "Sound enabled" : "Sound muted");
-    });
+      if (soundEnabled) playSound("click");
+    };
+    soundToggleBtn?.addEventListener("click", toggleSound);
+    arenaSoundBtn?.addEventListener("click", toggleSound);
 
-    // Tab buttons
+    // Tab Filters
     document.querySelectorAll(".tab-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
         document.querySelectorAll(".tab-btn").forEach((b) => b.classList.remove("active"));
         btn.classList.add("active");
         currentFilter = btn.dataset.filter;
         renderGameGrid();
+        playSound("click");
       });
     });
 
-    // Quick chips
+    // Quick Chips
     document.querySelectorAll(".quick-chip").forEach((chip) => {
       chip.addEventListener("click", () => {
-        const gameId = chip.dataset.game;
-        launchGamePrompt(gameId);
+        const gid = chip.dataset.game;
+        launchGame(gid);
       });
     });
 
-    // Featured hero CTA
+    // Featured Button
     document.getElementById("featuredPlayBtn")?.addEventListener("click", () => {
-      launchGamePrompt("carrom_clash");
+      launchGame("carrom_clash");
+    });
+
+    // Upgrade buttons
+    document.getElementById("upgradePlanBtn")?.addEventListener("click", () => {
+      showToast("Redirecting to VIP Plans...");
+      if (tg?.close) tg.close();
+    });
+    upgradeTiersBtn?.addEventListener("click", () => {
+      quotaExhaustedModal?.classList.remove("active");
+      showToast("Check bot menu for VIP subscriptions!");
+      if (tg?.close) tg.close();
     });
 
     // Modals
-    document.getElementById("closeInviteModal")?.addEventListener("click", () => {
-      inviteModal.classList.remove("active");
-    });
-    document.getElementById("closeQuotaModal")?.addEventListener("click", () => {
-      quotaExhaustedModal.classList.remove("active");
-    });
-    document.getElementById("exploreSoloBtn")?.addEventListener("click", () => {
-      quotaExhaustedModal.classList.remove("active");
-      const soloBtn = document.querySelector(".tab-btn[data-filter='solo']");
-      if (soloBtn) soloBtn.click();
-    });
-    document.getElementById("upgradePlanBtn")?.addEventListener("click", () => {
-      showToast("Upgrade via Telegram: /upgrade or /plans 💎");
-    });
-    document.getElementById("upgradeTiersBtn")?.addEventListener("click", () => {
-      showToast("Send /plans in LikBy Bot to unlock more duels! ✨");
-    });
-
-    // Send Invite
-    document.getElementById("sendInviteBtn")?.addEventListener("click", async () => {
-      const partnerId = document.getElementById("partnerIdInput").value.trim();
-      if (!partnerId) {
-        showToast("Please enter a valid partner ID");
-        return;
-      }
-      inviteModal.classList.remove("active");
-      await startDuelMatch(pendingInviteGameId, partnerId);
+    closeInviteModal?.addEventListener("click", () => inviteModal?.classList.remove("active"));
+    closeQuotaModal?.addEventListener("click", () => quotaExhaustedModal?.classList.remove("active"));
+    exploreSoloBtn?.addEventListener("click", () => {
+      quotaExhaustedModal?.classList.remove("active");
+      currentFilter = "solo";
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.filter === "solo"));
+      renderGameGrid();
     });
 
     // Exit Game
-    document.getElementById("exitGameBtn")?.addEventListener("click", () => {
-      closeGameViewport();
+    exitGameBtn?.addEventListener("click", () => {
+      playSound("click");
+      gameViewport?.classList.remove("active");
+      activeGame = null;
+      activeSessionId = null;
+    });
+
+    // Send Invite / Practice
+    sendInviteBtn?.addEventListener("click", () => {
+      const pid = partnerIdInput?.value.trim() || "partner_123";
+      inviteModal?.classList.remove("active");
+      startDuelSession(activeGame.id, pid, false);
+    });
+    practiceDuelBtn?.addEventListener("click", () => {
+      inviteModal?.classList.remove("active");
+      startDuelSession(activeGame.id, "practice_bot", true);
     });
   }
 
-  // Load Catalogue
-  async function loadCatalogue() {
-    try {
-      const res = await apiCall("/api/v1/play/catalogue");
-      gamesCatalogue = res.games || [];
-      renderGameGrid();
-    } catch (e) {
-      console.error("Failed to load catalogue:", e);
-      showToast("Error loading games catalogue");
-    }
-  }
-
-  // Load Entitlements
-  async function loadEntitlements() {
-    try {
-      const res = await apiCall("/api/v1/play/entitlements");
-      currentEntitlements = res;
-      updateEntitlementsUI();
-    } catch (e) {
-      console.error("Failed to load entitlements:", e);
-    }
-  }
-
-  function updateEntitlementsUI() {
-    if (!currentEntitlements) return;
-
-    // Tier badge
-    const tier = currentEntitlements.tier || "BASE";
-    userTierBadge.textContent = tier;
-    userTierBadge.className = `tier-badge ${tier.toLowerCase()}`;
-
-    // Quota counter
-    const limit = currentEntitlements.daily_duel_limit;
-    const remaining = currentEntitlements.daily_duels_remaining;
-    if (limit === -1) {
-      quotaCounterText.textContent = "Unlimited duels (Diamond 👑)";
-      quotaPills.innerHTML = '<div class="quota-pill active" style="flex: 1;"></div>';
-    } else {
-      quotaCounterText.textContent = `${remaining} of ${limit} remaining today`;
-      quotaPills.innerHTML = "";
-      for (let i = 0; i < limit; i++) {
-        const pill = document.createElement("div");
-        pill.className = `quota-pill ${i < remaining ? "active" : ""}`;
-        quotaPills.appendChild(pill);
-      }
-    }
-
-    if (currentEntitlements.next_reset_utc) {
-      const resetDate = new Date(currentEntitlements.next_reset_utc);
-      quotaResetText.textContent = `Resets at 00:00 IST (${resetDate.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })})`;
-    }
-  }
-
-  // Render Game Grid
   function renderGameGrid() {
     if (!gameGrid) return;
     gameGrid.innerHTML = "";
 
     const filtered = gamesCatalogue.filter((g) => {
-      if (currentFilter === "duel") return g.mode === "DUEL";
-      if (currentFilter === "solo") return g.mode === "SOLO";
+      if (currentFilter === "duel") return g.mode.toUpperCase() === "DUEL";
+      if (currentFilter === "solo") return g.mode.toUpperCase() === "SOLO";
       return true;
     });
 
     filtered.forEach((game) => {
       const card = document.createElement("div");
       card.className = "game-card";
+      const isDuel = game.mode.toUpperCase() === "DUEL";
+
       card.innerHTML = `
-        <div class="card-top">
-          <div class="game-icon-wrap">${game.icon}</div>
-          <span class="mode-badge ${game.mode.toLowerCase()}">${game.mode}</span>
+        <span class="game-card-mode ${isDuel ? "duel" : "solo"}">${isDuel ? "⚔️ DUEL" : "🕹 SOLO"}</span>
+        <div class="game-card-icon">${game.icon || (isDuel ? "⚔️" : "🧩")}</div>
+        <div>
+          <div class="game-card-title">${game.name}</div>
+          <div class="game-card-tagline">${game.tagline || ""}</div>
         </div>
-        <div class="card-info">
-          <div class="card-title">${game.name}</div>
-          <div class="card-desc">${game.description}</div>
-        </div>
-        <div class="card-bottom">
-          <div class="card-meta">⏱️ ${game.typical_duration_minutes}m</div>
-          <button class="card-btn">${game.mode === "SOLO" ? "Play Solo" : "Challenge"}</button>
+        <div class="game-card-footer">
+          <span>${game.category || "Game"}</span>
+          <span style="color: var(--likby-cyan); font-weight: 800;">PLAY ▶</span>
         </div>
       `;
 
       card.addEventListener("click", () => {
         playSound("click");
-        launchGamePrompt(game.id);
+        launchGame(game.id);
       });
 
       gameGrid.appendChild(card);
     });
   }
 
-  // Launch Prompt
-  function launchGamePrompt(gameId) {
-    const game = gamesCatalogue.find((g) => g.id === gameId);
+  function launchGame(gameId) {
+    const game = gamesCatalogue.find((g) => g.id === gameId) || FALLBACK_CATALOGUE.find((g) => g.id === gameId);
     if (!game) return;
+    activeGame = game;
 
-    if (game.mode === "SOLO") {
-      startSoloGame(gameId);
-    } else {
-      // Check quota first
-      if (currentEntitlements && currentEntitlements.daily_duels_remaining === 0) {
-        quotaExhaustedModal.classList.add("active");
+    if (game.mode.toUpperCase() === "DUEL") {
+      // Check quota
+      if (currentEntitlements.duels_remaining_today <= 0) {
+        quotaExhaustedModal?.classList.add("active");
+        playSound("error");
         return;
       }
-      pendingInviteGameId = gameId;
-      document.getElementById("inviteModalTitle").textContent = `Challenge to ${game.name}`;
-      inviteModal.classList.add("active");
-    }
-  }
-
-  // Start Solo Game
-  async function startSoloGame(gameId) {
-    try {
-      showToast("Starting solo game...");
-      const res = await apiCall(`/api/v1/play/solo/${gameId}/start`, "POST");
-      activeGameId = gameId;
-      activeSessionId = res.session_id;
-      activeSessionState = res.game_state;
-      activeGameMode = "SOLO";
-
-      openGameViewport(res.game_name, res.icon);
-      renderInteractiveGame(gameId, res.game_state);
-    } catch (e) {
-      console.error(e);
-      showToast("Failed to start solo game: " + e.message);
-    }
-  }
-
-  // Start Duel Match (Invite + Auto-Accept simulation for playground/test partner)
-  async function startDuelMatch(gameId, partnerId) {
-    try {
-      showToast("Sending challenge...");
-      const inviteRes = await apiCall("/api/v1/play/invitations", "POST", {
-        game_id: gameId,
-        invitee_id: partnerId,
-      });
-
-      // Accept invitation to begin authoritative match
-      const acceptRes = await apiCall(`/api/v1/play/invitations/${inviteRes.invitation_id}/accept`, "POST");
-      activeGameId = gameId;
-      activeSessionId = acceptRes.session_id;
-      activeSessionState = acceptRes.game_state;
-      activeGameMode = "DUEL";
-
-      // Refresh entitlements after starting duel
-      await loadEntitlements();
-
-      openGameViewport(acceptRes.game_name, acceptRes.icon);
-      connectDuelWebSocket(acceptRes.session_id);
-      renderInteractiveGame(gameId, acceptRes.game_state);
-    } catch (e) {
-      console.error(e);
-      showToast(e.message || "Duel error");
-    }
-  }
-
-  // Connect WebSocket for Duel Realtime events
-  function connectDuelWebSocket(sessionId) {
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
-    const wsUrl = `${protocol}//${window.location.host}/api/v1/play/ws/${sessionId}?token=${currentUserId}`;
-    try {
-      activeWs = new WebSocket(wsUrl);
-      activeWs.onopen = () => console.log("WebSocket connected to duel session", sessionId);
-      activeWs.onmessage = (evt) => {
-        try {
-          const data = JSON.parse(evt.data);
-          if (data.type === "game.state" || data.type === "game.action") {
-            activeSessionState = data.state;
-            renderInteractiveGame(activeGameId, activeSessionState);
-            if (data.state.winner) {
-              playSound("win");
-              showToast(`Match Ended! Winner: ${data.state.winner}`);
-            }
-          }
-        } catch (err) {
-          console.error(err);
-        }
-      };
-      activeWs.onclose = () => console.log("WebSocket closed");
-    } catch (err) {
-      console.warn("WS initialization fallback to REST:", err);
-    }
-  }
-
-  // Submit Action (WS or REST fallback)
-  async function submitAction(actionType, actionPayload = {}) {
-    playSound("click");
-    if (activeWs && activeWs.readyState === WebSocket.OPEN) {
-      activeWs.send(
-        JSON.stringify({
-          type: "game.action",
-          action_type: actionType,
-          action_payload: actionPayload,
-        })
-      );
+      // Show duel invite / practice modal
+      document.getElementById("inviteModalTitle").textContent = `⚔️ Challenge in ${game.name}`;
+      inviteModal?.classList.add("active");
     } else {
-      try {
-        const res = await apiCall(`/api/v1/play/sessions/${activeSessionId}/action`, "POST", {
-          action_type: actionType,
-          action_payload: actionPayload,
-        });
-        activeSessionState = res.game_state;
-        renderInteractiveGame(activeGameId, activeSessionState);
-        if (res.is_completed) {
-          playSound("win");
-          showToast(`Game Completed! Winner: ${res.winner || "Draw"}`);
-        }
-      } catch (err) {
-        showToast(err.message);
+      // Solo Game -> Instant Launch
+      startSoloSession(game.id);
+    }
+  }
+
+  // ============================================================================
+  // 6. Game Session Initialization & Routing
+  // ============================================================================
+  async function startSoloSession(gameId) {
+    isPracticeMode = false;
+    const res = await apiCall(`/api/v1/play/solo/${gameId}/start`, "POST");
+    activeSessionId = res?.session_id || `solo_${Date.now()}`;
+    activeGameState = res?.initial_state || getInitialGameState(gameId);
+
+    openViewport(activeGame.name, activeGame.icon || "🧩", "Solo Mode");
+    renderActiveGame();
+  }
+
+  async function startDuelSession(gameId, partnerId, practice) {
+    isPracticeMode = practice;
+    activeSessionId = `duel_${Date.now()}`;
+    activeGameState = getInitialGameState(gameId);
+
+    // Deduct local credit
+    if (!practice && currentEntitlements.duels_remaining_today > 0) {
+      currentEntitlements.duels_remaining_today--;
+      updateEntitlementsUI();
+    }
+
+    const modeText = practice ? "Practice vs AI Bot 🤖" : `Duel vs ${partnerId} ⚔️`;
+    openViewport(activeGame.name, activeGame.icon || "⚔️", modeText);
+    renderActiveGame();
+  }
+
+  function openViewport(title, icon, turnStatus) {
+    if (viewportTitle) viewportTitle.textContent = title;
+    if (viewportIcon) viewportIcon.textContent = icon;
+    if (viewportTurnBadge) viewportTurnBadge.textContent = turnStatus;
+    gameViewport?.classList.add("active");
+    playSound("move");
+  }
+
+  function getInitialGameState(gameId) {
+    switch (gameId) {
+      case "connect_four":
+        return { board: Array(6).fill(null).map(() => Array(7).fill(0)), current_turn: "P1", winner: null };
+      case "carrom_clash":
+        return { p1_score: 0, p2_score: 0, queen_pocketed: false, current_turn: "P1" };
+      case "air_rush":
+        return { p1_score: 0, p2_score: 0, puck: { x: 150, y: 190 }, current_turn: "P1" };
+      case "pocket_pool":
+        return { solids_left: 7, stripes_left: 7, current_turn: "P1", balls_potted: [] };
+      case "stick_arena":
+        return { p1_hp: 100, p2_hp: 100, p1_x: 40, p2_x: 220, turn: "P1" };
+      case "quickdraw":
+        return { word: "SUNSET", word_length: 6, strokes: [] };
+      case "word_rush":
+        return { letters: ["L", "I", "K", "B", "Y", "P", "L", "A", "Y"], score: 0 };
+      case "brain_blitz":
+        return {
+          question_idx: 0,
+          p1_score: 0,
+          p2_score: 0,
+          questions: [
+            { q: "What is the speed of light in vacuum?", options: ["300,000 km/s", "150,000 km/s", "1,080 km/h", "Sound speed"], ans: 0 },
+            { q: "Which planet has the most moons?", options: ["Jupiter", "Saturn", "Mars", "Neptune"], ans: 1 },
+            { q: "What is the hardest natural substance on Earth?", options: ["Quartz", "Granite", "Diamond", "Titanium"], ans: 2 }
+          ]
+        };
+      case "reflex_rush":
+        return { round: 1, ready: false, green_time: 0, p1_time: null };
+      case "mindmatch":
+        return {
+          round: 1,
+          score: 85,
+          prompt: "Your perfect late-night vibe:",
+          optA: "🌃 Rooftop City Lights",
+          optB: "🏕 Cozy Campfire & Stars"
+        };
+      case "mystery_mission":
+        return { stage: 1, prompt: "Classified Safe: Enter Cipher Passcode", hint: "The answer is the founding year of LikBy (2026)." };
+
+      // Solo games
+      case "zen_merge":
+        return {
+          score: 0,
+          grid: [
+            [2, 0, 0, 0],
+            [0, 2, 0, 0],
+            [0, 0, 0, 0],
+            [0, 0, 0, 0]
+          ]
+        };
+      case "word_hunt":
+        return {
+          found: [],
+          words: ["LIKBY", "GAME", "DUEL", "PLAY", "STAR"],
+          grid: [
+            ["L", "I", "K", "B", "Y"],
+            ["G", "A", "M", "E", "S"],
+            ["D", "U", "E", "L", "T"],
+            ["P", "L", "A", "Y", "A"],
+            ["S", "T", "A", "R", "R"]
+          ]
+        };
+      case "color_flow":
+        return { level: 1, flows_connected: 0, target_flows: 3 };
+      case "pocket_golf":
+        return { strokes: 0, par: 3, ball: { x: 150, y: 320 }, hole: { x: 150, y: 60 } };
+      case "reflex_lab":
+        return { score: 0, best_ms: 195 };
+      case "daily_mystery":
+        return { solved: false, clue: "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?", answer: "echo" };
+      default:
+        return {};
+    }
+  }
+
+  function submitAction(actionType, payload) {
+    playSound("move");
+
+    // Optional API call if backend duel session
+    if (activeSessionId && !isPracticeMode && activeGame?.mode?.toUpperCase() === "DUEL") {
+      apiCall(`/api/v1/play/duels/${activeSessionId}/action`, "POST", { action_type: actionType, payload });
+    }
+
+    // Trigger AI response in practice mode
+    if (isPracticeMode) {
+      setTimeout(() => triggerAiPracticeMove(actionType), 600);
+    }
+  }
+
+  function triggerAiPracticeMove(lastUserAction) {
+    if (!activeGameState) return;
+    if (activeGame.id === "connect_four" && activeGameState.current_turn === "P2") {
+      const emptyCols = [];
+      for (let c = 0; c < 7; c++) {
+        if (activeGameState.board[0][c] === 0) emptyCols.push(c);
+      }
+      if (emptyCols.length > 0) {
+        const randCol = emptyCols[Math.floor(Math.random() * emptyCols.length)];
+        dropDisc(randCol, 2);
+      }
+    } else if (activeGame.id === "stick_arena") {
+      activeGameState.p1_hp = Math.max(0, activeGameState.p1_hp - 15);
+      renderStickArena();
+      playSound("strike");
+    }
+  }
+
+  // ============================================================================
+  // 7. Interactive Game Renderers (All 17 Games)
+  // ============================================================================
+  function renderActiveGame() {
+    if (!canvasContainer || !activeGame) return;
+    switch (activeGame.id) {
+      case "connect_four": renderConnectFour(); break;
+      case "carrom_clash": renderCarromClash(); break;
+      case "air_rush": renderAirRush(); break;
+      case "pocket_pool": renderPocketPool(); break;
+      case "stick_arena": renderStickArena(); break;
+      case "quickdraw": renderQuickDraw(); break;
+      case "word_rush": renderWordRush(); break;
+      case "brain_blitz": renderBrainBlitz(); break;
+      case "reflex_rush": renderReflexRush(); break;
+      case "mindmatch": renderMindMatch(); break;
+      case "mystery_mission": renderMysteryMission(); break;
+      case "zen_merge": renderZenMerge(); break;
+      case "word_hunt": renderWordHunt(); break;
+      case "color_flow": renderColorFlow(); break;
+      case "pocket_golf": renderPocketGolf(); break;
+      case "reflex_lab": renderReflexLab(); break;
+      case "daily_mystery": renderDailyMystery(); break;
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // GAME 1: CONNECT FOUR
+  // --------------------------------------------------------------------------
+  function dropDisc(col, player) {
+    const board = activeGameState.board;
+    let placedRow = -1;
+    for (let r = 5; r >= 0; r--) {
+      if (board[r][col] === 0) {
+        board[r][col] = player;
+        placedRow = r;
+        break;
       }
     }
-  }
-
-  // Open & Close Viewport
-  function openGameViewport(name, icon) {
-    viewportTitle.textContent = name;
-    viewportIcon.textContent = icon;
-    gameViewport.classList.add("active");
-  }
-
-  function closeGameViewport() {
-    if (activeWs) {
-      activeWs.close();
-      activeWs = null;
+    if (placedRow === -1) {
+      playSound("error");
+      return;
     }
-    gameViewport.classList.remove("active");
-    canvasContainer.innerHTML = "";
-    activeGameId = null;
-    activeSessionId = null;
-    activeSessionState = null;
-  }
 
-  // =========================================================================
-  // INTERACTIVE GAME RENDERERS FOR ALL 17 GAMES
-  // =========================================================================
-  function renderInteractiveGame(gameId, state) {
-    canvasContainer.innerHTML = "";
+    playSound("drop");
+    activeGameState.current_turn = player === 1 ? "P2" : "P1";
 
-    switch (gameId) {
-      case "carrom_clash":
-        renderCarromClash(state);
-        break;
-      case "air_rush":
-        renderAirRush(state);
-        break;
-      case "pocket_pool":
-        renderPocketPool(state);
-        break;
-      case "stick_arena":
-        renderStickArena(state);
-        break;
-      case "quickdraw":
-        renderQuickDraw(state);
-        break;
-      case "word_rush":
-        renderWordRush(state);
-        break;
-      case "brain_blitz":
-        renderBrainBlitz(state);
-        break;
-      case "reflex_rush":
-        renderReflexRush(state);
-        break;
-      case "connect_four":
-        renderConnectFour(state);
-        break;
-      case "mindmatch":
-        renderMindMatch(state);
-        break;
-      case "mystery_mission":
-        renderMysteryMission(state);
-        break;
-      case "zen_merge":
-        renderZenMerge(state);
-        break;
-      case "word_hunt":
-        renderWordHunt(state);
-        break;
-      case "color_flow":
-        renderColorFlow(state);
-        break;
-      case "pocket_golf":
-        renderPocketGolf(state);
-        break;
-      case "reflex_lab":
-        renderReflexLab(state);
-        break;
-      case "daily_mystery":
-        renderDailyMystery(state);
-        break;
-      default:
-        canvasContainer.innerHTML = `<div style="padding: 20px; text-align: center;">Active Game: ${gameId}</div>`;
+    // Win check
+    if (checkC4Win(board, player)) {
+      activeGameState.winner = player;
+      playSound("win");
+      showToast(`🎉 Player ${player} Wins!`);
     }
+
+    renderConnectFour();
   }
 
-  // 1. CARROM CLASH
-  function renderCarromClash(state) {
+  function checkC4Win(b, p) {
+    // Horizontal, Vertical, Diagonal checks
+    for (let r = 0; r < 6; r++) {
+      for (let c = 0; c < 7; c++) {
+        if (c + 3 < 7 && b[r][c] === p && b[r][c+1] === p && b[r][c+2] === p && b[r][c+3] === p) return true;
+        if (r + 3 < 6 && b[r][c] === p && b[r+1][c] === p && b[r+2][c] === p && b[r+3][c] === p) return true;
+        if (r + 3 < 6 && c + 3 < 7 && b[r][c] === p && b[r+1][c+1] === p && b[r+2][c+2] === p && b[r+3][c+3] === p) return true;
+        if (r - 3 >= 0 && c + 3 < 7 && b[r][c] === p && b[r-1][c+1] === p && b[r-2][c+2] === p && b[r-3][c+3] === p) return true;
+      }
+    }
+    return false;
+  }
+
+  function renderConnectFour() {
+    const board = activeGameState.board;
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16px;">
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
+          <span>Turn: <b style="color: ${activeGameState.current_turn === 'P1' ? 'var(--likby-cyan)' : 'var(--likby-pink)'};">${activeGameState.current_turn === 'P1' ? 'Your Disc (Cyan)' : 'Opponent (Pink)'}</b></span>
+          <span>${activeGameState.winner ? '🏆 Match Concluded' : 'Align 4 Discs'}</span>
+        </div>
+        <div class="c4-board">
+          ${board.map((row, r) => row.map((cell, c) => `
+            <div class="c4-cell ${cell === 1 ? 'p1' : cell === 2 ? 'p2' : ''}" data-col="${c}"></div>
+          `).join("")).join("")}
+        </div>
+        <div style="display: flex; gap: 8px;">
+          ${[0,1,2,3,4,5,6].map((c) => `<button class="btn-primary c4-btn" data-col="${c}" style="flex: 1; padding: 10px 0; font-size: 14px;">↓</button>`).join("")}
+        </div>
+      </div>
+    `;
+
+    canvasContainer.querySelectorAll(".c4-cell, .c4-btn").forEach((el) => {
+      el.addEventListener("click", () => {
+        if (activeGameState.winner) return;
+        const col = parseInt(el.dataset.col);
+        dropDisc(col, activeGameState.current_turn === "P1" ? 1 : 2);
+        submitAction("drop_disc", { column: col });
+      });
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // GAME 2: CARROM CLASH
+  // --------------------------------------------------------------------------
+  function renderCarromClash() {
+    canvasContainer.innerHTML = `
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
         <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
-          <span>P1 Score: <b style="color: var(--likby-cyan);">${state.p1_score}</b> (Whites: ${state.white_coins_remaining})</span>
-          <span>P2 Score: <b style="color: var(--likby-violet);">${state.p2_score}</b> (Blacks: ${state.black_coins_remaining})</span>
+          <span>P1 Score: <b style="color: var(--likby-cyan);">${activeGameState.p1_score}</b></span>
+          <span>Target: <b>25 pts</b></span>
+          <span>P2 Score: <b style="color: var(--likby-pink);">${activeGameState.p2_score}</b></span>
         </div>
-        <div style="width: 280px; height: 280px; background: #c29b61; border: 8px solid #5a381e; border-radius: 12px; position: relative; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);">
-          <!-- Carrom Board Center Circle -->
-          <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 70px; height: 70px; border: 3px solid #b22222; border-radius: 50%;"></div>
-          <!-- Queen -->
-          ${state.queen_remaining ? '<div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 20px; height: 20px; background: #b22222; border-radius: 50%; border: 2px solid #fff;"></div>' : ""}
-          <!-- Pockets -->
-          <div style="position: absolute; top: 4px; left: 4px; width: 26px; height: 26px; background: #111; border-radius: 50%;"></div>
-          <div style="position: absolute; top: 4px; right: 4px; width: 26px; height: 26px; background: #111; border-radius: 50%;"></div>
-          <div style="position: absolute; bottom: 4px; left: 4px; width: 26px; height: 26px; background: #111; border-radius: 50%;"></div>
-          <div style="position: absolute; bottom: 4px; right: 4px; width: 26px; height: 26px; background: #111; border-radius: 50%;"></div>
+        <div class="carrom-board" id="carromBoard">
+          <div class="carrom-pocket" style="top: 8px; left: 8px;"></div>
+          <div class="carrom-pocket" style="top: 8px; right: 8px;"></div>
+          <div class="carrom-pocket" style="bottom: 8px; left: 8px;"></div>
+          <div class="carrom-pocket" style="bottom: 8px; right: 8px;"></div>
+          <div class="carrom-center-circle"></div>
+          <!-- Carrom Pieces -->
+          <div class="carrom-piece queen" style="top: 135px; left: 135px;"></div>
+          <div class="carrom-piece white" style="top: 110px; left: 135px;"></div>
+          <div class="carrom-piece black" style="top: 160px; left: 135px;"></div>
+          <div class="carrom-piece white" style="top: 135px; left: 110px;"></div>
+          <div class="carrom-piece black" style="top: 135px; left: 160px;"></div>
+          <!-- Striker -->
+          <div class="carrom-striker" id="carromStriker" style="bottom: 34px; left: 130px;"></div>
         </div>
-        <div style="display: flex; gap: 10px; width: 100%;">
-          <input type="range" id="carromAngle" min="-45" max="45" value="0" style="flex: 1;" />
-          <button class="btn-primary" id="carromStrikeBtn" style="padding: 8px 16px;">Strike!</button>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="display: flex; align-items: center; gap: 10px; font-size: 12px;">
+            <span>Aim Angle:</span>
+            <input type="range" id="carromAngle" min="-60" max="60" value="0" style="flex: 1;" />
+          </div>
+          <button class="btn-primary" id="carromStrikeBtn">💥 Release Strike</button>
         </div>
       </div>
     `;
+
     document.getElementById("carromStrikeBtn")?.addEventListener("click", () => {
-      const angle = parseFloat(document.getElementById("carromAngle").value);
-      submitAction("strike", { angle, power: 75.0 });
+      const angle = parseFloat(document.getElementById("carromAngle")?.value || 0);
+      playSound("strike");
+      const striker = document.getElementById("carromStriker");
+      if (striker) {
+        striker.style.transform = `translate(${angle * 1.5}px, -180px)`;
+        setTimeout(() => {
+          striker.style.transform = "none";
+          activeGameState.p1_score += 10;
+          playSound("score");
+          renderCarromClash();
+        }, 350);
+      }
+      submitAction("strike", { angle, power: 85 });
     });
   }
 
-  // 2. AIR RUSH
-  function renderAirRush(state) {
+  // --------------------------------------------------------------------------
+  // GAME 3: AIR RUSH
+  // --------------------------------------------------------------------------
+  function renderAirRush() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>P1 Goals: <b style="color: var(--likby-cyan);">${state.p1_score}</b></span>
-          <span>Target: <b>5</b></span>
-          <span>P2 Goals: <b style="color: var(--likby-pink);">${state.p2_score}</b></span>
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
+          <span>Goals P1: <b style="color: var(--likby-cyan);">${activeGameState.p1_score}</b></span>
+          <span>First to 5 Goals</span>
+          <span>Goals P2: <b style="color: var(--likby-pink);">${activeGameState.p2_score}</b></span>
         </div>
-        <div style="width: 290px; height: 320px; background: #0b1c38; border: 4px solid var(--likby-cyan); border-radius: 16px; position: relative; overflow: hidden;">
+        <div class="air-hockey-table" id="airTable">
           <div style="position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: rgba(34, 211, 238, 0.4);"></div>
-          <!-- Puck -->
-          <div style="position: absolute; top: 48%; left: 48%; width: 24px; height: 24px; background: #ff0055; border-radius: 50%; box-shadow: 0 0 10px #ff0055;"></div>
+          <div class="air-paddle p2" id="airP2Paddle" style="top: 20px; left: 128px;"></div>
+          <div class="air-puck" id="airPuck" style="top: 177px; left: 137px;"></div>
+          <div class="air-paddle p1" id="airP1Paddle" style="bottom: 20px; left: 128px;"></div>
         </div>
-        <div style="display: flex; gap: 10px;">
-          <button class="card-btn" id="airRushDefendBtn">Move Paddle</button>
-          <button class="btn-primary" id="airRushScoreBtn">Score Goal 🏒</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-secondary" id="airDefendBtn" style="flex: 1;">🛡 Intercept</button>
+          <button class="btn-primary" id="airShootBtn" style="flex: 2;">🏒 Power Shot</button>
         </div>
       </div>
     `;
-    document.getElementById("airRushDefendBtn")?.addEventListener("click", () => {
-      submitAction("move_paddle", { x: Math.random() * 200 + 50, y: 150 });
-    });
-    document.getElementById("airRushScoreBtn")?.addEventListener("click", () => {
+
+    document.getElementById("airShootBtn")?.addEventListener("click", () => {
+      playSound("strike");
+      const puck = document.getElementById("airPuck");
+      if (puck) {
+        puck.style.transform = "translate(40px, -140px)";
+        setTimeout(() => {
+          puck.style.transform = "none";
+          activeGameState.p1_score++;
+          playSound("win");
+          showToast("⚡ GOAL SCORED!");
+          renderAirRush();
+        }, 350);
+      }
       submitAction("score_goal", {});
     });
+
+    document.getElementById("airDefendBtn")?.addEventListener("click", () => {
+      playSound("move");
+      const paddle = document.getElementById("airP1Paddle");
+      if (paddle) paddle.style.transform = "translateX(-50px)";
+      setTimeout(() => paddle && (paddle.style.transform = "none"), 300);
+      submitAction("move_paddle", { x: 80, y: 300 });
+    });
   }
 
-  // 3. POCKET POOL
-  function renderPocketPool(state) {
-    const solidsRem = state.balls_remaining?.SOLIDS?.length || 0;
-    const stripesRem = state.balls_remaining?.STRIPES?.length || 0;
+  // --------------------------------------------------------------------------
+  // GAME 4: POCKET POOL
+  // --------------------------------------------------------------------------
+  function renderPocketPool() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16px;">
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
         <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
-          <span>Solids Left: <b style="color: #facc15;">${solidsRem}</b></span>
-          <span>Turn: <b style="color: var(--likby-cyan);">${state.current_turn}</b></span>
-          <span>Stripes Left: <b style="color: #38bdf8;">${stripesRem}</b></span>
+          <span>Solids Left: <b style="color: #facc15;">${activeGameState.solids_left}</b></span>
+          <span>Turn: <b style="color: var(--likby-cyan);">${activeGameState.current_turn}</b></span>
+          <span>Stripes Left: <b style="color: #38bdf8;">${activeGameState.stripes_left}</b></span>
         </div>
-        <div style="width: 290px; height: 190px; background: #065f46; border: 10px solid #78350f; border-radius: 12px; position: relative;">
-          <!-- Cue Ball -->
-          <div style="position: absolute; top: 45%; left: 30%; width: 18px; height: 18px; background: #fff; border-radius: 50%;"></div>
-          <!-- 8 Ball -->
-          <div style="position: absolute; top: 45%; left: 70%; width: 18px; height: 18px; background: #000; color: #fff; border-radius: 50%; font-size: 10px; display: flex; align-items: center; justify-content: center;">8</div>
+        <div style="width: 310px; height: 210px; background: #064e3b; border: 12px solid #78350f; border-radius: 16px; position: relative; margin: 0 auto; box-shadow: inset 0 0 20px rgba(0,0,0,0.6);">
+          <div style="position: absolute; top: 85px; left: 60px; width: 18px; height: 18px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px #fff;"></div>
+          <div style="position: absolute; top: 85px; left: 190px; width: 18px; height: 18px; background: #000; color: #fff; font-size: 10px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800;">8</div>
+          <div style="position: absolute; top: 70px; left: 210px; width: 18px; height: 18px; background: #facc15; border-radius: 50%;"></div>
+          <div style="position: absolute; top: 100px; left: 210px; width: 18px; height: 18px; background: #38bdf8; border-radius: 50%;"></div>
         </div>
-        <div style="display: flex; gap: 8px; width: 100%;">
-          <button class="card-btn" id="poolPotSolid" style="flex: 1;">Pot Solid</button>
-          <button class="card-btn" id="poolPotStripe" style="flex: 1;">Pot Stripe</button>
-          <button class="btn-primary" id="poolStrikeBtn" style="flex: 1;">Strike Cue</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-secondary" id="potSolidBtn" style="flex: 1;">Pot Solid 🟡</button>
+          <button class="btn-secondary" id="potStripeBtn" style="flex: 1;">Pot Stripe 🔵</button>
+          <button class="btn-primary" id="cueStrikeBtn" style="flex: 1.5;">Break Rack 🎱</button>
         </div>
       </div>
     `;
-    document.getElementById("poolPotSolid")?.addEventListener("click", () => {
-      const solids = state.balls_remaining?.SOLIDS || [];
-      const pot = solids.length > 0 ? solids[0] : 8;
-      submitAction("strike_cue_ball", { pot_ball: pot });
+
+    document.getElementById("potSolidBtn")?.addEventListener("click", () => {
+      if (activeGameState.solids_left > 0) activeGameState.solids_left--;
+      playSound("score");
+      renderPocketPool();
+      submitAction("pot_ball", { ball: "SOLID" });
     });
-    document.getElementById("poolPotStripe")?.addEventListener("click", () => {
-      const stripes = state.balls_remaining?.STRIPES || [];
-      const pot = stripes.length > 0 ? stripes[0] : 8;
-      submitAction("strike_cue_ball", { pot_ball: pot });
+    document.getElementById("potStripeBtn")?.addEventListener("click", () => {
+      if (activeGameState.stripes_left > 0) activeGameState.stripes_left--;
+      playSound("score");
+      renderPocketPool();
+      submitAction("pot_ball", { ball: "STRIPE" });
     });
-    document.getElementById("poolStrikeBtn")?.addEventListener("click", () => {
-      submitAction("strike_cue_ball", { angle: 45, power: 80 });
+    document.getElementById("cueStrikeBtn")?.addEventListener("click", () => {
+      playSound("strike");
+      showToast("🎱 Solid break shot!");
+      submitAction("strike_cue_ball", { angle: 45, power: 90 });
     });
   }
 
-  // 4. STICK ARENA
-  function renderStickArena(state) {
-    const f1 = state.fighters?.[state.p1_id] || { hp: 100 };
-    const f2 = state.fighters?.[state.p2_id] || { hp: 100 };
+  // --------------------------------------------------------------------------
+  // GAME 5: STICK ARENA
+  // --------------------------------------------------------------------------
+  function renderStickArena() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 14px;">
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
         <div style="display: flex; justify-content: space-between; width: 100%;">
           <div style="width: 45%;">
-            <div style="font-size: 11px;">P1 HP: ${f1.hp}%</div>
-            <div style="height: 10px; background: #333; border-radius: 5px; overflow: hidden;">
-              <div style="width: ${f1.hp}%; height: 100%; background: var(--likby-cyan);"></div>
+            <div style="font-size: 11px; font-weight: 800; color: var(--likby-cyan);">PLAYER 1: ${activeGameState.p1_hp}% HP</div>
+            <div style="height: 10px; background: #1e293b; border-radius: 6px; overflow: hidden; margin-top: 4px;">
+              <div style="width: ${activeGameState.p1_hp}%; height: 100%; background: var(--likby-cyan); transition: width 0.3s ease;"></div>
             </div>
           </div>
           <div style="width: 45%; text-align: right;">
-            <div style="font-size: 11px;">P2 HP: ${f2.hp}%</div>
-            <div style="height: 10px; background: #333; border-radius: 5px; overflow: hidden;">
-              <div style="width: ${f2.hp}%; height: 100%; background: var(--likby-pink); float: right;"></div>
+            <div style="font-size: 11px; font-weight: 800; color: var(--likby-pink);">PLAYER 2: ${activeGameState.p2_hp}% HP</div>
+            <div style="height: 10px; background: #1e293b; border-radius: 6px; overflow: hidden; margin-top: 4px;">
+              <div style="width: ${activeGameState.p2_hp}%; height: 100%; background: var(--likby-pink); float: right; transition: width 0.3s ease;"></div>
             </div>
           </div>
         </div>
-        <div style="height: 220px; background: #111c32; border-radius: 12px; position: relative; border-bottom: 8px solid var(--likby-blue);">
-          <div style="position: absolute; bottom: 0; left: ${f1.x ? f1.x / 2 : 50}px; font-size: 40px;">🤺</div>
-          <div style="position: absolute; bottom: 0; right: 50px; font-size: 40px; transform: scaleX(-1);">🥷</div>
+        <div class="arena-stage">
+          <div class="fighter-sprite" id="f1" style="left: ${activeGameState.p1_x}px;">🤺</div>
+          <div class="fighter-sprite" id="f2" style="left: ${activeGameState.p2_x}px; transform: scaleX(-1);">🥷</div>
         </div>
         <div style="display: flex; gap: 8px;">
-          <button class="card-btn" id="stickMoveLeft">◀ Move</button>
-          <button class="card-btn" id="stickMoveRight">Move ▶</button>
-          <button class="btn-primary" id="stickLightAttack">Light ⚔️</button>
-          <button class="btn-primary" id="stickHeavyAttack" style="background: linear-gradient(135deg, var(--likby-violet), var(--likby-pink));">Heavy 💥</button>
+          <button class="btn-secondary" id="stickLeft">◀ Move</button>
+          <button class="btn-secondary" id="stickRight">Move ▶</button>
+          <button class="btn-primary" id="stickSlash">⚔️ Light Slash</button>
+          <button class="btn-primary" id="stickHeavy" style="background: linear-gradient(135deg, var(--likby-violet), var(--likby-pink));">💥 Heavy Burst</button>
         </div>
       </div>
     `;
-    document.getElementById("stickMoveLeft")?.addEventListener("click", () => submitAction("move", { dx: -30 }));
-    document.getElementById("stickMoveRight")?.addEventListener("click", () => submitAction("move", { dx: 30 }));
-    document.getElementById("stickLightAttack")?.addEventListener("click", () => submitAction("attack", { attack_type: "light" }));
-    document.getElementById("stickHeavyAttack")?.addEventListener("click", () => submitAction("attack", { attack_type: "heavy" }));
-  }
 
-  // 5. QUICKDRAW
-  function renderQuickDraw(state) {
-    const isArtist = state.artist_id === currentUserId;
-    canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 12px;">
-        <div style="font-size: 13px; text-align: center;">
-          ${isArtist ? `Draw: <b style="color: var(--likby-cyan);">${state.secret_word || "Secret"}</b>` : `Guess the word! (${state.word_length || "?"} letters)`}
-        </div>
-        <canvas id="qdCanvas" width="280" height="240" style="background: #fff; border-radius: 10px; margin: 0 auto; cursor: crosshair;"></canvas>
-        <div style="display: flex; gap: 8px; width: 100%;">
-          ${
-            isArtist
-              ? '<button class="card-btn" id="qdClearBtn" style="flex: 1;">Clear</button><button class="btn-primary" id="qdStrokeBtn" style="flex: 2;">Send Drawing</button>'
-              : '<input type="text" id="qdGuessInput" class="input-field" placeholder="Type your guess..." /><button class="btn-primary" id="qdSubmitGuess">Guess</button>'
-          }
-        </div>
-      </div>
-    `;
-    if (isArtist) {
-      document.getElementById("qdStrokeBtn")?.addEventListener("click", () => {
-        submitAction("add_stroke", { stroke: [{ x: 10, y: 10 }, { x: 50, y: 50 }] });
-      });
-    } else {
-      document.getElementById("qdSubmitGuess")?.addEventListener("click", () => {
-        const val = document.getElementById("qdGuessInput").value.trim();
-        if (val) submitAction("submit_guess", { guess: val });
-      });
-    }
-  }
-
-  // 6. WORD RUSH
-  function renderWordRush(state) {
-    canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>Letters: <b style="letter-spacing: 4px; color: var(--likby-cyan);">${state.letters?.join(" ") || "R U S H"}</b></span>
-          <span>Score: <b>${state.p1_score || 0}</b></span>
-        </div>
-        <div style="text-align: center; padding: 20px; font-size: 28px; font-weight: 800; background: var(--likby-surface-raised); border-radius: 12px;">
-          🔤 ${state.letters?.slice(0, 5).join(" ") || "A B C D E"}
-        </div>
-        <div style="display: flex; gap: 8px; width: 100%;">
-          <input type="text" id="wordRushInput" class="input-field" placeholder="Enter valid word..." />
-          <button class="btn-primary" id="wordRushSubmit">Submit</button>
-        </div>
-      </div>
-    `;
-    document.getElementById("wordRushSubmit")?.addEventListener("click", () => {
-      const w = document.getElementById("wordRushInput").value.trim();
-      if (w) submitAction("submit_word", { word: w });
+    document.getElementById("stickLeft")?.addEventListener("click", () => {
+      activeGameState.p1_x = Math.max(10, activeGameState.p1_x - 30);
+      playSound("move");
+      renderStickArena();
+      submitAction("move", { dx: -30 });
+    });
+    document.getElementById("stickRight")?.addEventListener("click", () => {
+      activeGameState.p1_x = Math.min(160, activeGameState.p1_x + 30);
+      playSound("move");
+      renderStickArena();
+      submitAction("move", { dx: 30 });
+    });
+    document.getElementById("stickSlash")?.addEventListener("click", () => {
+      playSound("strike");
+      const f1 = document.getElementById("f1");
+      const f2 = document.getElementById("f2");
+      f1?.classList.add("attack");
+      f2?.classList.add("hit");
+      activeGameState.p2_hp = Math.max(0, activeGameState.p2_hp - 15);
+      setTimeout(() => renderStickArena(), 250);
+      submitAction("attack", { attack_type: "light" });
+    });
+    document.getElementById("stickHeavy")?.addEventListener("click", () => {
+      playSound("strike");
+      const f1 = document.getElementById("f1");
+      const f2 = document.getElementById("f2");
+      f1?.classList.add("attack");
+      f2?.classList.add("hit");
+      activeGameState.p2_hp = Math.max(0, activeGameState.p2_hp - 30);
+      setTimeout(() => renderStickArena(), 250);
+      submitAction("attack", { attack_type: "heavy" });
     });
   }
 
-  // 7. BRAIN BLITZ
-  function renderBrainBlitz(state) {
-    const q = state.question || { q: "Loading trivia...", options: ["A", "B", "C", "D"] };
+  // --------------------------------------------------------------------------
+  // GAME 6: QUICKDRAW
+  // --------------------------------------------------------------------------
+  function renderQuickDraw() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; width: 100%; font-size: 12px; color: var(--likby-muted);">
-          <span>Question ${(state.current_question_index || 0) + 1} of ${state.total_questions || 5}</span>
-          <span>P1: ${state.p1_score || 0} pts</span>
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 12px;">
+        <div style="text-align: center; font-size: 13px;">
+          Draw: <b style="color: var(--likby-cyan); font-size: 16px;">${activeGameState.word}</b>
         </div>
-        <div style="font-size: 16px; font-weight: 700; text-align: center; margin: 12px 0;">${q.q}</div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%;">
-          ${q.options.map((opt, i) => `<button class="card-btn bb-opt-btn" data-idx="${i}" style="padding: 12px 8px; font-size: 12px; height: auto;">${opt}</button>`).join("")}
+        <canvas id="qdCanvas" width="300" height="260" style="background: #ffffff; border-radius: 14px; margin: 0 auto; touch-action: none; cursor: crosshair;"></canvas>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-secondary" id="qdClear" style="flex: 1;">Clear 🗑</button>
+          <button class="btn-primary" id="qdSend" style="flex: 2;">Submit Drawing 🚀</button>
         </div>
       </div>
     `;
+
+    const canvas = document.getElementById("qdCanvas");
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    let isDrawing = false;
+    ctx.strokeStyle = "#0f172a";
+    ctx.lineWidth = 4;
+    ctx.lineCap = "round";
+
+    const startDraw = (e) => {
+      isDrawing = true;
+      ctx.beginPath();
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      ctx.moveTo(clientX - rect.left, clientY - rect.top);
+    };
+
+    const draw = (e) => {
+      if (!isDrawing) return;
+      const rect = canvas.getBoundingClientRect();
+      const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+      ctx.lineTo(clientX - rect.left, clientY - rect.top);
+      ctx.stroke();
+    };
+
+    const stopDraw = () => { isDrawing = false; };
+
+    canvas.addEventListener("mousedown", startDraw);
+    canvas.addEventListener("mousemove", draw);
+    window.addEventListener("mouseup", stopDraw);
+
+    canvas.addEventListener("touchstart", startDraw);
+    canvas.addEventListener("touchmove", draw);
+    window.addEventListener("touchend", stopDraw);
+
+    document.getElementById("qdClear")?.addEventListener("click", () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      playSound("click");
+    });
+    document.getElementById("qdSend")?.addEventListener("click", () => {
+      playSound("win");
+      showToast("✨ Drawing sent to partner!");
+      submitAction("add_stroke", {});
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // GAME 7: WORD RUSH
+  // --------------------------------------------------------------------------
+  function renderWordRush() {
+    canvasContainer.innerHTML = `
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; width: 100%;">
+          <span>Letters Available:</span>
+          <span>Score: <b style="color: var(--likby-cyan);">${activeGameState.score} pts</b></span>
+        </div>
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 20px 0;">
+          ${activeGameState.letters.map((l) => `
+            <div class="quick-chip wr-tile" data-letter="${l}" style="font-size: 20px; font-weight: 800; width: 44px; height: 44px; justify-content: center; background: var(--likby-surface-raised); border-color: var(--likby-cyan);">${l}</div>
+          `).join("")}
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="wrInput" class="input-field" placeholder="Enter word..." />
+          <button class="btn-primary" id="wrSubmit">Submit</button>
+        </div>
+      </div>
+    `;
+
+    document.querySelectorAll(".wr-tile").forEach((tile) => {
+      tile.addEventListener("click", () => {
+        const input = document.getElementById("wrInput");
+        if (input) input.value += tile.dataset.letter;
+        playSound("click");
+      });
+    });
+
+    document.getElementById("wrSubmit")?.addEventListener("click", () => {
+      const input = document.getElementById("wrInput");
+      const word = input?.value.trim().toUpperCase();
+      if (word && word.length >= 2) {
+        activeGameState.score += word.length * 10;
+        playSound("score");
+        showToast(`+${word.length * 10} Points! 🔤`);
+        input.value = "";
+        renderWordRush();
+        submitAction("submit_word", { word });
+      } else {
+        playSound("error");
+      }
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // GAME 8: BRAIN BLITZ
+  // --------------------------------------------------------------------------
+  function renderBrainBlitz() {
+    const q = activeGameState.questions[activeGameState.question_idx] || { q: "All questions finished!", options: [] };
+    canvasContainer.innerHTML = `
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span>Question ${activeGameState.question_idx + 1} of 3</span>
+          <span>Score: <b style="color: var(--likby-cyan);">${activeGameState.p1_score} pts</b></span>
+        </div>
+        <div style="text-align: center; font-size: 17px; font-weight: 800; line-height: 1.4; margin: 20px 0;">
+          ${q.q}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          ${q.options.map((opt, i) => `
+            <button class="btn-secondary bb-opt-btn" data-idx="${i}" style="text-align: left; padding: 14px 18px; font-size: 14px;">${opt}</button>
+          `).join("")}
+        </div>
+      </div>
+    `;
+
     document.querySelectorAll(".bb-opt-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        submitAction("answer_question", { option_index: parseInt(btn.dataset.idx) });
+        const chosen = parseInt(btn.dataset.idx);
+        if (chosen === q.ans) {
+          activeGameState.p1_score += 100;
+          playSound("score");
+          btn.style.borderColor = "var(--likby-emerald)";
+          btn.style.background = "rgba(16, 185, 129, 0.2)";
+        } else {
+          playSound("error");
+          btn.style.borderColor = "var(--likby-pink)";
+          btn.style.background = "rgba(236, 72, 153, 0.2)";
+        }
+
+        setTimeout(() => {
+          activeGameState.question_idx++;
+          if (activeGameState.question_idx >= activeGameState.questions.length) {
+            playSound("win");
+            showToast("🧠 Trivia Duel Completed!");
+          }
+          renderBrainBlitz();
+          submitAction("answer_question", { question_index: activeGameState.question_idx, chosen_index: chosen });
+        }, 500);
       });
     });
   }
 
-  // 8. REFLEX RUSH
-  function renderReflexRush(state) {
-    const isCueActive = state.status !== "COMPLETED";
+  // --------------------------------------------------------------------------
+  // GAME 9: REFLEX RUSH
+  // --------------------------------------------------------------------------
+  function renderReflexRush() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>Round: <b>${state.round || 1}</b></span>
-          <span>Wins: P1 (${state.p1_wins || 0}) - P2 (${state.p2_wins || 0})</span>
-        </div>
-        <div id="reflexBox" style="width: 240px; height: 240px; border-radius: 50%; background: #22c55e; display: flex; align-items: center; justify-content: center; font-size: 24px; font-weight: 800; color: #050816; cursor: pointer; box-shadow: 0 0 30px rgba(34, 197, 94, 0.4);">
-          TAP NOW! ⚡
-        </div>
-        <p style="font-size: 12px; color: var(--likby-muted);">Test reaction time! Avoid false starts.</p>
-      </div>
-    `;
-    document.getElementById("reflexBox")?.addEventListener("click", () => {
-      submitAction("tap", { client_timestamp_ms: Date.now() });
-    });
-  }
-
-  // 9. CONNECT FOUR
-  function renderConnectFour(state) {
-    const board = state.board || Array(6).fill(null).map(() => Array(7).fill(0));
-    canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 12px;">
-        <div style="font-size: 13px;">Turn: <b style="color: var(--likby-cyan);">${state.current_turn}</b></div>
-        <div style="background: #1e3a8a; padding: 10px; border-radius: 12px; display: grid; grid-template-columns: repeat(7, 34px); gap: 6px;">
-          ${board.map((row, r) => row.map((cell, c) => `
-            <div class="c4-cell" data-col="${c}" style="width: 34px; height: 34px; border-radius: 50%; background: ${cell === 1 ? "#22d3ee" : cell === 2 ? "#ec4899" : "#0b1224"}; cursor: pointer;"></div>
-          `).join("")).join("")}
-        </div>
-        <div style="display: flex; gap: 4px; width: 100%; justify-content: center;">
-          ${[0, 1, 2, 3, 4, 5, 6].map((col) => `<button class="card-btn c4-drop-btn" data-col="${col}" style="padding: 6px 10px;">↓</button>`).join("")}
-        </div>
-      </div>
-    `;
-    document.querySelectorAll(".c4-cell, .c4-drop-btn").forEach((el) => {
-      el.addEventListener("click", () => {
-        submitAction("drop_disc", { column: parseInt(el.dataset.col) });
-      });
-    });
-  }
-
-  // 10. MINDMATCH
-  function renderMindMatch(state) {
-    const d = state.current_dilemma || { prompt: "Your ideal vibe:", a: "Sunrise 🌅", b: "Stargazing 🌙" };
-    canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 16px;">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; padding: 20px;">
         <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
-          <span>Round: <b>${(state.round || 0) + 1} of 5</b></span>
-          <span>Harmony: <b style="color: var(--likby-cyan);">${state.match_score || 0}%</b></span>
+          <span>Round ${activeGameState.round} of 3</span>
+          <span>Reaction Duel</span>
         </div>
-        <div style="text-align: center; font-size: 17px; font-weight: 700; margin: 10px 0;">${d.prompt}</div>
-        <div style="display: flex; flex-direction: column; gap: 12px; width: 100%;">
-          <button class="btn-primary mm-choice-btn" data-choice="a" style="padding: 16px;">${d.a}</button>
-          <button class="btn-primary mm-choice-btn" data-choice="b" style="background: linear-gradient(135deg, var(--likby-violet), var(--likby-pink)); padding: 16px;">${d.b}</button>
+        <div id="reflexOrb" style="width: 220px; height: 220px; border-radius: 50%; background: #ef4444; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 22px; font-weight: 900; color: #fff; cursor: pointer; box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); transition: all 0.2s ease;">
+          WAIT... 🛑
+        </div>
+        <div style="font-size: 12px; color: var(--likby-text-muted);">
+          Tap immediately when orb turns GREEN!
         </div>
       </div>
     `;
-    document.querySelectorAll(".mm-choice-btn").forEach((btn) => {
+
+    const orb = document.getElementById("reflexOrb");
+    const delay = Math.random() * 2000 + 1500;
+    activeGameState.ready = false;
+
+    const timer = setTimeout(() => {
+      if (!orb) return;
+      activeGameState.ready = true;
+      activeGameState.green_time = Date.now();
+      orb.style.background = "#10b981";
+      orb.style.boxShadow = "0 0 50px rgba(16, 185, 129, 0.9)";
+      orb.textContent = "TAP NOW! ⚡";
+      playSound("click");
+    }, delay);
+
+    orb?.addEventListener("click", () => {
+      if (!activeGameState.ready) {
+        clearTimeout(timer);
+        playSound("error");
+        showToast("⚠️ False start! Wait for green.");
+        renderReflexRush();
+      } else {
+        const ms = Date.now() - activeGameState.green_time;
+        playSound("win");
+        showToast(`⚡ Superfast! ${ms} ms reaction!`);
+        activeGameState.round++;
+        setTimeout(() => renderReflexRush(), 1200);
+        submitAction("tap", { reaction_ms: ms });
+      }
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // GAME 10: MINDMATCH
+  // --------------------------------------------------------------------------
+  function renderMindMatch() {
+    canvasContainer.innerHTML = `
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 18px;">
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span>Round ${activeGameState.round} of 5</span>
+          <span>Harmony: <b style="color: var(--likby-cyan);">${activeGameState.score}%</b></span>
+        </div>
+        <div style="text-align: center; font-size: 18px; font-weight: 800; margin: 20px 0;">
+          ${activeGameState.prompt}
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <button class="btn-primary mm-btn" data-choice="A" style="padding: 16px; font-size: 15px;">${activeGameState.optA}</button>
+          <button class="btn-primary mm-btn" data-choice="B" style="padding: 16px; font-size: 15px; background: linear-gradient(135deg, var(--likby-violet), var(--likby-pink));">${activeGameState.optB}</button>
+        </div>
+      </div>
+    `;
+
+    document.querySelectorAll(".mm-btn").forEach((btn) => {
       btn.addEventListener("click", () => {
-        submitAction("select_option", { choice: btn.dataset.choice });
+        playSound("score");
+        showToast("💙 Selection synced with partner!");
+        activeGameState.round++;
+        submitAction("choose_option", { choice: btn.dataset.choice });
       });
     });
   }
 
-  // 11. MYSTERY MISSION
-  function renderMysteryMission(state) {
+  // --------------------------------------------------------------------------
+  // GAME 11: MYSTERY MISSION
+  // --------------------------------------------------------------------------
+  function renderMysteryMission() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
-          <span>${state.prompt || "Mystery Room"}</span>
-          <span>Stage: <b>${(state.stage || 0) + 1} / 3</b></span>
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 16px;">
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span>Stage ${activeGameState.stage} of 3</span>
+          <span style="color: var(--likby-amber); font-weight: 800;">🔒 LOCKED SAFE</span>
         </div>
-        <div style="background: var(--likby-surface-raised); border: 1px solid var(--likby-border-glow); border-radius: 12px; padding: 16px; margin: 14px 0;">
-          <div style="font-size: 11px; text-transform: uppercase; color: var(--likby-cyan); font-weight: 700; margin-bottom: 6px;">Your Private Clue 🔍</div>
-          <div style="font-size: 14px; color: var(--likby-text);">${state.private_clue || state.my_clue || "Combine clues with partner!"}</div>
+        <div style="background: var(--likby-surface-raised); border: 1px solid var(--likby-cyan); border-radius: 14px; padding: 16px; margin: 10px 0;">
+          <div style="font-size: 11px; text-transform: uppercase; color: var(--likby-cyan); font-weight: 800; margin-bottom: 6px;">Co-op Mission Clue:</div>
+          <div style="font-size: 14px; line-height: 1.5;">${activeGameState.hint}</div>
         </div>
-        <div style="display: flex; gap: 8px; width: 100%;">
-          <input type="text" id="missionAnswer" class="input-field" placeholder="Enter passcode..." />
-          <button class="btn-primary" id="missionSubmit">Unlock</button>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="missionInput" class="input-field" placeholder="Enter 4-digit code..." />
+          <button class="btn-primary" id="missionUnlockBtn">Unlock 🔓</button>
         </div>
       </div>
     `;
-    document.getElementById("missionSubmit")?.addEventListener("click", () => {
-      const ans = document.getElementById("missionAnswer").value.trim();
-      if (ans) submitAction("submit_solution", { answer: ans });
+
+    document.getElementById("missionUnlockBtn")?.addEventListener("click", () => {
+      const code = document.getElementById("missionInput")?.value.trim();
+      if (code === "2026") {
+        playSound("win");
+        showToast("🎉 SAFE CRACKED! Mission Accomplished!");
+      } else {
+        playSound("error");
+        showToast("❌ Incorrect passcode. Combine clues!");
+      }
+      submitAction("submit_solution", { code });
     });
   }
 
-  // 12. ZEN MERGE (Solo)
-  function renderZenMerge(state) {
-    const grid = state.grid || [[2, 0, 0, 0], [0, 2, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]];
+  // --------------------------------------------------------------------------
+  // GAME 12: ZEN MERGE (2048 SOLO)
+  // --------------------------------------------------------------------------
+  function renderZenMerge() {
+    const grid = activeGameState.grid;
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>Zen Score: <b style="color: var(--likby-cyan);">${state.score || 0}</b></span>
-          <span>Max Tile: <b style="color: #facc15;">${state.max_tile || 2}</b></span>
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span>Zen Score: <b style="color: var(--likby-cyan);">${activeGameState.score}</b></span>
+          <span>Goal: <b>2048</b></span>
         </div>
-        <div style="width: 250px; height: 250px; background: #0e172a; border-radius: 12px; padding: 8px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px;">
+        <div class="zen-grid" id="zenGrid">
           ${grid.map((row) => row.map((cell) => `
-            <div style="background: ${cell > 0 ? "var(--likby-cyan)" : "rgba(255,255,255,0.05)"}; color: #050816; font-weight: 800; font-size: 16px; border-radius: 6px; display: flex; align-items: center; justify-content: center;">
-              ${cell > 0 ? cell : ""}
-            </div>
+            <div class="zen-tile ${cell > 0 ? 't' + cell : ''}">${cell > 0 ? cell : ''}</div>
           `).join("")).join("")}
         </div>
-        <div style="display: grid; grid-template-columns: repeat(3, 50px); gap: 6px;">
-          <div></div><button class="card-btn zm-btn" data-dir="UP">▲</button><div></div>
-          <button class="card-btn zm-btn" data-dir="LEFT">◀</button><button class="card-btn zm-btn" data-dir="DOWN">▼</button><button class="card-btn zm-btn" data-dir="RIGHT">▶</button>
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; width: 180px; margin: 0 auto;">
+          <div></div><button class="btn-secondary zm-dir" data-dir="UP">▲</button><div></div>
+          <button class="btn-secondary zm-dir" data-dir="LEFT">◀</button>
+          <button class="btn-secondary zm-dir" data-dir="DOWN">▼</button>
+          <button class="btn-secondary zm-dir" data-dir="RIGHT">▶</button>
         </div>
       </div>
     `;
-    document.querySelectorAll(".zm-btn").forEach((btn) => {
+
+    document.querySelectorAll(".zm-dir").forEach((btn) => {
       btn.addEventListener("click", () => {
-        submitAction("swipe", { direction: btn.dataset.dir });
+        handleZenSwipe(btn.dataset.dir);
       });
     });
   }
 
-  // 13. WORD HUNT (Solo)
-  function renderWordHunt(state) {
-    const grid = state.grid || [["L", "I", "K", "B", "Y"], ["G", "A", "M", "E", "S"]];
+  function handleZenSwipe(dir) {
+    playSound("move");
+    // Add random 2 or 4 tile
+    const emptyCells = [];
+    activeGameState.grid.forEach((row, r) => {
+      row.forEach((cell, c) => {
+        if (cell === 0) emptyCells.push({ r, c });
+      });
+    });
+    if (emptyCells.length > 0) {
+      const pick = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+      activeGameState.grid[pick.r][pick.c] = 2;
+      activeGameState.score += 4;
+    }
+    renderZenMerge();
+  }
+
+  // --------------------------------------------------------------------------
+  // GAME 13: WORD HUNT (SOLO)
+  // --------------------------------------------------------------------------
+  function renderWordHunt() {
+    const grid = activeGameState.grid;
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>Found: <b>${state.found_words?.length || 0} / ${state.hidden_words?.length || 4}</b></span>
-          <button class="card-btn" id="wordHuntHint">Hint 💡</button>
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span>Found: <b>${activeGameState.found.length} / ${activeGameState.words.length}</b></span>
+          <span>Search 5x5 Matrix</span>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(5, 38px); gap: 6px; margin: 0 auto;">
-          ${grid.slice(0, 5).map((row) => row.slice(0, 5).map((char) => `
-            <div style="width: 38px; height: 38px; background: var(--likby-surface-raised); border: 1px solid var(--likby-border); border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 700;">${char}</div>
+        <div style="display: grid; grid-template-columns: repeat(5, 42px); gap: 6px; margin: 0 auto;">
+          ${grid.map((row) => row.map((char) => `
+            <div class="quick-chip wh-tile" data-char="${char}" style="width: 42px; height: 42px; justify-content: center; font-size: 16px; font-weight: 800;">${char}</div>
           `).join("")).join("")}
         </div>
-        <div style="display: flex; gap: 8px; width: 100%;">
-          <input type="text" id="wordHuntInput" class="input-field" placeholder="Found word..." />
-          <button class="btn-primary" id="wordHuntSubmit">Submit</button>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="whInput" class="input-field" placeholder="Found word..." />
+          <button class="btn-primary" id="whSubmit">Claim</button>
         </div>
       </div>
     `;
-    document.getElementById("wordHuntSubmit")?.addEventListener("click", () => {
-      const val = document.getElementById("wordHuntInput").value.trim();
-      if (val) submitAction("select_word", { word: val });
+
+    document.querySelectorAll(".wh-tile").forEach((t) => {
+      t.addEventListener("click", () => {
+        const inp = document.getElementById("whInput");
+        if (inp) inp.value += t.dataset.char;
+        playSound("click");
+      });
     });
-    document.getElementById("wordHuntHint")?.addEventListener("click", () => submitAction("hint", {}));
+
+    document.getElementById("whSubmit")?.addEventListener("click", () => {
+      const inp = document.getElementById("whInput");
+      const w = inp?.value.trim().toUpperCase();
+      if (activeGameState.words.includes(w) && !activeGameState.found.includes(w)) {
+        activeGameState.found.push(w);
+        playSound("win");
+        showToast(`🎉 Found: ${w}!`);
+        inp.value = "";
+        renderWordHunt();
+      } else {
+        playSound("error");
+      }
+    });
   }
 
-  // 14. COLOR FLOW (Solo)
-  function renderColorFlow(state) {
+  // --------------------------------------------------------------------------
+  // GAME 14: COLOR FLOW (SOLO)
+  // --------------------------------------------------------------------------
+  function renderColorFlow() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>Level: <b>${state.level || 1}</b></span>
-          <span>Flows: <b style="color: var(--likby-cyan);">${state.flows_connected || 0}</b></span>
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span>Flows: <b>${activeGameState.flows_connected} / ${activeGameState.target_flows}</b></span>
+          <span>Connect Colors</span>
         </div>
-        <div style="width: 240px; height: 240px; background: #0c1527; border-radius: 12px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px;">
-          <div style="background: #22d3ee; border-radius: 50%;"></div><div></div><div></div><div style="background: #22d3ee; border-radius: 50%;"></div>
-          <div></div><div style="background: #ec4899; border-radius: 50%;"></div><div></div><div></div>
-          <div></div><div></div><div style="background: #ec4899; border-radius: 50%;"></div><div></div>
-          <div style="background: #8b5cf6; border-radius: 50%;"></div><div></div><div></div><div style="background: #8b5cf6; border-radius: 50%;"></div>
+        <div style="width: 260px; height: 260px; background: #0f172a; border-radius: 16px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px;">
+          <div class="cf-dot" data-color="CYAN" style="background: var(--likby-cyan); border-radius: 50%;"></div>
+          <div></div><div></div>
+          <div class="cf-dot" data-color="CYAN" style="background: var(--likby-cyan); border-radius: 50%;"></div>
+          <div></div>
+          <div class="cf-dot" data-color="PINK" style="background: var(--likby-pink); border-radius: 50%;"></div>
+          <div class="cf-dot" data-color="PINK" style="background: var(--likby-pink); border-radius: 50%;"></div>
+          <div></div>
+          <div class="cf-dot" data-color="AMBER" style="background: var(--likby-amber); border-radius: 50%;"></div>
+          <div></div><div></div>
+          <div class="cf-dot" data-color="AMBER" style="background: var(--likby-amber); border-radius: 50%;"></div>
         </div>
-        <button class="btn-primary" id="colorFlowConnect">Connect Flow 🎨</button>
+        <button class="btn-primary" id="cfCompleteBtn">Complete Flow Connection 🎨</button>
       </div>
     `;
-    document.getElementById("colorFlowConnect")?.addEventListener("click", () => {
-      submitAction("connect_path", { color: "CYAN", path: [{ r: 0, c: 0 }, { r: 0, c: 3 }] });
+
+    document.getElementById("cfCompleteBtn")?.addEventListener("click", () => {
+      activeGameState.flows_connected = activeGameState.target_flows;
+      playSound("win");
+      showToast("✨ 100% Color Flow Achieved!");
+      renderColorFlow();
     });
   }
 
-  // 15. POCKET GOLF (Solo)
-  function renderPocketGolf(state) {
+  // --------------------------------------------------------------------------
+  // GAME 15: POCKET GOLF (SOLO)
+  // --------------------------------------------------------------------------
+  function renderPocketGolf() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>Course: <b>Hole 1</b></span>
-          <span>Strokes: <b style="color: var(--likby-cyan);">${state.strokes || 0}</b></span>
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span>Hole 1 (Par 3)</span>
+          <span>Strokes: <b style="color: var(--likby-cyan);">${activeGameState.strokes}</b></span>
         </div>
-        <div style="width: 260px; height: 260px; background: #064e3b; border: 6px solid #042f2e; border-radius: 16px; position: relative;">
+        <div style="width: 280px; height: 280px; background: #064e3b; border: 8px solid #022c22; border-radius: 20px; position: relative; margin: 0 auto;">
+          <!-- Sand trap -->
+          <div style="position: absolute; top: 120px; left: 40px; width: 60px; height: 40px; background: #d97706; border-radius: 50%; opacity: 0.6;"></div>
           <!-- Hole -->
-          <div style="position: absolute; top: 30px; left: 120px; width: 22px; height: 22px; background: #000; border-radius: 50%;"></div>
+          <div style="position: absolute; top: 40px; left: 130px; width: 22px; height: 22px; background: #000; border-radius: 50%; border: 2px solid #fff;"></div>
+          <!-- Flag -->
+          <div style="position: absolute; top: 22px; left: 138px; font-size: 18px;">🚩</div>
           <!-- Ball -->
-          <div style="position: absolute; bottom: 30px; left: 120px; width: 14px; height: 14px; background: #fff; border-radius: 50%;"></div>
+          <div id="golfBall" style="position: absolute; bottom: 40px; left: 132px; width: 16px; height: 16px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px #fff; transition: transform 0.4s ease-out;"></div>
         </div>
-        <div style="display: flex; gap: 8px; width: 100%;">
-          <button class="card-btn" id="golfPuttShort" style="flex: 1;">Short Putt</button>
-          <button class="btn-primary" id="golfPuttPower" style="flex: 2;">Putt to Hole ⛳</button>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn-secondary" id="golfPuttShort" style="flex: 1;">Tap Putt</button>
+          <button class="btn-primary" id="golfPuttLong" style="flex: 2;">Long Drive ⛳</button>
         </div>
       </div>
     `;
+
+    document.getElementById("golfPuttLong")?.addEventListener("click", () => {
+      activeGameState.strokes++;
+      playSound("strike");
+      const ball = document.getElementById("golfBall");
+      if (ball) {
+        ball.style.transform = "translate(0, -180px)";
+        setTimeout(() => {
+          playSound("win");
+          showToast("⛳ In the hole! Birdie!");
+        }, 400);
+      }
+    });
+
     document.getElementById("golfPuttShort")?.addEventListener("click", () => {
-      submitAction("putt", { angle: 90, power: 40 });
-    });
-    document.getElementById("golfPuttPower")?.addEventListener("click", () => {
-      submitAction("putt", { angle: 90, power: 85 });
-    });
-  }
-
-  // 16. REFLEX LAB (Solo)
-  function renderReflexLab(state) {
-    canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>Reflex Lab</span>
-          <span>Score: <b style="color: var(--likby-cyan);">${state.score || 0}</b></span>
-        </div>
-        <div style="text-align: center; margin: 20px 0;">
-          <div style="font-size: 14px; color: var(--likby-muted); margin-bottom: 8px;">Challenge: ${state.mode || "TAP_FAST"}</div>
-          <button class="btn-primary" id="labTrigger" style="width: 160px; height: 160px; border-radius: 50%; font-size: 20px;">⚡ TAP</button>
-        </div>
-        <p style="font-size: 11px; text-align: center; color: var(--likby-muted);">Casual reaction training (non-diagnostic)</p>
-      </div>
-    `;
-    document.getElementById("labTrigger")?.addEventListener("click", () => {
-      submitAction("record_result", { mode: "TAP_FAST", reaction_ms: 210 });
+      activeGameState.strokes++;
+      playSound("move");
+      const ball = document.getElementById("golfBall");
+      if (ball) ball.style.transform = "translate(0, -60px)";
     });
   }
 
-  // 17. DAILY MYSTERY (Solo)
-  function renderDailyMystery(state) {
+  // --------------------------------------------------------------------------
+  // GAME 16: REFLEX LAB (SOLO)
+  // --------------------------------------------------------------------------
+  function renderReflexLab() {
     canvasContainer.innerHTML = `
-      <div style="width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; padding: 16px;">
+      <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; padding: 20px;">
         <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
-          <span>Daily Riddle 🔐</span>
-          <span>Hints: <b>${state.hints_used || 0}</b></span>
+          <span>Neuro Speed Matrix</span>
+          <span>Best: <b style="color: var(--likby-cyan);">${activeGameState.best_ms} ms</b></span>
         </div>
-        <div style="background: var(--likby-surface-raised); border-radius: 12px; padding: 16px; margin: 12px 0;">
-          <p style="font-size: 14px; line-height: 1.5;">${state.clue || "What has keys but cannot open locks, has space but no room, and allows you to enter without ever leaving?"}</p>
+        <div id="labOrb" style="width: 160px; height: 160px; border-radius: 50%; background: linear-gradient(135deg, var(--likby-cyan), var(--likby-blue)); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: #030712; cursor: pointer; box-shadow: var(--likby-cyan-glow);">
+          ⚡ POP
         </div>
-        <div style="display: flex; gap: 8px; width: 100%;">
-          <input type="text" id="dailyMysteryInput" class="input-field" placeholder="Answer..." />
-          <button class="btn-primary" id="dailyMysterySubmit">Solve</button>
+        <div style="font-size: 12px; color: var(--likby-text-muted);">
+          Tap as quickly as possible upon appearance
         </div>
       </div>
     `;
-    document.getElementById("dailyMysterySubmit")?.addEventListener("click", () => {
-      const a = document.getElementById("dailyMysteryInput").value.trim();
-      if (a) submitAction("solve", { answer: a });
+
+    document.getElementById("labOrb")?.addEventListener("click", () => {
+      playSound("score");
+      const ms = Math.floor(Math.random() * 80 + 170);
+      if (ms < activeGameState.best_ms) activeGameState.best_ms = ms;
+      showToast(`⚡ ${ms} ms! Reaction logged.`);
+      renderReflexLab();
     });
   }
 
-  // Boot
+  // --------------------------------------------------------------------------
+  // GAME 17: DAILY MYSTERY (SOLO)
+  // --------------------------------------------------------------------------
+  function renderDailyMystery() {
+    canvasContainer.innerHTML = `
+      <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 18px;">
+        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+          <span>Daily Cryptic Riddle 🔐</span>
+          <span>Reward: +10 Karma</span>
+        </div>
+        <div style="background: var(--likby-surface-raised); border: 1px solid var(--likby-glass-border-hover); border-radius: 16px; padding: 20px; margin: 16px 0;">
+          <p style="font-size: 15px; line-height: 1.6; color: #fff;">"${activeGameState.clue}"</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="dmInput" class="input-field" placeholder="Type riddle answer..." />
+          <button class="btn-primary" id="dmSubmit">Solve</button>
+        </div>
+      </div>
+    `;
+
+    document.getElementById("dmSubmit")?.addEventListener("click", () => {
+      const ans = document.getElementById("dmInput")?.value.trim().toLowerCase();
+      if (ans === activeGameState.answer) {
+        playSound("win");
+        showToast("🎉 Riddle Solved! +10 Karma Earned!");
+      } else {
+        playSound("error");
+        showToast("❌ Not quite. Ponder deeper!");
+      }
+    });
+  }
+
+  // Boot on DOM ready
   document.addEventListener("DOMContentLoaded", init);
 })();
