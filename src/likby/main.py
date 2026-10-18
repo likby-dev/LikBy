@@ -348,6 +348,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.bot = bot
     app.state.dp = dp
     app.state.user_repo = user_repo
+    app.state.profile_repo = profile_repo
     app.state.plan_repo = plan_repo
     app.state.order_repo = order_repo
     app.state.txn_repo = txn_repo

@@ -141,13 +141,22 @@ def get_profile_vip_keyboard(tier_code: str = "BASE") -> InlineKeyboardMarkup:
     )
 
 
-def get_chat_hub_keyboard(is_active: bool = False, session_id: Optional[str] = None) -> InlineKeyboardMarkup:
+def get_chat_hub_keyboard(
+    is_active: bool = False,
+    session_id: Optional[str] = None,
+    mini_app_url: Optional[str] = None,
+) -> InlineKeyboardMarkup:
     """Conversation Hub interactive controls."""
     if is_active:
+        play_btn = (
+            InlineKeyboardButton(text="⚔️ Play Duel with Partner", web_app=WebAppInfo(url=mini_app_url))
+            if mini_app_url
+            else InlineKeyboardButton(text="⚔️ Play Duel with Partner", callback_data="chat:game")
+        )
         return InlineKeyboardMarkup(
             inline_keyboard=[
                 [
-                    InlineKeyboardButton(text="🎮 Play Game with Partner", callback_data="chat:game"),
+                    play_btn,
                     InlineKeyboardButton(text="⏭ Next Chat", callback_data="chat:next"),
                 ],
                 [
@@ -156,6 +165,11 @@ def get_chat_hub_keyboard(is_active: bool = False, session_id: Optional[str] = N
                 ],
             ]
         )
+    play_btn = (
+        InlineKeyboardButton(text="🚀 LikBy Play (App)", web_app=WebAppInfo(url=mini_app_url))
+        if mini_app_url
+        else InlineKeyboardButton(text="🎮 LikBy Play", callback_data="play:hub")
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [
@@ -163,7 +177,7 @@ def get_chat_hub_keyboard(is_active: bool = False, session_id: Optional[str] = N
             ],
             [
                 InlineKeyboardButton(text="👥 My Friends", callback_data="conn:friends"),
-                InlineKeyboardButton(text="🕹 Solo Arcade", callback_data="solo:hub"),
+                play_btn,
             ],
         ]
     )
@@ -267,11 +281,16 @@ def get_active_chat_keyboard() -> ReplyKeyboardMarkup:
     )
 
 
-def get_queue_cancel_keyboard() -> InlineKeyboardMarkup:
+def get_queue_cancel_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """Inline keyboard shown while waiting in queue."""
+    play_btn = (
+        InlineKeyboardButton(text="🚀 Play While Waiting (App)", web_app=WebAppInfo(url=mini_app_url))
+        if mini_app_url
+        else InlineKeyboardButton(text="🎮 LikBy Play (App)", callback_data="play:hub")
+    )
     return InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="🕹 Play While Waiting", callback_data="solo:hub")],
+            [play_btn],
             [InlineKeyboardButton(text="❌ Cancel Search", callback_data="queue:cancel")],
         ]
     )
@@ -336,7 +355,7 @@ def get_gem_hunter_keyboard(game, show_all: bool = False) -> InlineKeyboardMarku
 def get_play_hub_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """
     Consolidated LikBy Play Ecosystem Navigation Keyboard.
-    Uses WebAppInfo when mini_app_url is provided, with fallback inline actions.
+    Prioritizes official LikBy Play WebApp with all 17 games, motions, and active duels.
     """
     rows = []
     if mini_app_url:
@@ -348,16 +367,33 @@ def get_play_hub_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardM
         ])
     rows.append([
         InlineKeyboardButton(text="⚔️ 2-Player Duels (11 Games)", callback_data="play:duels"),
-        InlineKeyboardButton(text="🕹 Solo Casual Games", callback_data="solo:hub"),
+        InlineKeyboardButton(text="🧩 Solo Games (6 Games)", callback_data="play:solo_info"),
     ])
     rows.append([
-        InlineKeyboardButton(text="✨ Game Collection", callback_data="play:catalogue"),
-        InlineKeyboardButton(text="📊 My Progress & Stats", callback_data="play:progress"),
+        InlineKeyboardButton(text="✨ 17 Games Catalog & Rules", callback_data="play:catalogue"),
+        InlineKeyboardButton(text="📊 My Progress & Quotas", callback_data="play:progress"),
     ])
     rows.append([
         InlineKeyboardButton(text="💎 Upgrade Gaming Quota (VIP)", callback_data="sub:plans"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_chat_duel_invite_keyboard(duel_url: str) -> InlineKeyboardMarkup:
+    """Challenge active chat partner to live multiplayer duel in LikBy Play."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="🚀 Launch Duel in LikBy Play",
+                    web_app=WebAppInfo(url=duel_url),
+                )
+            ],
+            [
+                InlineKeyboardButton(text="« Back to Chat", callback_data="chat:hub"),
+            ],
+        ]
+    )
 
 
 def get_rps_keyboard() -> InlineKeyboardMarkup:

@@ -6,7 +6,8 @@ Handlers for multiplayer Tic-Tac-Toe invites, moves, and board updates.
 import uuid
 from aiogram import Router, F
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, Message
+from aiogram.types import CallbackQuery, Message, WebAppInfo
+from likby.config import get_settings
 from likby.domain.entities.game import (
     GameSession,
     InvalidMoveError,
@@ -19,7 +20,7 @@ from likby.repositories.interfaces import (
     UserRepository,
 )
 from likby.services.chat_relay_service import ChatRelayService
-from likby.telegram.keyboards import get_tictactoe_keyboard
+from likby.telegram.keyboards import get_chat_duel_invite_keyboard, get_tictactoe_keyboard
 from likby.telegram.utils import safe_edit_text
 
 router = Router(name="game")
@@ -27,65 +28,64 @@ router = Router(name="game")
 
 @router.message(F.text == "🎮 Play Game")
 @router.message(Command("game"))
+@router.callback_query(F.data == "chat:game")
 async def start_game(
-    message: Message,
+    event: Message | CallbackQuery,
     user_repo: UserRepository,
     session_repo: ChatSessionRepository,
     game_repo: GameRepository,
     chat_relay: ChatRelayService,
 ) -> None:
-    if not message.from_user:
+    message = event if isinstance(event, Message) else event.message
+    if isinstance(event, CallbackQuery):
+        await event.answer()
+
+    if not event.from_user:
         return
 
-    tg_id = message.from_user.id
+    tg_id = event.from_user.id
     cached = await chat_relay.get_or_warm_session(tg_id)
     if not cached:
-        await message.answer("You must be in an active chat to play Tic-Tac-Toe!")
-        return
-
-    # Check for existing active game
-    active_game = await game_repo.get_active_by_session_id(cached.session_id)
-    if active_game:
         await message.answer(
-            "A game is already in progress!",
-            reply_markup=get_tictactoe_keyboard(active_game.board, active_game.id),
+            "⚔️ <b>Multiplayer Duels require an active conversation partner!</b>\n\n"
+            "Tap <b>🎲 Find Match</b> below to connect with an anonymous partner, or open <b>🎮 LikBy Play</b> to enjoy unlimited solo games!",
+            parse_mode="HTML",
         )
         return
 
-    # Create new game: Initiator is X (moves first)
+    settings = get_settings()
+    base_play_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+
     player_x = cached.user_a_id if tg_id == cached.user_a_tg_id else cached.user_b_id
     player_o = cached.get_partner_user_id(player_x)
     partner_tg_id = cached.get_partner_tg_id(tg_id)
 
-    game_id = f"gm_{uuid.uuid4().hex[:12]}"
-    game = GameSession(
-        id=game_id,
-        session_id=cached.session_id,
-        player_x_id=player_x,
-        player_o_id=player_o,
-        current_turn_user_id=player_x,
-    )
-    await game_repo.save(game)
+    duel_url = f"{base_play_url}?session_id={cached.session_id}&partner_id={player_o}&mode=duel"
+    partner_duel_url = f"{base_play_url}?session_id={cached.session_id}&partner_id={player_x}&mode=duel"
 
-    kb = get_tictactoe_keyboard(game.board, game.id)
+    duel_kb = get_chat_duel_invite_keyboard(duel_url)
+    partner_duel_kb = get_chat_duel_invite_keyboard(partner_duel_url)
 
     # Send to initiator
     await message.answer(
-        "🎮 <b>Tic-Tac-Toe Started!</b>\n\n"
-        "You are <b>❌</b> (Your turn).\nTap a square to move:",
+        "⚔️ <b>LikBy Play — Multiplayer Duel Arena</b>\n\n"
+        "You are connected with an active partner!\n"
+        "Tap below to launch any of the 11 real-time duel games:\n"
+        "• Connect Four • Carrom Clash • Air Rush\n"
+        "• Pocket Pool • Stick Arena • QuickDraw & more!",
         parse_mode="HTML",
-        reply_markup=kb,
+        reply_markup=duel_kb,
     )
 
     # Send to partner
     await message.bot.send_message(
         chat_id=partner_tg_id,
         text=(
-            "🎮 <b>Your partner started Tic-Tac-Toe!</b>\n\n"
-            "You are <b>⭕</b> (Waiting for partner's first move):"
+            "⚔️ <b>Your partner invited you to a Duel in LikBy Play!</b>\n\n"
+            "Tap below to enter the live game arena with your partner:"
         ),
         parse_mode="HTML",
-        reply_markup=kb,
+        reply_markup=partner_duel_kb,
     )
 
 

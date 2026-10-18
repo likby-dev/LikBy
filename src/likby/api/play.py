@@ -114,6 +114,38 @@ async def get_gaming_entitlements(
     return await quota_service.get_user_entitlements(user.id)
 
 
+@router.get("/active_chat_partner")
+async def get_active_chat_partner(
+    request: Request,
+    user: User = Depends(get_play_authenticated_user),
+) -> Dict[str, Any]:
+    """Check if the user is currently in an active conversation session with a partner."""
+    session_repo = request.app.state.session_repo
+    active_session = await session_repo.get_active_by_user_id(user.id)
+    if not active_session:
+        return {"has_partner": False, "partner_id": None, "session_id": None, "partner_name": None}
+
+    try:
+        partner_id = active_session.get_partner_id(user.id)
+    except Exception:
+        partner_id = None
+
+    partner_name = "Anonymous Partner"
+    if partner_id:
+        profile_repo = getattr(request.app.state, "profile_repo", None)
+        if profile_repo:
+            partner_profile = await profile_repo.get_by_user_id(partner_id)
+            if partner_profile and partner_profile.display_name:
+                partner_name = partner_profile.display_name
+
+    return {
+        "has_partner": True,
+        "partner_id": partner_id,
+        "partner_name": partner_name,
+        "session_id": active_session.id,
+    }
+
+
 @router.post("/duels/invite")
 async def invite_to_duel(
     payload: InviteDuelRequest,

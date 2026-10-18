@@ -45,7 +45,7 @@ async def play_hub_command(
         await event.answer()
 
     settings = get_settings()
-    mini_app_url = settings.telegram_mini_app_url
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
 
     quota_line = ""
     tg_id = event.from_user.id if event.from_user else 0
@@ -76,7 +76,7 @@ async def show_duels(
 ) -> None:
     """Displays the 11 duel games and daily allowance."""
     settings = get_settings()
-    mini_app_url = settings.telegram_mini_app_url
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
 
     tg_id = event.from_user.id if event.from_user else 0
     quota_info = "5 duels/day on Base"
@@ -111,13 +111,13 @@ async def show_duels(
 
 
 @router.message(Command("solo"))
-@router.callback_query(F.data == "play:solo")
+@router.callback_query(F.data.in_(["play:solo", "play:solo_info", "solo:hub"]))
 async def show_solo(
     event: Message | CallbackQuery,
 ) -> None:
-    """Displays the 6 solo games with unlimited access."""
+    """Displays the 6 solo games with unlimited access and direct Mini App launch."""
     settings = get_settings()
-    mini_app_url = settings.telegram_mini_app_url
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
 
     solos = [g for g in GAME_CATALOGUE.values() if g.mode == GameMode.SOLO]
     solo_list_lines = []
@@ -128,7 +128,7 @@ async def show_solo(
         "🧩 <b>LikBy Play — 6 Solo Experiences</b>\n\n"
         "✨ <b>Unlimited for all tiers!</b> Solo games do not consume duel credits.\n\n"
         + "\n\n".join(solo_list_lines)
-        + "\n\n<i>Play anytime while waiting for a match or relaxing solo.</i>"
+        + "\n\n<i>Play anytime in the LikBy Play Mini App while waiting or relaxing solo!</i>"
     )
 
     if isinstance(event, Message):

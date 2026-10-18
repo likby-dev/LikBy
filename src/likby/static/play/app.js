@@ -26,11 +26,12 @@
   };
   let currentFilter = "all";
 
-  // Active Session State
+  // Active Session & Partner State
   let activeGame = null;
   let activeSessionId = null;
   let activeGameState = null;
   let isPracticeMode = false;
+  let connectedPartner = null; // { id, name, sessionId }
 
   // DOM Cache
   const gameGrid = document.getElementById("gameGrid");
@@ -55,6 +56,17 @@
   const exploreSoloBtn = document.getElementById("exploreSoloBtn");
   const upgradeTiersBtn = document.getElementById("upgradeTiersBtn");
   const toast = document.getElementById("toast");
+
+  // Partner Banner DOM Cache
+  const partnerBanner = document.getElementById("partnerBanner");
+  const partnerStatusDot = document.getElementById("partnerStatusDot");
+  const partnerStatusTag = document.getElementById("partnerStatusTag");
+  const partnerTitle = document.getElementById("partnerTitle");
+  const partnerCtaBtn = document.getElementById("partnerCtaBtn");
+  const activePartnerModalContent = document.getElementById("activePartnerModalContent");
+  const idlePartnerModalContent = document.getElementById("idlePartnerModalContent");
+  const modalPartnerName = document.getElementById("modalPartnerName");
+  const modalFindMatchBtn = document.getElementById("modalFindMatchBtn");
 
   // ============================================================================
   // 1. Web Audio API Harmonic Synthesizer
@@ -242,16 +254,78 @@
     initAmbientCanvas();
     setupEventListeners();
 
-    // Fetch Catalogue from API or Fallback
+    // 1. Check URL parameters for active session or partner
+    const urlParams = new URLSearchParams(window.location.search);
+    const pId = urlParams.get("partner_id");
+    const pName = urlParams.get("partner_name");
+    const sId = urlParams.get("session_id");
+    const reqMode = urlParams.get("mode");
+    const reqGame = urlParams.get("game");
+
+    if (pId) {
+      connectedPartner = {
+        id: pId,
+        name: pName || "Chat Partner",
+        sessionId: sId || null,
+      };
+    }
+
+    // 2. Fetch Catalogue from API or Fallback
     const apiCatalogue = await apiCall("/api/v1/play/catalogue");
     gamesCatalogue = (apiCatalogue && apiCatalogue.length > 0) ? apiCatalogue : FALLBACK_CATALOGUE;
 
-    // Fetch Entitlements
+    // 3. Fetch Entitlements
     const apiEntitlements = await apiCall("/api/v1/play/entitlements");
     if (apiEntitlements) currentEntitlements = apiEntitlements;
 
+    // 4. Also check active chat partner endpoint if not already in URL
+    if (!connectedPartner) {
+      const partnerRes = await apiCall("/api/v1/play/active_chat_partner");
+      if (partnerRes && partnerRes.has_partner && partnerRes.partner_id) {
+        connectedPartner = {
+          id: partnerRes.partner_id,
+          name: partnerRes.partner_name || "Chat Partner",
+          sessionId: partnerRes.session_id || null,
+        };
+      }
+    }
+
+    updatePartnerBanner();
     updateEntitlementsUI();
+
+    if (reqMode === "duel") {
+      currentFilter = "duel";
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.filter === "duel"));
+    }
+
     renderGameGrid();
+
+    if (reqGame) {
+      launchGame(reqGame);
+    }
+  }
+
+  function updatePartnerBanner() {
+    if (!partnerBanner) return;
+    if (connectedPartner) {
+      partnerBanner.className = "partner-connection-banner active";
+      if (partnerStatusDot) partnerStatusDot.className = "live-dot live";
+      if (partnerStatusTag) partnerStatusTag.textContent = "🟢 CHAT PARTNER CONNECTED";
+      if (partnerTitle) partnerTitle.textContent = `⚔️ Duels Active with ${connectedPartner.name}`;
+      if (partnerCtaBtn) {
+        partnerCtaBtn.textContent = "⚔️ Ready";
+        partnerCtaBtn.className = "btn-partner-cta ready";
+      }
+    } else {
+      partnerBanner.className = "partner-connection-banner idle";
+      if (partnerStatusDot) partnerStatusDot.className = "live-dot idle";
+      if (partnerStatusTag) partnerStatusTag.textContent = "💬 ANONYMOUS CHAT DUELS";
+      if (partnerTitle) partnerTitle.textContent = "Duels unlock when connected in chat";
+      if (partnerCtaBtn) {
+        partnerCtaBtn.textContent = "🎲 Find Match";
+        partnerCtaBtn.className = "btn-partner-cta";
+      }
+    }
   }
 
   function updateEntitlementsUI() {
@@ -289,6 +363,20 @@
     };
     soundToggleBtn?.addEventListener("click", toggleSound);
     arenaSoundBtn?.addEventListener("click", toggleSound);
+
+    // Partner Banner CTA
+    partnerCtaBtn?.addEventListener("click", () => {
+      playSound("click");
+      if (connectedPartner) {
+        currentFilter = "duel";
+        document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.filter === "duel"));
+        renderGameGrid();
+        showToast(`⚔️ Connected with ${connectedPartner.name}! Select any duel.`);
+      } else {
+        showToast("Open LikBy bot to start anonymous chat!");
+        if (tg?.close) tg.close();
+      }
+    });
 
     // Tab Filters
     document.querySelectorAll(".tab-btn").forEach((btn) => {
@@ -335,6 +423,12 @@
       renderGameGrid();
     });
 
+    modalFindMatchBtn?.addEventListener("click", () => {
+      inviteModal?.classList.remove("active");
+      showToast("Open LikBy bot to find a match!");
+      if (tg?.close) tg.close();
+    });
+
     // Exit Game
     exitGameBtn?.addEventListener("click", () => {
       playSound("click");
@@ -345,8 +439,9 @@
 
     // Send Invite / Practice
     sendInviteBtn?.addEventListener("click", () => {
-      const pid = partnerIdInput?.value.trim() || "partner_123";
+      const pid = (connectedPartner && connectedPartner.id) || partnerIdInput?.value.trim() || "partner_123";
       inviteModal?.classList.remove("active");
+      showToast(`⚔️ Challenging ${connectedPartner ? connectedPartner.name : "partner"}...`);
       startDuelSession(activeGame.id, pid, false);
     });
     practiceDuelBtn?.addEventListener("click", () => {
@@ -404,9 +499,33 @@
         playSound("error");
         return;
       }
-      // Show duel invite / practice modal
-      document.getElementById("inviteModalTitle").textContent = `⚔️ Challenge in ${game.name}`;
-      inviteModal?.classList.add("active");
+
+      if (connectedPartner) {
+        // Partner is connected!
+        document.getElementById("inviteModalTitle").textContent = `⚔️ Challenge in ${game.name}`;
+        if (document.getElementById("inviteModalDesc")) {
+          document.getElementById("inviteModalDesc").textContent = `Challenge your conversation partner ${connectedPartner.name} to a live match of ${game.name}!`;
+        }
+        if (activePartnerModalContent) activePartnerModalContent.style.display = "block";
+        if (idlePartnerModalContent) idlePartnerModalContent.style.display = "none";
+        if (modalPartnerName) modalPartnerName.textContent = connectedPartner.name;
+        if (sendInviteBtn) {
+          sendInviteBtn.style.display = "block";
+          sendInviteBtn.textContent = `⚔️ Play with ${connectedPartner.name}`;
+        }
+        if (partnerIdInput) partnerIdInput.value = connectedPartner.id;
+        inviteModal?.classList.add("active");
+      } else {
+        // No partner connected -> duels are active when connected in chat
+        document.getElementById("inviteModalTitle").textContent = `⚔️ Duels Active in Chat`;
+        if (document.getElementById("inviteModalDesc")) {
+          document.getElementById("inviteModalDesc").textContent = `Multiplayer duels activate automatically when connected with a partner in LikBy chat. Practice against AI now or connect with a partner!`;
+        }
+        if (activePartnerModalContent) activePartnerModalContent.style.display = "none";
+        if (idlePartnerModalContent) idlePartnerModalContent.style.display = "block";
+        if (sendInviteBtn) sendInviteBtn.style.display = "none";
+        inviteModal?.classList.add("active");
+      }
     } else {
       // Solo Game -> Instant Launch
       startSoloSession(game.id);
@@ -437,7 +556,8 @@
       updateEntitlementsUI();
     }
 
-    const modeText = practice ? "Practice vs AI Bot 🤖" : `Duel vs ${partnerId} ⚔️`;
+    const opponentName = practice ? "AI Practice Bot 🤖" : (connectedPartner ? connectedPartner.name : `Opponent ⚔️`);
+    const modeText = practice ? "Practice vs AI Bot 🤖" : `Duel vs ${opponentName} ⚔️`;
     openViewport(activeGame.name, activeGame.icon || "⚔️", modeText);
     renderActiveGame();
   }

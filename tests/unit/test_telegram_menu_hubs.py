@@ -88,7 +88,7 @@ def test_chat_hub_keyboard_active_and_idle_states():
     idle_callbacks = [btn.callback_data for row in idle_kb.inline_keyboard for btn in row]
     assert "queue:find_new" in idle_callbacks
     assert "conn:friends" in idle_callbacks
-    assert "solo:hub" in idle_callbacks
+    assert "play:hub" in idle_callbacks
 
 
 def test_play_and_solo_hub_keyboards_clean_routing():
@@ -103,7 +103,7 @@ def test_play_and_solo_hub_keyboards_clean_routing():
     play_kb = get_play_hub_keyboard()
     play_callbacks = [btn.callback_data for row in play_kb.inline_keyboard for btn in row]
     assert "play:duels" in play_callbacks
-    assert "solo:hub" in play_callbacks
+    assert "play:solo_info" in play_callbacks
     assert "play:catalogue" in play_callbacks
     assert "play:progress" in play_callbacks
     assert "sub:plans" in play_callbacks

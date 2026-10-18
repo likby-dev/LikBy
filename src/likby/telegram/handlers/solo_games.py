@@ -12,8 +12,10 @@ from likby.games.solo.gem_hunter import GemHunterGame
 from likby.games.solo.rps import CHOICE_EMOJIS, RPSChoice, play_rps
 from likby.games.solo.trivia import TRIVIA_QUESTIONS, get_random_question
 from likby.telegram.utils import safe_edit_text
+from likby.config import get_settings
 from likby.telegram.keyboards import (
     get_gem_hunter_keyboard,
+    get_play_hub_keyboard,
     get_rps_keyboard,
     get_solo_hub_keyboard,
     get_trivia_keyboard,
@@ -27,19 +29,20 @@ _USER_TRIVIA_STREAKS: Dict[int, int] = {}
 _USER_RPS_SCORES: Dict[int, Dict[str, int]] = {}  # tg_id -> {"wins": 0, "losses": 0, "draws": 0}
 
 
-@router.message(F.text == "🕹 Solo Arcade")
+@router.message(F.text.in_(["🕹 Solo Arcade", "🕹 Play While Waiting"]))
 @router.message(Command("arcade"))
 async def open_arcade_menu(message: Message) -> None:
-    """Entrypoint to solo games arcade."""
+    """Entrypoint to LikBy Play app."""
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
     await message.answer(
-        "🕹 <b>Welcome to LikBy Solo Arcade!</b>\n\n"
-        "Play quick, fun casual games while waiting for a conversation partner or during your downtime:\n\n"
-        "• 🎯 <b>Trivia Blitz</b> — Test your knowledge across pop culture, tech, and science.\n"
-        "• 💎 <b>Gem Hunter</b> — 3x3 Mini Minesweeper. Uncover gems without triggering the bomb!\n"
-        "• 🪨 <b>Rock Paper Scissors</b> — Quick rounds against the bot.\n\n"
-        "<i>Select a game below to begin:</i>",
+        "🚀 <b>LikBy Play Mini App</b>\n\n"
+        "All 17 high-octane multiplayer duels and relaxing solo puzzles are available directly in the <b>LikBy Play App</b>!\n\n"
+        "• ⚔️ <b>11 Multiplayer Duels:</b> Connect Four, Air Rush, Carrom Clash, Pocket Pool & more!\n"
+        "• 🧩 <b>6 Solo Games:</b> Zen Merge, Word Hunt, Color Flow, Pocket Golf & more!\n\n"
+        "<i>Tap below to launch LikBy Play:</i>",
         parse_mode="HTML",
-        reply_markup=get_solo_hub_keyboard(),
+        reply_markup=get_play_hub_keyboard(mini_app_url),
     )
 
 
@@ -48,12 +51,14 @@ async def back_to_arcade_hub(callback: CallbackQuery) -> None:
     await callback.answer()
     if not callback.message:
         return
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
     await safe_edit_text(
         callback.message,
-        "🕹 <b>LikBy Solo Arcade</b>\n\n"
-        "Choose a casual game to play:",
+        "🚀 <b>LikBy Play Mini App</b>\n\n"
+        "Explore all 17 multiplayer duels and solo games in our animated WebApp:",
         parse_mode="HTML",
-        reply_markup=get_solo_hub_keyboard(),
+        reply_markup=get_play_hub_keyboard(mini_app_url),
     )
 
 

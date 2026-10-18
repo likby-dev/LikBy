@@ -29,6 +29,20 @@
       </div>
     </header>
 
+    <!-- Active Partner Connection Status Banner -->
+    <section class="partner-connection-banner idle" id="partnerBanner">
+      <div class="partner-banner-content">
+        <span class="live-dot" id="partnerStatusDot"></span>
+        <div class="partner-meta">
+          <div class="partner-status-tag" id="partnerStatusTag">ANONYMOUS CHAT DUELS</div>
+          <div class="partner-title" id="partnerTitle">Duels unlock when connected in chat</div>
+        </div>
+      </div>
+      <div id="partnerActionWrap">
+        <button class="btn-partner-cta" id="partnerCtaBtn">🎲 Find Match</button>
+      </div>
+    </section>
+
     <!-- Daily Duel Allowance Card -->
     <section class="quota-card" id="quotaCard">
       <div class="quota-header">
@@ -130,20 +144,35 @@
     </div>
   </div>
 
-  <!-- Challenge Partner Modal -->
+  <!-- Challenge Partner / Duel Active Modal -->
   <div class="modal-overlay" id="inviteModal">
     <div class="modal-box">
       <div class="modal-header">
-        <h3 class="modal-title" id="inviteModalTitle">⚔️ Challenge Partner</h3>
+        <h3 class="modal-title" id="inviteModalTitle">⚔️ Multiplayer Duel</h3>
         <button class="btn-close" id="closeInviteModal">✕</button>
       </div>
-      <p style="font-size: 13px; color: var(--likby-text-muted); line-height: 1.5;">
-        Challenge your chat partner or enter a User ID to start a live duel:
+      <p id="inviteModalDesc" style="font-size: 13px; color: var(--likby-text-muted); line-height: 1.5; margin-bottom: 12px;">
+        Multiplayer duels are designed to be played with your active conversation partner in LikBy chat.
       </p>
-      <input type="text" class="input-field" id="partnerIdInput" placeholder="Partner User ID (or 'practice_bot')" />
-      <div style="display: flex; gap: 10px;">
-        <button class="btn-primary" id="sendInviteBtn" style="flex: 2;">Challenge Partner</button>
-        <button class="btn-secondary" id="practiceDuelBtn" style="flex: 1;">Practice</button>
+      <div id="activePartnerModalContent" style="display: none; margin-bottom: 12px;">
+        <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 12px; padding: 12px; text-align: center;">
+          <span style="font-size: 11px; font-weight: 800; color: var(--likby-emerald); letter-spacing: 0.5px;">🟢 CONNECTED PARTNER READY</span>
+          <div id="modalPartnerName" style="font-size: 16px; font-weight: 700; color: var(--likby-text); margin-top: 4px;">Anonymous Partner</div>
+        </div>
+      </div>
+      <div id="idlePartnerModalContent" style="display: block; margin-bottom: 12px;">
+        <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid var(--likby-glass-border); border-radius: 12px; padding: 12px; text-align: center;">
+          <span style="font-size: 11px; font-weight: 800; color: var(--likby-cyan); letter-spacing: 0.5px;">💡 NO ACTIVE CHAT PARTNER</span>
+          <div style="font-size: 13px; color: var(--likby-text-muted); margin-top: 4px;">
+            Connect with someone in LikBy anonymous chat to duel live, or practice right now against the AI Bot!
+          </div>
+        </div>
+      </div>
+      <input type="hidden" id="partnerIdInput" value="" />
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <button class="btn-primary" id="sendInviteBtn" style="width: 100%;">⚔️ Play Live with Partner</button>
+        <button class="btn-secondary" id="practiceDuelBtn" style="width: 100%;">🤖 Practice vs AI</button>
+        <button class="btn-link" id="modalFindMatchBtn" style="margin-top: 4px;">🎲 Find a Partner in Bot</button>
       </div>
     </div>
   </div>
