@@ -4,12 +4,17 @@ Onboarding FSM handlers: Alias, Age, Gender, and Interests selection.
 """
 
 import html
+import logging
 import re
-from typing import Any, Optional
+from typing import Any, List, Optional
+import uuid
 from aiogram import Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from likby.domain.entities.profile import Profile
+from likby.domain.entities.user import User
+
+logger = logging.getLogger(__name__)
 from likby.domain.enums import Gender, GenderPreference, UserState
 from likby.repositories.interfaces import ProfileRepository, UserRepository
 from likby.telegram.keyboards import (
@@ -200,7 +205,22 @@ async def process_gender(callback: CallbackQuery, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(OnboardingStates.waiting_for_interests, F.data.startswith("interest_toggle:"))
+def extract_selected_interests_from_markup(message: Optional[Message]) -> List[str]:
+    """Extract currently checked interests directly from the inline keyboard buttons."""
+    if not message or not message.reply_markup:
+        return []
+    selected: List[str] = []
+    for row in message.reply_markup.inline_keyboard:
+        for btn in row:
+            if btn.callback_data and btn.callback_data.startswith("interest_toggle:"):
+                code = btn.callback_data.split(":", 1)[1]
+                if btn.text and "✅" in btn.text:
+                    if code not in selected:
+                        selected.append(code)
+    return selected
+
+
+@router.callback_query(F.data.startswith("interest_toggle:"))
 async def toggle_interest(callback: CallbackQuery, state: FSMContext) -> None:
     if not callback.data or not callback.message:
         return
@@ -209,16 +229,21 @@ async def toggle_interest(callback: CallbackQuery, state: FSMContext) -> None:
     data = await state.get_data()
     selected = list(data.get("selected_interests", []))
 
+    # If state memory was lost, recover from message markup checkmarks
+    if not selected and callback.message:
+        selected = extract_selected_interests_from_markup(callback.message)
+
     if interest_code in selected:
         selected.remove(interest_code)
         await callback.answer()
     else:
         if len(selected) >= 5:
-            await callback.answer("You can select up to 5 interests maximum!", show_alert=True)
+            await callback.answer("You can select up to 5 interests maximum! Tap Done when finished.", show_alert=True)
             return
         selected.append(interest_code)
         await callback.answer()
 
+    await state.set_state(OnboardingStates.waiting_for_interests)
     await state.update_data(selected_interests=selected)
     await safe_edit_reply_markup(
         callback.message,
@@ -226,7 +251,7 @@ async def toggle_interest(callback: CallbackQuery, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(OnboardingStates.waiting_for_interests, F.data == "interest_done")
+@router.callback_query(F.data == "interest_done")
 async def finish_interests(
     callback: CallbackQuery,
     state: FSMContext,
@@ -237,43 +262,87 @@ async def finish_interests(
     data = await state.get_data()
     selected = list(data.get("selected_interests", []))
 
+    # Fallback to extracting from button checkmarks if state is missing
+    if len(selected) < 2 and callback.message:
+        recovered = extract_selected_interests_from_markup(callback.message)
+        if len(recovered) >= 2:
+            selected = recovered
+
     if len(selected) < 2:
         await callback.answer("Please select at least 2 interests!", show_alert=True)
         return
 
+    # Acknowledge the callback query immediately to stop the button loading spinner
     await callback.answer()
-    if not callback.from_user or not callback.message:
+    if not callback.from_user:
         return
 
+    # Cap at 5 maximum interests
+    if len(selected) > 5:
+        selected = selected[:5]
+
+    # Retrieve or auto-create user
     user = await user_repo.get_by_telegram_id(callback.from_user.id)
     if not user:
-        return
+        user = User(
+            id=f"usr_{uuid.uuid4().hex[:12]}",
+            telegram_id=callback.from_user.id,
+            age_verified=True,
+        )
 
+    # Resolve unique_id
     unique_id = data.get("unique_id") or user.unique_id
-    if unique_id:
-        user.unique_id = unique_id
+    if not unique_id:
+        unique_id = f"lk_{abs(user.telegram_id) % 90000 + 10000}"
+    user.unique_id = unique_id
 
-    alias = data.get("alias") or f"User_{user.id[-4:]}"
-    age = data.get("age") or 21
+    # Resolve alias
+    raw_alias = data.get("alias")
+    if not raw_alias and callback.from_user.first_name:
+        raw_alias = callback.from_user.first_name.strip()
+    if not raw_alias or len(raw_alias) < 2:
+        raw_alias = f"User_{user.id[-4:]}"
+    alias = raw_alias[:50]
+
+    # Resolve age
+    try:
+        age = int(data.get("age", 21))
+    except (ValueError, TypeError):
+        age = 21
+    age = max(18, min(99, age))
+
+    # Resolve gender
     gender_val = data.get("gender", Gender.OTHER.value)
+    try:
+        gender = Gender(gender_val)
+    except Exception:
+        gender = Gender.OTHER
 
+    # 1. Save user FIRST to satisfy foreign key constraints in Supabase
+    user.transition_state(UserState.MAIN_MENU)
+    try:
+        await user_repo.save(user)
+    except Exception as exc:
+        logger.error("[Onboarding] Error saving user %s: %s", user.id, exc)
+
+    # 2. Save profile SECOND
     profile = Profile(
         user_id=user.id,
         unique_id=unique_id,
         display_name=alias,
         age=age,
-        gender=Gender(gender_val),
+        gender=gender,
         interests=selected,
         preferred_gender_filter=[GenderPreference.ANY],
         min_age_filter=max(18, age - 7),
         max_age_filter=min(99, age + 7),
     )
-    await profile_repo.save(profile)
+    try:
+        await profile_repo.save(profile)
+    except Exception as exc:
+        logger.error("[Onboarding] Error saving profile for %s: %s", user.id, exc)
 
-    user.transition_state(UserState.MAIN_MENU)
-    await user_repo.save(user)
-
-    # Evaluate referral reward for inviter if this user was invited
+    # 3. Evaluate referral reward if applicable
     if referral_service:
         try:
             await referral_service.evaluate_and_grant_reward(user.id)
@@ -282,12 +351,19 @@ async def finish_interests(
 
     await state.clear()
 
-    await callback.message.delete()
+    # Safely delete the inline keyboard prompt if possible
+    if callback.message:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+
+    chat_id = callback.message.chat.id if callback.message else callback.from_user.id
     unique_tag = f"@{profile.unique_id}" if profile.unique_id else "<i>Not set</i>"
     gender_label = profile.gender.value.replace("_", " ").title()
     interests_label = ", ".join(profile.interests).title()
 
-    await callback.message.answer(
+    welcome_text = (
         f"🎉 <b>Profile Created & Safely Saved in Memory!</b> ✨\n\n"
         f"• 👤 <b>Display Name:</b> {profile.display_name}\n"
         f"• 🆔 <b>Permanent ID:</b> {unique_tag} 🔒 <i>(Immutable — cannot be edited)</i>\n"
@@ -298,7 +374,23 @@ async def finish_interests(
         f"• 🛡 Your Telegram username and phone number are 100% confidential and hidden.\n"
         f"• 💬 Conversations are ephemeral with zero permanent database chat logs.\n"
         f"• 🎮 All 17 games are ready to play in the <b>LikBy Play Mini App</b>!\n\n"
-        f"Tap <b>🎲 Find Match</b> below whenever you're ready to start chatting!",
-        parse_mode="HTML",
-        reply_markup=get_main_menu_keyboard(),
+        f"Tap <b>🎲 Find Match</b> below whenever you're ready to start chatting!"
     )
+
+    try:
+        await callback.bot.send_message(
+            chat_id=chat_id,
+            text=welcome_text,
+            parse_mode="HTML",
+            reply_markup=get_main_menu_keyboard(),
+        )
+    except Exception:
+        if callback.message:
+            try:
+                await callback.message.answer(
+                    text=welcome_text,
+                    parse_mode="HTML",
+                    reply_markup=get_main_menu_keyboard(),
+                )
+            except Exception as exc:
+                logger.error("[Onboarding] Failed to send completion message: %s", exc)

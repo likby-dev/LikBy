@@ -117,3 +117,24 @@ def test_subscription_keyboard_has_back_to_profile_hub():
     assert "sub:buy:SPARK" in callbacks
     assert "sub:buy:PREMIUM" in callbacks
     assert "sub:buy:DIAMOND" in callbacks
+
+
+def test_interests_keyboard_five_selected_and_markup_extraction():
+    """Validates that selecting 5 interests creates Done (5 Selected) and can be extracted."""
+    from aiogram.types import Message
+    from likby.telegram.keyboards import get_interests_keyboard
+    from likby.telegram.handlers.onboarding import extract_selected_interests_from_markup
+
+    selected_5 = ["coffee", "gaming", "tech", "music", "books"]
+    kb = get_interests_keyboard(selected=selected_5)
+
+    # Validate Done button text and callback
+    done_btn = kb.inline_keyboard[-1][0]
+    assert done_btn.text == "✅ Done (5 Selected)"
+    assert done_btn.callback_data == "interest_done"
+
+    # Create dummy message with this markup and test extraction
+    msg = Message.model_construct(reply_markup=kb)
+    extracted = extract_selected_interests_from_markup(msg)
+    assert set(extracted) == set(selected_5)
+    assert len(extracted) == 5
