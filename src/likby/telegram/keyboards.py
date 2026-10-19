@@ -167,7 +167,7 @@ def get_chat_hub_keyboard(
         )
     play_btn = (
         InlineKeyboardButton(text="🚀 LikBy Play (App)", web_app=WebAppInfo(url=mini_app_url))
-        if mini_app_url
+        if mini_app_url and mini_app_url.startswith("https://")
         else InlineKeyboardButton(text="🎮 LikBy Play", callback_data="play:hub")
     )
     return InlineKeyboardMarkup(
@@ -176,8 +176,11 @@ def get_chat_hub_keyboard(
                 InlineKeyboardButton(text="🎲 Find a Match Now", callback_data="queue:find_new"),
             ],
             [
-                InlineKeyboardButton(text="👥 My Friends", callback_data="conn:friends"),
+                InlineKeyboardButton(text="🧩 Solo Games (6 Free Games)", callback_data="play:solo_info"),
                 play_btn,
+            ],
+            [
+                InlineKeyboardButton(text="👥 My Friends", callback_data="conn:friends"),
             ],
         ]
     )
@@ -377,6 +380,71 @@ def get_play_hub_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardM
         InlineKeyboardButton(text="💎 Upgrade Gaming Quota (VIP)", callback_data="sub:plans"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_solo_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
+    """
+    Dedicated interactive launcher keyboard for all 6 official LikBy Solo Games.
+    Provides direct 1-tap game launch via Telegram WebApp and interactive cards.
+    """
+    is_https = bool(mini_app_url and mini_app_url.startswith("https://"))
+
+    def _btn(label: str, game_id: str) -> InlineKeyboardButton:
+        if is_https:
+            clean_base = mini_app_url.split("?")[0].rstrip("/")
+            game_url = f"{clean_base}?game={game_id}"
+            return InlineKeyboardButton(text=label, web_app=WebAppInfo(url=game_url))
+        return InlineKeyboardButton(text=label, callback_data=f"play:solo_card:{game_id}")
+
+    rows = [
+        [
+            _btn("🧘 1. Zen Merge", "zen_merge"),
+            _btn("🔤 2. Word Hunt", "word_hunt"),
+        ],
+        [
+            _btn("🎨 3. Color Flow", "color_flow"),
+            _btn("⛳️ 4. Pocket Golf", "pocket_golf"),
+        ],
+        [
+            _btn("⚡️ 5. Reflex Lab", "reflex_lab"),
+            _btn("🔍 6. Daily Mystery", "daily_mystery"),
+        ],
+    ]
+
+    if is_https:
+        clean_base = mini_app_url.split("?")[0].rstrip("/")
+        solo_hub_url = f"{clean_base}?mode=solo"
+        rows.append([
+            InlineKeyboardButton(
+                text="🚀 Open Solo Arcade in LikBy Play",
+                web_app=WebAppInfo(url=solo_hub_url),
+            )
+        ])
+
+    rows.append([
+        InlineKeyboardButton(text="⚔️ 2-Player Duels", callback_data="play:duels"),
+        InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_solo_game_card_keyboard(game_id: str, mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
+    """Action keyboard for a specific solo game card."""
+    rows = []
+    if mini_app_url and mini_app_url.startswith("https://"):
+        clean_base = mini_app_url.split("?")[0].rstrip("/")
+        game_url = f"{clean_base}?game={game_id}"
+        rows.append([
+            InlineKeyboardButton(text="🚀 Play in LikBy Play (Mini App)", web_app=WebAppInfo(url=game_url))
+        ])
+
+    rows.append([
+        InlineKeyboardButton(text="🧩 All 6 Solo Games", callback_data="play:solo_info"),
+        InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
 
 
 def get_chat_duel_invite_keyboard(duel_url: str) -> InlineKeyboardMarkup:

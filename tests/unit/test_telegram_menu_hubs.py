@@ -219,3 +219,84 @@ async def test_finish_interests_handler_creates_user_and_sends_welcome():
 
     await conn.close()
 
+
+def test_solo_games_keyboards_https_and_fallback():
+    """Validates that solo games keyboard uses WebApp when https is available, and fallback otherwise."""
+    from likby.telegram.keyboards import get_solo_games_keyboard, get_solo_game_card_keyboard
+
+    # Local / non-https -> fallback to callback_data
+    kb_local = get_solo_games_keyboard("http://localhost:8000/play/")
+    for row in kb_local.inline_keyboard[:3]:
+        for btn in row:
+            assert btn.callback_data.startswith("play:solo_card:")
+            assert btn.web_app is None
+
+    # Production https -> direct 1-tap WebApp
+    kb_prod = get_solo_games_keyboard("https://likby-dev.onrender.com/play/")
+    for row in kb_prod.inline_keyboard[:3]:
+        for btn in row:
+            assert btn.web_app is not None
+            assert "game=" in btn.web_app.url
+
+    card_kb = get_solo_game_card_keyboard("zen_merge", "https://likby-dev.onrender.com/play/")
+    assert card_kb.inline_keyboard[0][0].web_app is not None
+    assert "game=zen_merge" in card_kb.inline_keyboard[0][0].web_app.url
+
+
+@pytest.mark.asyncio
+async def test_solo_number_shortcut_typing_one_when_idle():
+    """Validates that typing '1' outside an active session displays the Zen Merge game card."""
+    from unittest.mock import AsyncMock, MagicMock
+    from aiogram.types import Message, User
+    from likby.telegram.handlers.play import handle_solo_number_shortcut
+
+    msg = MagicMock(spec=Message)
+    msg.text = "1"
+    msg.from_user = User(id=99999, is_bot=False, first_name="Jasvanth")
+    msg.answer = AsyncMock()
+
+    relay_mock = MagicMock()
+    relay_mock.get_or_warm_session = AsyncMock(return_value=None)
+
+    await handle_solo_number_shortcut(msg, chat_relay=relay_mock)
+
+    msg.answer.assert_called_once()
+    call_args = msg.answer.call_args[0]
+    assert "Zen Merge" in call_args[0]
+    assert "Solo Game #1" in call_args[0]
+
+
+@pytest.mark.asyncio
+async def test_chat_message_unrelayed_solo_shortcut_and_idle_help():
+    """Validates that unrelayed chat messages cleanly launch solo games or give friendly idle guidance."""
+    from unittest.mock import AsyncMock, MagicMock
+    from aiogram.types import Message, User
+    from likby.telegram.handlers.chat import handle_chat_message
+
+    user_repo_mock = MagicMock()
+    chat_relay_mock = MagicMock()
+    chat_relay_mock.relay_text = AsyncMock(return_value=False)
+
+    # 1. User types '1' when not in active chat
+    msg1 = MagicMock(spec=Message)
+    msg1.text = "1"
+    msg1.from_user = User(id=88888, is_bot=False, first_name="Alex")
+    msg1.answer = AsyncMock()
+
+    await handle_chat_message(msg1, user_repo=user_repo_mock, chat_relay=chat_relay_mock)
+    msg1.answer.assert_called_once()
+    assert "Zen Merge" in msg1.answer.call_args[0][0]
+
+    # 2. User types normal text 'hello' when not in active chat
+    msg2 = MagicMock(spec=Message)
+    msg2.text = "hello"
+    msg2.from_user = User(id=88888, is_bot=False, first_name="Alex")
+    msg2.answer = AsyncMock()
+
+    await handle_chat_message(msg2, user_repo=user_repo_mock, chat_relay=chat_relay_mock)
+    msg2.answer.assert_called_once()
+    text_sent = msg2.answer.call_args[0][0]
+    assert "You are not currently in an active chat session" in text_sent
+    assert "6 Free Solo Games" in text_sent
+
+

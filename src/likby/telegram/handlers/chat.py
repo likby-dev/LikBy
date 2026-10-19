@@ -12,16 +12,25 @@ from likby.repositories.interfaces import (
     ProfileRepository,
     UserRepository,
 )
+from likby.config import get_settings
 from likby.services.chat_relay_service import ChatRelayService
 from likby.services.karma_service import KarmaService
 from likby.services.matchmaking_service import MatchmakingService
 from likby.services.media_quota_service import MediaQuotaService
 from likby.services.social_service import SocialService
 from likby.services.transcript_service import TranscriptService
+from likby.telegram.handlers.play import (
+    SOLO_GAMES_DETAILS,
+    SOLO_NUM_MAP,
+    format_solo_card,
+)
 from likby.telegram.keyboards import (
     get_active_chat_keyboard,
+    get_chat_hub_keyboard,
     get_main_menu_keyboard,
     get_post_session_keyboard,
+    get_solo_game_card_keyboard,
+    get_solo_games_keyboard,
 )
 
 router = Router(name="chat")
@@ -282,10 +291,48 @@ async def handle_chat_message(
 
     relayed = await chat_relay.relay_text(sender_tg_id=tg_id, text=text)
     if not relayed:
+        clean_text = text.strip().lower()
+        if clean_text in SOLO_NUM_MAP:
+            game_id = SOLO_NUM_MAP[clean_text]
+            info = SOLO_GAMES_DETAILS.get(game_id)
+            if info:
+                settings = get_settings()
+                mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+                card_text = format_solo_card(info, mini_app_url)
+                kb = get_solo_game_card_keyboard(game_id, mini_app_url)
+                await message.answer(card_text, parse_mode="HTML", reply_markup=kb)
+                return
+
+        if clean_text in ["solo", "play", "games", "game", "arcade", "solo games"]:
+            settings = get_settings()
+            mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+            solo_text = (
+                "🧩 <b>LikBy Play — 6 Solo Experiences</b>\n\n"
+                "✨ <b>100% Free & Unlimited for all tiers!</b>\n"
+                "<i>Solo games never consume duel quota and do NOT require an active chat session.</i>\n\n"
+                "1. 🧘 <b>Zen Merge (2048)</b> — <i>Sliding tile puzzle (Goal: 2048)</i>\n"
+                "2. 🔤 <b>Word Hunt</b> — <i>5x5 matrix vocabulary search</i>\n"
+                "3. 🎨 <b>Color Flow</b> — <i>Connect matching neon paths</i>\n"
+                "4. ⛳️ <b>Pocket Golf</b> — <i>Precision slingshot mini-golf</i>\n"
+                "5. ⚡️ <b>Reflex Lab</b> — <i>Sub-200ms neuro speed test</i>\n"
+                "6. 🔍 <b>Daily Mystery</b> — <i>Cryptic lateral riddles & secrets</i>\n\n"
+                "👉 <b>Tap any game button below or type its number (1-6) to play instantly!</b>"
+            )
+            await message.answer(solo_text, parse_mode="HTML", reply_markup=get_solo_games_keyboard(mini_app_url))
+            return
+
+        settings = get_settings()
+        mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+        idle_prompt = (
+            "💬 <b>You are not currently in an active chat session.</b>\n\n"
+            "• Tap <b>🎲 Find Match</b> below to connect with a conversation partner.\n"
+            "• Or play our <b>6 Free Solo Games</b> anytime with zero wait:\n"
+            "  Type <b>1 to 6</b> (e.g. <code>1</code> for Zen Merge, <code>4</code> for Pocket Golf) or tap <b>🧩 Solo Games</b> below!"
+        )
         await message.answer(
-            "You are not currently in an active chat.\nTap <b>🎲 Find Match</b> to connect!",
+            idle_prompt,
             parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
+            reply_markup=get_chat_hub_keyboard(is_active=False, mini_app_url=mini_app_url),
         )
 
 

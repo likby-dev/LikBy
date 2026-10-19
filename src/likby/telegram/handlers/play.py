@@ -4,7 +4,7 @@ Telegram Bot interface and entry points for LikBy Play gaming ecosystem.
 Handles /play, /games, /duels, /solo, /mygames commands and interactive game menus.
 """
 
-from typing import Optional
+from typing import Any, Optional
 from aiogram import F, Router
 from aiogram.filters import Command
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
@@ -15,7 +15,11 @@ from likby.domain.enums import GameMode, SubscriptionTier
 from likby.repositories.interfaces import UserRepository
 from likby.services.gaming_entitlement_service import GamingEntitlementService
 from likby.services.play_game_service import PlayGameService
-from likby.telegram.keyboards import get_play_hub_keyboard
+from likby.telegram.keyboards import (
+    get_play_hub_keyboard,
+    get_solo_games_keyboard,
+    get_solo_game_card_keyboard,
+)
 
 router = Router(name="play")
 
@@ -110,33 +114,238 @@ async def show_duels(
             await event.message.edit_text(duel_text, parse_mode="HTML", reply_markup=get_play_hub_keyboard(mini_app_url))
 
 
+SOLO_GAMES_DETAILS = {
+    "zen_merge": {
+        "num": 1,
+        "name": "Zen Merge (2048)",
+        "emoji": "🧘",
+        "category": "Sliding Number Puzzle",
+        "duration": "3-5 mins",
+        "desc": (
+            "Immerse yourself in a soothing yet challenging logic puzzle. "
+            "Slide numbered tiles across a sleek 4x4 matrix, merging matching numbers to double their value (2+2=4, 4+4=8... 1024+1024=2048). "
+            "Features silky smooth sliding animations, haptics, and relaxing ambient audio harmonics."
+        ),
+        "rules": [
+            "Swipe or tap directions (Up, Down, Left, Right) to glide all tiles.",
+            "Identical adjacent tiles merge on impact.",
+            "Keep the matrix clear and aim for the legendary 2048 tile!",
+        ],
+        "reward": "Earn up to +15 Karma score for reaching 1024 / 2048 milestones!",
+    },
+    "word_hunt": {
+        "num": 2,
+        "name": "Word Hunt",
+        "emoji": "🔤",
+        "category": "Lexicon Matrix Search",
+        "duration": "2-4 mins",
+        "desc": (
+            "Sharpen your vocabulary and lateral acuity! "
+            "Scour a 5x5 matrix of acrylic letter tiles for hidden high-scoring words hidden across rows, columns, and diagonal angles."
+        ),
+        "rules": [
+            "Spot valid English words formed in the matrix.",
+            "Tap the letters in sequence to build your word.",
+            "Press Claim to bank points and reveal hidden bonus keywords!",
+        ],
+        "reward": "Complete a 5-word matrix for +5 Karma score!",
+    },
+    "color_flow": {
+        "num": 3,
+        "name": "Color Flow",
+        "emoji": "🎨",
+        "category": "Topological Path Puzzle",
+        "duration": "2-3 mins",
+        "desc": (
+            "A mesmerizing test of spatial logic and fluid dynamics. "
+            "Connect pairs of matching glowing neon color dots by drawing continuous conduits across the board without overlapping paths."
+        ),
+        "rules": [
+            "Drag lines to connect matching color pairs (Cyan, Pink, Amber).",
+            "Fill all tiles on the board with flowing color lines.",
+            "Paths must never intersect or break connection.",
+        ],
+        "reward": "100% flow coverage awards Color Master achievement!",
+    },
+    "pocket_golf": {
+        "num": 4,
+        "name": "Pocket Golf",
+        "emoji": "⛳️",
+        "category": "Precision Physics Minigolf",
+        "duration": "2-3 mins",
+        "desc": (
+            "Step up to the miniature links! Gauge speed, friction, angles, and sand traps "
+            "to guide your golf ball around tricky obstacles and sink it in the cup with minimal strokes."
+        ),
+        "rules": [
+            "Choose between precision Tap Putt or high-power Long Drive.",
+            "Evade sand bunkers and water hazards that slow down your ball.",
+            "Sink the ball into the cup under par for maximum score!",
+        ],
+        "reward": "Hole-in-one grants +10 Karma and Ace Golfer title!",
+    },
+    "reflex_lab": {
+        "num": 5,
+        "name": "Reflex Lab",
+        "emoji": "⚡️",
+        "category": "Neuro Speed Trainer",
+        "duration": "1-2 mins",
+        "desc": (
+            "A fast-paced neuro-speed trainer! Kinetic glowing neon orbs appear at random intervals. "
+            "Tap as quickly as possible upon appearance to log your millisecond reaction speed."
+        ),
+        "rules": [
+            "Focus your vision on the matrix.",
+            "As soon as the kinetic neon orb flashes, tap it instantly!",
+            "Multiple rounds track your consistency and personal record.",
+        ],
+        "reward": "Sub-200ms reaction times award Elite Reflex badge!",
+    },
+    "daily_mystery": {
+        "num": 6,
+        "name": "Daily Mystery",
+        "emoji": "🔍",
+        "category": "Cryptic Deduction Riddle",
+        "duration": "2-5 mins",
+        "desc": (
+            "A daily dose of lateral thinking and cryptic mystery! "
+            "Read the daily encrypted clue, deduce the hidden solution, and enter your answer to unlock the mystery safe."
+        ),
+        "rules": [
+            "Read today's featured cryptic riddle.",
+            "Connect the hidden clues to deduce the answer.",
+            "Type your guess directly in chat or unlock inside LikBy Play!",
+        ],
+        "reward": "Daily correct solve awards +10 Karma standing!",
+    },
+}
+
+SOLO_NUM_MAP = {
+    "1": "zen_merge",
+    "2": "word_hunt",
+    "3": "color_flow",
+    "4": "pocket_golf",
+    "5": "reflex_lab",
+    "6": "daily_mystery",
+    "zen": "zen_merge",
+    "zen merge": "zen_merge",
+    "2048": "zen_merge",
+    "word": "word_hunt",
+    "word hunt": "word_hunt",
+    "color": "color_flow",
+    "color flow": "color_flow",
+    "golf": "pocket_golf",
+    "pocket golf": "pocket_golf",
+    "reflex": "reflex_lab",
+    "reflex lab": "reflex_lab",
+    "mystery": "daily_mystery",
+    "daily mystery": "daily_mystery",
+}
+
+
+def format_solo_card(info: dict, mini_app_url: str) -> str:
+    rules_text = "\n".join(f"• {r}" for r in info["rules"])
+    return (
+        f"{info['emoji']} <b>{info['name']} — Solo Game #{info['num']}</b> ✨\n\n"
+        f"🌟 <b>Genre:</b> {info['category']}\n"
+        f"⏱ <b>Duration:</b> {info['duration']} (Play anytime solo!)\n"
+        f"🎯 <b>Status:</b> <code>100% Free & Unlimited (Zero session needed)</code>\n\n"
+        f"📖 <b>About the Game:</b>\n"
+        f"{info['desc']}\n\n"
+        f"🎮 <b>How to Play:</b>\n"
+        f"{rules_text}\n\n"
+        f"🏆 <b>Rewards:</b> {info['reward']}\n\n"
+        f"👉 <i>Tap <b>🚀 Play Now</b> below to launch directly in LikBy Play!</i>"
+    )
+
+
 @router.message(Command("solo"))
 @router.callback_query(F.data.in_(["play:solo", "play:solo_info", "solo:hub"]))
 async def show_solo(
     event: Message | CallbackQuery,
 ) -> None:
-    """Displays the 6 solo games with unlimited access and direct Mini App launch."""
+    """Displays the 6 solo games with unlimited access and dedicated launcher buttons."""
     settings = get_settings()
     mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
 
-    solos = [g for g in GAME_CATALOGUE.values() if g.mode == GameMode.SOLO]
-    solo_list_lines = []
-    for idx, s in enumerate(solos, 1):
-        solo_list_lines.append(f"{idx}. <b>{s.name}</b> — <i>{s.description}</i> ({s.typical_duration})")
-
     solo_text = (
         "🧩 <b>LikBy Play — 6 Solo Experiences</b>\n\n"
-        "✨ <b>Unlimited for all tiers!</b> Solo games do not consume duel credits.\n\n"
-        + "\n\n".join(solo_list_lines)
-        + "\n\n<i>Play anytime in the LikBy Play Mini App while waiting or relaxing solo!</i>"
+        "✨ <b>100% Free & Unlimited for all tiers!</b>\n"
+        "<i>Solo games never consume duel quota and do NOT require an active chat session.</i>\n\n"
+        "1. 🧘 <b>Zen Merge (2048)</b> — <i>Sliding tile puzzle (Goal: 2048)</i>\n"
+        "2. 🔤 <b>Word Hunt</b> — <i>5x5 matrix vocabulary search</i>\n"
+        "3. 🎨 <b>Color Flow</b> — <i>Connect matching neon paths</i>\n"
+        "4. ⛳️ <b>Pocket Golf</b> — <i>Precision slingshot mini-golf</i>\n"
+        "5. ⚡️ <b>Reflex Lab</b> — <i>Sub-200ms neuro speed test</i>\n"
+        "6. 🔍 <b>Daily Mystery</b> — <i>Cryptic lateral riddles & secrets</i>\n\n"
+        "👉 <b>Tap any game button below or type its number (1-6) to play instantly!</b>"
     )
 
+    kb = get_solo_games_keyboard(mini_app_url)
     if isinstance(event, Message):
-        await event.answer(solo_text, parse_mode="HTML", reply_markup=get_play_hub_keyboard(mini_app_url))
+        await event.answer(solo_text, parse_mode="HTML", reply_markup=kb)
     else:
         await event.answer()
         if event.message:
-            await event.message.edit_text(solo_text, parse_mode="HTML", reply_markup=get_play_hub_keyboard(mini_app_url))
+            await event.message.edit_text(solo_text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("play:solo_card:"))
+async def solo_game_card_callback(
+    callback: CallbackQuery,
+) -> None:
+    """Renders the detailed game card for a specific solo game."""
+    if not callback.data:
+        return
+    game_id = callback.data.split("play:solo_card:")[1]
+    info = SOLO_GAMES_DETAILS.get(game_id)
+    if not info:
+        await callback.answer("Game not found", show_alert=True)
+        return
+    await callback.answer()
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+    text = format_solo_card(info, mini_app_url)
+    kb = get_solo_game_card_keyboard(game_id, mini_app_url)
+    if callback.message:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+
+
+async def not_in_active_session_filter(message: Message, chat_relay: Optional[Any] = None) -> bool:
+    """Filter that matches ONLY when the user is NOT in an active conversation session."""
+    if not message.from_user:
+        return False
+    if not chat_relay:
+        return True
+    try:
+        active_session = await chat_relay.get_or_warm_session(message.from_user.id)
+        return active_session is None
+    except Exception:
+        return True
+
+
+@router.message(F.text.in_(["1", "2", "3", "4", "5", "6"]), not_in_active_session_filter)
+@router.message(F.text.lower().in_(list(SOLO_NUM_MAP.keys())), not_in_active_session_filter)
+async def handle_solo_number_shortcut(
+    message: Message,
+    chat_relay: Optional[Any] = None,
+) -> None:
+    """Instantly launches or shows the solo game card when typing 1-6 or game name outside chat."""
+    text_clean = (message.text or "").strip().lower()
+    game_id = SOLO_NUM_MAP.get(text_clean)
+    if not game_id:
+        return
+
+    info = SOLO_GAMES_DETAILS.get(game_id)
+    if not info:
+        return
+
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+    text = format_solo_card(info, mini_app_url)
+    kb = get_solo_game_card_keyboard(game_id, mini_app_url)
+    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
 
 
 @router.callback_query(F.data == "play:catalogue")

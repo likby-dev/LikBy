@@ -296,6 +296,9 @@
     if (reqMode === "duel") {
       currentFilter = "duel";
       document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.filter === "duel"));
+    } else if (reqMode === "solo") {
+      currentFilter = "solo";
+      document.querySelectorAll(".tab-btn").forEach((b) => b.classList.toggle("active", b.dataset.filter === "solo"));
     }
 
     renderGameGrid();
