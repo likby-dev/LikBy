@@ -40,7 +40,19 @@ def test_invalid_base_url_raises_error():
 def test_render_host_auto_prefixes_https():
     settings = Settings(
         bot_token=SecretStr("123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"),
-        base_url="likby-app.onrender.com",
+        base_url="likby.onrender.com",
     )
-    assert settings.base_url == "https://likby-app.onrender.com"
+    assert settings.base_url == "https://likby.onrender.com"
+
+
+def test_mini_app_url_auto_healing_and_effective_url():
+    settings = Settings(
+        bot_token=SecretStr("123456789:ABCdefGhIJKlmNoPQRsTUVwxyZ"),
+        base_url="https://likby.onrender.com",
+        telegram_mini_app_url="https://likby-app.onrender.com/play",
+    )
+    # Heals likby-app.onrender.com to authoritative likby.onrender.com
+    assert settings.telegram_mini_app_url == "https://likby.onrender.com/play"
+    assert settings.effective_mini_app_url == "https://likby.onrender.com/play/"
+
 

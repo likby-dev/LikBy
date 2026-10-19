@@ -14,6 +14,16 @@ from aiogram.types import (
 )
 
 
+def _normalize_mini_app_url(url: Optional[str]) -> Optional[str]:
+    """Ensures WebApp URLs point to active likby.onrender.com domain and heals legacy hostnames."""
+    if not url:
+        return None
+    url = url.strip()
+    if "likby-app.onrender.com" in url:
+        url = url.replace("likby-app.onrender.com", "likby.onrender.com")
+    return url
+
+
 def get_age_gate_keyboard() -> InlineKeyboardMarkup:
     """18+ age verification inline keyboard."""
     return InlineKeyboardMarkup(
@@ -147,6 +157,7 @@ def get_chat_hub_keyboard(
     mini_app_url: Optional[str] = None,
 ) -> InlineKeyboardMarkup:
     """Conversation Hub interactive controls."""
+    mini_app_url = _normalize_mini_app_url(mini_app_url)
     if is_active:
         play_btn = (
             InlineKeyboardButton(text="⚔️ Play Duel with Partner", web_app=WebAppInfo(url=mini_app_url))
@@ -286,6 +297,7 @@ def get_active_chat_keyboard() -> ReplyKeyboardMarkup:
 
 def get_queue_cancel_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """Inline keyboard shown while waiting in queue."""
+    mini_app_url = _normalize_mini_app_url(mini_app_url)
     play_btn = (
         InlineKeyboardButton(text="🚀 Play While Waiting (App)", web_app=WebAppInfo(url=mini_app_url))
         if mini_app_url
@@ -380,6 +392,7 @@ def get_solo_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboar
     Dedicated interactive launcher keyboard for all 6 official LikBy Solo Games.
     Provides direct 1-tap game launch via Telegram WebApp and interactive cards.
     """
+    mini_app_url = _normalize_mini_app_url(mini_app_url)
     is_https = bool(mini_app_url and mini_app_url.startswith("https://"))
 
     def _btn(label: str, game_id: str) -> InlineKeyboardButton:
@@ -424,6 +437,7 @@ def get_solo_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboar
 
 def get_solo_game_card_keyboard(game_id: str, mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """Action keyboard for a specific solo game card."""
+    mini_app_url = _normalize_mini_app_url(mini_app_url)
     rows = []
     if mini_app_url and mini_app_url.startswith("https://"):
         clean_base = mini_app_url.split("?")[0].rstrip("/")
@@ -444,6 +458,7 @@ def get_duel_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboar
     Dedicated interactive selector keyboard for all 11 official LikBy Multiplayer Duels.
     Provides clickable buttons for every single duel game with detail cards & instant launch.
     """
+    mini_app_url = _normalize_mini_app_url(mini_app_url)
     is_https = bool(mini_app_url and mini_app_url.startswith("https://"))
 
     def _btn(label: str, game_id: str) -> InlineKeyboardButton:
@@ -503,6 +518,7 @@ def get_duel_game_card_keyboard(
     in_active_session: bool = False,
 ) -> InlineKeyboardMarkup:
     """Action keyboard for a specific multiplayer duel game card."""
+    mini_app_url = _normalize_mini_app_url(mini_app_url)
     rows = []
     if mini_app_url and mini_app_url.startswith("https://"):
         clean_base = mini_app_url.split("?")[0].rstrip("/")
@@ -531,6 +547,7 @@ def get_duel_game_card_keyboard(
 
 def get_chat_duel_invite_keyboard(duel_url: str) -> InlineKeyboardMarkup:
     """Challenge active chat partner to live multiplayer duel in LikBy Play."""
+    duel_url = _normalize_mini_app_url(duel_url) or duel_url
     return InlineKeyboardMarkup(
         inline_keyboard=[
             [

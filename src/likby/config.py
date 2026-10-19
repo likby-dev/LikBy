@@ -133,18 +133,59 @@ class Settings(BaseSettings):
     def validate_base_url(cls, v: str) -> str:
         import os
         render_url = os.environ.get("RENDER_EXTERNAL_URL")
-        if render_url and ("localhost" in v or "127.0.0.1" in v):
-            return render_url.strip().rstrip("/")
         render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
-        if render_host and ("localhost" in v or "127.0.0.1" in v):
-            return f"https://{render_host.strip()}".rstrip("/")
+        actual_base = render_url or (f"https://{render_host}" if render_host else None)
+
+        if actual_base and ("localhost" in v or "127.0.0.1" in v or "likby-app.onrender.com" in v):
+            return actual_base.strip().rstrip("/")
+
         v = v.strip().rstrip("/")
+        if "likby-app.onrender.com" in v:
+            if actual_base:
+                return actual_base.strip().rstrip("/")
+            v = v.replace("likby-app.onrender.com", "likby.onrender.com")
+
         if "://" in v:
             if not (v.startswith("http://") or v.startswith("https://")):
                 raise ValueError("BASE_URL must be a valid HTTP or HTTPS URL.")
         else:
             v = f"https://{v}"
         return v
+
+    @field_validator("telegram_mini_app_url")
+    @classmethod
+    def validate_telegram_mini_app_url(cls, v: Optional[str]) -> Optional[str]:
+        import os
+        render_url = os.environ.get("RENDER_EXTERNAL_URL")
+        render_host = os.environ.get("RENDER_EXTERNAL_HOSTNAME")
+        actual_base = render_url or (f"https://{render_host}" if render_host else None)
+
+        if not v:
+            if actual_base:
+                return f"{actual_base.strip().rstrip('/')}/play"
+            return v
+
+        v = v.strip().rstrip("/")
+        # Fix legacy or incorrect service name 'likby-app.onrender.com'
+        if "likby-app.onrender.com" in v:
+            if actual_base:
+                return f"{actual_base.strip().rstrip('/')}/play"
+            v = v.replace("likby-app.onrender.com", "likby.onrender.com")
+
+        if actual_base and "onrender.com" in v and "localhost" not in actual_base:
+            return f"{actual_base.strip().rstrip('/')}/play"
+
+        return v
+
+    @property
+    def effective_mini_app_url(self) -> str:
+        """Returns the canonical public Mini App URL guaranteed to have a trailing slash."""
+        url = self.telegram_mini_app_url or f"{self.base_url.rstrip('/')}/play/"
+        if "likby-app.onrender.com" in url:
+            url = url.replace("likby-app.onrender.com", "likby.onrender.com")
+        if not url.endswith("/"):
+            url += "/"
+        return url
 
 
 @lru_cache

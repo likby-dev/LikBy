@@ -38,7 +38,7 @@ services:
           name: likby-app
           property: host
       - key: TELEGRAM_MINI_APP_URL
-        value: https://likby-app.onrender.com/play
+        value: https://likby.onrender.com/play
       - key: DATABASE_BACKEND
         value: postgres
       - key: SUPABASE_DB_URL
