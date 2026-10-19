@@ -101,13 +101,21 @@ def test_play_and_solo_hub_keyboards_clean_routing():
     assert "solo:gem:new" in solo_callbacks
     assert "solo:rps:new" in solo_callbacks
 
-    play_kb = get_play_hub_keyboard()
+    play_kb = get_play_hub_keyboard("https://likby-dev.onrender.com/play/")
     play_callbacks = [btn.callback_data for row in play_kb.inline_keyboard for btn in row]
     assert "play:duels" in play_callbacks
     assert "play:solo_info" in play_callbacks
     assert "play:catalogue" in play_callbacks
     assert "play:progress" in play_callbacks
     assert "sub:plans" in play_callbacks
+
+    # Verify no open mini button at top, and no count numbers in any button labels
+    all_texts = [btn.text for row in play_kb.inline_keyboard for btn in row]
+    assert not any("Open LikBy Play" in t for t in all_texts)
+    assert not any("(11 Games)" in t or "(6 Games)" in t or "17 Games" in t for t in all_texts)
+    assert "⚔️ 2-Player Duels" in all_texts
+    assert "🧩 Solo Games" in all_texts
+    assert "✨ Games Catalog & Rules" in all_texts
 
 
 def test_subscription_keyboard_has_back_to_profile_hub():
@@ -297,8 +305,7 @@ async def test_chat_message_unrelayed_solo_shortcut_and_idle_help():
     msg2.answer.assert_called_once()
     text_sent = msg2.answer.call_args[0][0]
     assert "You are not currently in an active chat session" in text_sent
-    assert "You are not currently in an active chat session" in text_sent
-    assert "6 Free Solo Games" in text_sent
+    assert "Free Solo Games" in text_sent
 
 
 def test_duel_games_keyboards_all_eleven_buttons():

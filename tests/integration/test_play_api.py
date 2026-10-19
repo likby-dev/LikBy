@@ -271,6 +271,14 @@ def test_static_play_app_served():
         assert "LikBy Play" in resp.text
         assert "Every connection has a game." in resp.text
 
+        # Verify no hardcoded game counts in tab-bar buttons
+        assert 'data-filter="all">All Games</button>' in resp.text
+        assert 'data-filter="duel">⚔️ Duels</button>' in resp.text
+        assert 'data-filter="solo">🕹 Solo</button>' in resp.text
+        assert "All Games (17)" not in resp.text
+        assert "Duels (11)" not in resp.text
+        assert "Solo (6)" not in resp.text
+
         # 2. CSS
         css_resp = client.get("/play/styles.css")
         assert css_resp.status_code == 200
@@ -280,4 +288,131 @@ def test_static_play_app_served():
         js_resp = client.get("/play/app.js")
         assert js_resp.status_code == 200
         assert "LIKBY PLAY" in js_resp.text
+
+
+def test_all_six_solo_games_api_lifecycle():
+    """Validates that all 6 solo mini games start cleanly and process gameplay actions."""
+    import uuid
+    solo_user_id = f"u_solo_all_{uuid.uuid4().hex[:6]}"
+    with TestClient(app) as client:
+        user_repo = app.state.user_repo
+        user = User(id=solo_user_id, telegram_id=int(f"55{uuid.uuid4().int % 100000}"))
+        asyncio.run(user_repo.save(user))
+
+        solo_games_actions = {
+            "zen_merge": ("slide", {"direction": "left"}),
+            "word_hunt": ("find_word", lambda s: {"word": s["target_words"][0]}),
+            "color_flow": ("connect_color", lambda s: {"color": list(s["endpoints"].keys())[0]}),
+            "pocket_golf": ("putt", {"angle": 45.0, "power": 80.0}),
+            "reflex_lab": ("submit_step", lambda s: {"step": s["target_sequence"][0]}),
+            "daily_mystery": ("solve", {"assignment": {"Maya": "Clock", "Aarav": "Compass", "Rohan": "Music Box"}}),
+        }
+
+        for game_id, (action_type, payload_gen) in solo_games_actions.items():
+            # 1. Start solo game
+            resp_start = client.post(
+                f"/api/v1/play/solo/{game_id}/start",
+                headers={"X-User-Id": solo_user_id},
+            )
+            assert resp_start.status_code == 200, f"Failed starting solo game {game_id}: {resp_start.text}"
+            data = resp_start.json()
+            session_id = data["session_id"]
+            assert data["game_id"] == game_id
+            init_state = data["initial_state"]
+            assert init_state is not None
+
+            # 2. Query state
+            resp_state = client.get(
+                f"/api/v1/play/duels/{session_id}/state",
+                headers={"X-User-Id": solo_user_id},
+            )
+            assert resp_state.status_code == 200
+            current_state = resp_state.json()["game_state"]
+
+            # 3. Execute legal action
+            payload = payload_gen(current_state) if callable(payload_gen) else payload_gen
+            if game_id == "zen_merge":
+                # For 2048, try directions until valid slide
+                for direction in ("left", "right", "up", "down"):
+                    resp_act = client.post(
+                        f"/api/v1/play/duels/{session_id}/action",
+                        headers={"X-User-Id": solo_user_id},
+                        json={"action_type": action_type, "payload": {"direction": direction}},
+                    )
+                    if resp_act.status_code == 200:
+                        break
+                assert resp_act.status_code == 200
+            else:
+                resp_act = client.post(
+                    f"/api/v1/play/duels/{session_id}/action",
+                    headers={"X-User-Id": solo_user_id},
+                    json={"action_type": action_type, "payload": payload},
+                )
+                assert resp_act.status_code == 200, f"Action failed for {game_id}: {resp_act.text}"
+
+
+def test_all_eleven_duel_games_api_lifecycle():
+    """Validates that all 11 multiplayer duel games can be invited, accepted, and played."""
+    import uuid
+
+    with TestClient(app) as client:
+        user_repo = app.state.user_repo
+
+        duel_actions = {
+            "connect_four": ("drop_piece", {"column": 3}),
+            "carrom_clash": ("strike", {"angle": 45.0, "power": 80.0}),
+            "air_rush": ("move_paddle", {"x": 120.0, "y": 300.0}),
+            "pocket_pool": ("strike_cue_ball", {"angle": 30.0, "power": 60.0}),
+            "stick_arena": ("move", {"x": 180.0, "is_jumping": True}),
+            "quickdraw": ("add_stroke", {"stroke": [{"x": 10, "y": 20}, {"x": 30, "y": 40}]}),
+            "word_rush": ("submit_word", {"word": "fast"}),
+            "brain_blitz": ("answer_question", {"option_index": 0}),
+            "reflex_rush": ("tap", lambda s: {"client_timestamp_ms": s["cue_time_ms"] + 200}),
+            "mindmatch": ("select_option", {"choice": "a"}),
+            "mystery_mission": ("submit_solution", {"answer": "12"}),
+        }
+
+        for game_id, (action_type, payload_gen) in duel_actions.items():
+            # Create fresh pair of users for each game to ensure isolated quota and clean state
+            uid_a = f"u_da_{game_id[:4]}_{uuid.uuid4().hex[:4]}"
+            uid_b = f"u_db_{game_id[:4]}_{uuid.uuid4().hex[:4]}"
+            user_a = User(id=uid_a, telegram_id=int(f"6{uuid.uuid4().int % 100000000}"))
+            user_b = User(id=uid_b, telegram_id=int(f"7{uuid.uuid4().int % 100000000}"))
+            asyncio.run(user_repo.save(user_a))
+            asyncio.run(user_repo.save(user_b))
+
+            # 1. Invite
+            resp_inv = client.post(
+                "/api/v1/play/duels/invite",
+                headers={"X-User-Id": uid_a},
+                json={"recipient_id": uid_b, "game_id": game_id},
+            )
+            assert resp_inv.status_code == 200, f"Invite failed for {game_id}: {resp_inv.text}"
+            inv_id = resp_inv.json()["invitation_id"]
+
+            # 2. Accept
+            resp_acc = client.post(
+                f"/api/v1/play/duels/invitations/{inv_id}/accept",
+                headers={"X-User-Id": uid_b},
+            )
+            assert resp_acc.status_code == 200, f"Accept failed for {game_id}: {resp_acc.text}"
+            session_id = resp_acc.json()["session_id"]
+
+            # 3. Fetch state
+            resp_state = client.get(
+                f"/api/v1/play/duels/{session_id}/state",
+                headers={"X-User-Id": uid_a},
+            )
+            assert resp_state.status_code == 200
+            current_state = resp_state.json()["game_state"]
+
+            # 4. Action
+            payload = payload_gen(current_state) if callable(payload_gen) else payload_gen
+            resp_act = client.post(
+                f"/api/v1/play/duels/{session_id}/action",
+                headers={"X-User-Id": uid_a},
+                json={"action_type": action_type, "payload": payload},
+            )
+            assert resp_act.status_code == 200, f"Action failed for duel {game_id}: {resp_act.text}"
+
 

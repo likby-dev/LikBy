@@ -37,9 +37,9 @@ async def open_arcade_menu(message: Message) -> None:
     mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
     await message.answer(
         "🚀 <b>LikBy Play Mini App</b>\n\n"
-        "All 17 high-octane multiplayer duels and relaxing solo puzzles are available directly in the <b>LikBy Play App</b>!\n\n"
-        "• ⚔️ <b>11 Multiplayer Duels:</b> Connect Four, Air Rush, Carrom Clash, Pocket Pool & more!\n"
-        "• 🧩 <b>6 Solo Games:</b> Zen Merge, Word Hunt, Color Flow, Pocket Golf & more!\n\n"
+        "Multiplayer duels and relaxing solo puzzles are available directly in the <b>LikBy Play App</b>!\n\n"
+        "• ⚔️ <b>Multiplayer Duels:</b> Connect Four, Air Rush, Carrom Clash, Pocket Pool & more!\n"
+        "• 🧩 <b>Solo Games:</b> Zen Merge, Word Hunt, Color Flow, Pocket Golf & more!\n\n"
         "<i>Tap below to launch LikBy Play:</i>",
         parse_mode="HTML",
         reply_markup=get_play_hub_keyboard(mini_app_url),
@@ -56,7 +56,7 @@ async def back_to_arcade_hub(callback: CallbackQuery) -> None:
     await safe_edit_text(
         callback.message,
         "🚀 <b>LikBy Play Mini App</b>\n\n"
-        "Explore all 17 multiplayer duels and solo games in our animated WebApp:",
+        "Explore multiplayer duels and solo games in our animated WebApp:",
         parse_mode="HTML",
         reply_markup=get_play_hub_keyboard(mini_app_url),
     )
@@ -84,8 +84,8 @@ async def start_new_trivia(callback: CallbackQuery) -> None:
         callback.message,
         "🚀 <b>LikBy Play Mini App</b>\n\n"
         "All casual puzzles, brainteasers, and multiplayer duels are available exclusively inside the <b>LikBy Play Mini App</b> with smooth animations and sound synthesis!\n\n"
-        "• 🧩 <b>6 Unlimited Solo Games:</b> Zen Merge, Word Hunt, Color Flow, Pocket Golf & more!\n"
-        "• ⚔️ <b>11 Multiplayer Duels:</b> Connect Four, Carrom Clash, Air Rush, Pocket Pool & more!\n\n"
+        "• 🧩 <b>Unlimited Solo Games:</b> Zen Merge, Word Hunt, Color Flow, Pocket Golf & more!\n"
+        "• ⚔️ <b>Multiplayer Duels:</b> Connect Four, Carrom Clash, Air Rush, Pocket Pool & more!\n\n"
         "<i>Tap below to launch LikBy Play:</i>",
         parse_mode="HTML",
         reply_markup=get_play_hub_keyboard(mini_app_url),

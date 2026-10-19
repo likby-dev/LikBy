@@ -323,7 +323,7 @@ async def handle_chat_message(
             settings = get_settings()
             mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
             duel_text = (
-                "⚔️ <b>LikBy Play — 11 Multiplayer Duels</b>\n\n"
+                "⚔️ <b>LikBy Play — Multiplayer Duels</b>\n\n"
                 "<i>Duels unlock live with your chat partner or practice vs AI!</i>\n\n"
                 "1. 🔴 <b>Connect Four</b> — <i>Align 4 discs in 7x6 grid</i>\n"
                 "2. 🎯 <b>Carrom Clash</b> — <i>Striker physics & Queen rules</i>\n"
@@ -345,7 +345,7 @@ async def handle_chat_message(
             settings = get_settings()
             mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
             solo_text = (
-                "🧩 <b>LikBy Play — 6 Solo Experiences</b>\n\n"
+                "🧩 <b>LikBy Play — Solo Experiences</b>\n\n"
                 "✨ <b>100% Free & Unlimited for all tiers!</b>\n"
                 "<i>Solo games never consume duel quota and do NOT require an active chat session.</i>\n\n"
                 "1. 🧘 <b>Zen Merge (2048)</b> — <i>Sliding tile puzzle (Goal: 2048)</i>\n"
@@ -364,7 +364,7 @@ async def handle_chat_message(
         idle_prompt = (
             "💬 <b>You are not currently in an active chat session.</b>\n\n"
             "• Tap <b>🎲 Find Match</b> below to connect with a conversation partner.\n"
-            "• Or play our <b>6 Free Solo Games</b> anytime with zero wait:\n"
+            "• Or play <b>Free Solo Games</b> anytime with zero wait:\n"
             "  Type <b>1 to 6</b> (e.g. <code>1</code> for Zen Merge, <code>4</code> for Pocket Golf) or tap <b>🧩 Solo Games</b> below!"
         )
         await message.answer(

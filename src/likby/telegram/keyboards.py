@@ -176,7 +176,7 @@ def get_chat_hub_keyboard(
                 InlineKeyboardButton(text="🎲 Find a Match Now", callback_data="queue:find_new"),
             ],
             [
-                InlineKeyboardButton(text="🧩 Solo Games (6 Free Games)", callback_data="play:solo_info"),
+                InlineKeyboardButton(text="🧩 Solo Games", callback_data="play:solo_info"),
                 play_btn,
             ],
             [
@@ -358,22 +358,15 @@ def get_gem_hunter_keyboard(game, show_all: bool = False) -> InlineKeyboardMarku
 def get_play_hub_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """
     Consolidated LikBy Play Ecosystem Navigation Keyboard.
-    Prioritizes official LikBy Play WebApp with all 17 games, motions, and active duels.
+    Clean presentation without redundant open mini button or game counts.
     """
     rows = []
-    if mini_app_url:
-        rows.append([
-            InlineKeyboardButton(
-                text="🚀 Open LikBy Play (Mini App)",
-                web_app=WebAppInfo(url=mini_app_url),
-            )
-        ])
     rows.append([
-        InlineKeyboardButton(text="⚔️ 2-Player Duels (11 Games)", callback_data="play:duels"),
-        InlineKeyboardButton(text="🧩 Solo Games (6 Games)", callback_data="play:solo_info"),
+        InlineKeyboardButton(text="⚔️ 2-Player Duels", callback_data="play:duels"),
+        InlineKeyboardButton(text="🧩 Solo Games", callback_data="play:solo_info"),
     ])
     rows.append([
-        InlineKeyboardButton(text="✨ 17 Games Catalog & Rules", callback_data="play:catalogue"),
+        InlineKeyboardButton(text="✨ Games Catalog & Rules", callback_data="play:catalogue"),
         InlineKeyboardButton(text="📊 My Progress & Quotas", callback_data="play:progress"),
     ])
     rows.append([
@@ -440,7 +433,7 @@ def get_solo_game_card_keyboard(game_id: str, mini_app_url: Optional[str] = None
         ])
 
     rows.append([
-        InlineKeyboardButton(text="🧩 All 6 Solo Games", callback_data="play:solo_info"),
+        InlineKeyboardButton(text="« Back to Solo Games", callback_data="play:solo_info"),
         InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
@@ -482,7 +475,7 @@ def get_duel_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboar
             _btn("💭 10. MindMatch", "mindmatch"),
         ],
         [
-            _btn("🔍 11. Mystery Mission (Co-op)", "mystery_mission"),
+            _btn("🔍 11. Mystery Mission", "mystery_mission"),
         ],
     ]
 
@@ -497,7 +490,7 @@ def get_duel_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboar
         ])
 
     rows.append([
-        InlineKeyboardButton(text="🧩 Solo Games (6 Games)", callback_data="play:solo_info"),
+        InlineKeyboardButton(text="🧩 Solo Games", callback_data="play:solo_info"),
         InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
     ])
 
@@ -529,7 +522,7 @@ def get_duel_game_card_keyboard(
         ])
 
     rows.append([
-        InlineKeyboardButton(text="« Back to 11 Duels", callback_data="play:duels"),
+        InlineKeyboardButton(text="« Back to Duels", callback_data="play:duels"),
         InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)

@@ -375,7 +375,7 @@ async def finish_interests(
         f"🔒 <b>Privacy Shield Guarantee:</b>\n"
         f"• 🛡 Your Telegram username and phone number are 100% confidential and hidden.\n"
         f"• 💬 Conversations are ephemeral with zero permanent database chat logs.\n"
-        f"• 🎮 All 17 games are ready to play in the <b>LikBy Play Mini App</b>!\n\n"
+        f"• 🎮 All games are ready to play in the <b>LikBy Play Mini App</b>!\n\n"
         f"Tap <b>🎲 Find Match</b> below whenever you're ready to start chatting!"
     )
 
@@ -401,7 +401,7 @@ async def finish_interests(
                     f"• 🌟 Karma Standing: {user.karma_score} / 500\n\n"
                     f"🔒 Privacy Shield Guarantee:\n"
                     f"• 🛡 Your Telegram info is 100% confidential.\n"
-                    f"• 🎮 All 17 games are ready in the LikBy Play Mini App!\n\n"
+                    f"• 🎮 All games are ready in the LikBy Play Mini App!\n\n"
                     f"Tap 🎲 Find Match below to start chatting!"
                 )
                 await target_bot.send_message(

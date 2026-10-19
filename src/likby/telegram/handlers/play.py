@@ -294,7 +294,7 @@ async def show_duels(
             quota_info = f"{rem_str} of {lim_str} duels remaining today"
 
     duel_text = (
-        "⚔️ <b>LikBy Play — 11 Multiplayer Duels</b>\n\n"
+        "⚔️ <b>LikBy Play — Multiplayer Duels</b>\n\n"
         f"🎯 <b>Your Allowance:</b> {quota_info}\n"
         "<i>Duels unlock live with your chat partner or practice vs AI!</i>\n\n"
         "1. 🔴 <b>Connect Four</b> — <i>Align 4 discs in 7x6 grid</i>\n"
@@ -475,7 +475,7 @@ async def show_solo(
     mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
 
     solo_text = (
-        "🧩 <b>LikBy Play — 6 Solo Experiences</b>\n\n"
+        "🧩 <b>LikBy Play — Solo Experiences</b>\n\n"
         "✨ <b>100% Free & Unlimited for all tiers!</b>\n"
         "<i>Solo games never consume duel quota and do NOT require an active chat session.</i>\n\n"
         "1. 🧘 <b>Zen Merge (2048)</b> — <i>Sliding tile puzzle (Goal: 2048)</i>\n"
@@ -590,7 +590,7 @@ async def duel_practice_callback(
         ])
     rows.append([
         InlineKeyboardButton(text=f"« Back to {game_name}", callback_data=f"play:duel_card:{game_id}"),
-        InlineKeyboardButton(text="« All 11 Duels", callback_data="play:duels"),
+        InlineKeyboardButton(text="« Back to Duels", callback_data="play:duels"),
     ])
     if callback.message:
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
@@ -706,8 +706,8 @@ async def show_catalogue(
     await callback.answer()
 
     text = (
-        "✨ <b>LikBy Play — Complete 17 Game Catalogue</b> 🩵\n\n"
-        "<b>Multiplayer Duels (11 Games):</b>\n"
+        "✨ <b>LikBy Play — Games Catalogue</b> 🩵\n\n"
+        "<b>Multiplayer Duels:</b>\n"
         "1. 🎱 Carrom Clash (Physics)\n"
         "2. 🏒 Air Rush (Arcade)\n"
         "3. 🎱 Pocket Pool (Precision)\n"
@@ -719,7 +719,7 @@ async def show_catalogue(
         "9. 🔴 Connect Four (Strategy)\n"
         "10. 💭 MindMatch (Social Discovery)\n"
         "11. 🕵️ Mystery Mission (Co-op Deduction)\n\n"
-        "<b>Solo Experiences (6 Games — Unlimited):</b>\n"
+        "<b>Solo Experiences (Unlimited):</b>\n"
         "12. 🧩 Zen Merge (Number logic)\n"
         "13. 🔎 Word Hunt (Word search)\n"
         "14. 🎨 Color Flow (Color logic)\n"
