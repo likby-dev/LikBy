@@ -17,6 +17,7 @@ from likby.domain.enums import GameType
 from likby.repositories.interfaces import UserRepository
 from likby.services.gaming_entitlement_service import GamingEntitlementService
 from likby.services.play_game_service import PlayGameService
+from likby.services.progression_service import ACHIEVEMENTS_CATALOG
 from likby.telegram.security import validate_telegram_init_data
 
 router = APIRouter(prefix="/api/v1/play", tags=["LikBy Play Gaming Ecosystem"])
@@ -34,6 +35,15 @@ class InviteDuelRequest(BaseModel):
 class ActionRequest(BaseModel):
     action_type: str = Field(..., description="Action name e.g. drop_piece, strike, move, attack")
     payload: Dict[str, Any] = Field(default_factory=dict, description="Game-specific action parameters")
+
+
+class JoinQueueRequest(BaseModel):
+    game_id: str = Field(..., description="Duel game ID to match for (e.g. xo, connect_four)")
+
+
+class VerifyDailyRiddleRequest(BaseModel):
+    answer: str = Field(..., description="User's guess for the daily cryptic riddle")
+    date_str: Optional[str] = Field(None, description="Optional YYYY-MM-DD date key")
 
 
 # =============================================================================
@@ -305,21 +315,52 @@ async def submit_duel_action(
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
 
+    # Check for match completion & award progression
+    unlocked_achievements: List[Dict[str, Any]] = []
+    progression_summary: Optional[Dict[str, Any]] = None
+    prog_service = getattr(request.app.state, "progression_service", None)
+
+    if winner and prog_service:
+        session = await play_service._play_repo.get_session(session_id)
+        if session:
+            score = new_state.get("score") or new_state.get("p1_score") or 0
+            prog, unlocked = prog_service.record_duel_completion(
+                user_id=user.id,
+                game_id=session.game_id,
+                is_winner=(winner == user.id),
+                is_draw=(winner == "DRAW"),
+                score=score,
+                metadata=new_state,
+            )
+            unlocked_achievements = [a.model_dump() for a in unlocked]
+            progression_summary = {
+                "level": prog.level,
+                "total_xp": prog.total_xp,
+                "streak": prog.current_streak,
+            }
+
     # Broadcast via WebSocket if active connections exist
-    await manager.broadcast_to_session(session_id, {
-        "event": "game.action",
+    action_event = {
+        "version": 1,
+        "type": "game.action" if not winner else "game.completed",
+        "session_id": session_id,
         "action_type": payload.action_type,
         "actor_id": user.id,
         "state": new_state,
         "winner_id": winner,
         "message": msg,
-    })
+        "achievements": unlocked_achievements,
+        "progression": progression_summary,
+    }
+    await manager.broadcast_to_session(session_id, action_event)
 
     return {
         "status": "success",
         "message": msg,
         "state": new_state,
         "winner_id": winner,
+        "achievements": unlocked_achievements,
+        "progression": progression_summary,
     }
 
 
@@ -334,6 +375,15 @@ async def request_duel_rematch(
     ok, msg, new_session = await play_service.request_rematch(session_id, user.id)
     if not ok:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    # Notify old session participants of new rematch session
+    await manager.broadcast_to_session(session_id, {
+        "version": 1,
+        "type": "game.rematch",
+        "old_session_id": session_id,
+        "new_session_id": new_session.id,
+        "game_id": new_session.game_id.value,
+    })
 
     return {
         "status": "success",
@@ -366,14 +416,205 @@ async def get_my_game_stats(
 
 
 # =============================================================================
-# WebSocket Real-Time Match Hub
+# Matchmaking Queue Endpoints
+# =============================================================================
+
+@router.post("/matchmaking/join")
+async def join_matchmaking_queue(
+    payload: JoinQueueRequest,
+    request: Request,
+    user: User = Depends(get_play_authenticated_user),
+) -> Dict[str, Any]:
+    """Enter the random opponent matchmaking queue for a specified duel game."""
+    raw_id = payload.game_id.lower().strip()
+    if raw_id == "tictactoe":
+        raw_id = "xo"
+    try:
+        game_type = GameType(raw_id)
+    except ValueError:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid duel game ID.")
+
+    mm_service = getattr(request.app.state, "game_matchmaking_service", None)
+    if not mm_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Matchmaking unavailable.")
+
+    ok, msg, entry = await mm_service.enqueue_player(user.id, game_type)
+    if not ok:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=msg)
+
+    status_data = mm_service.get_status(user.id)
+    return {"status": "success", "message": msg, "queue": status_data}
+
+
+@router.post("/matchmaking/leave")
+async def leave_matchmaking_queue(
+    request: Request,
+    user: User = Depends(get_play_authenticated_user),
+) -> Dict[str, Any]:
+    """Leave matchmaking search queue."""
+    mm_service = getattr(request.app.state, "game_matchmaking_service", None)
+    if mm_service:
+        await mm_service.cancel_player(user.id)
+    return {"status": "success", "message": "Left matchmaking queue."}
+
+
+@router.get("/matchmaking/status")
+async def get_matchmaking_status(
+    request: Request,
+    user: User = Depends(get_play_authenticated_user),
+) -> Dict[str, Any]:
+    """Poll or query current matchmaking ticket status."""
+    mm_service = getattr(request.app.state, "game_matchmaking_service", None)
+    if not mm_service:
+        return {"state": "DISCONNECTED"}
+    return mm_service.get_status(user.id)
+
+
+# =============================================================================
+# Progression, Achievements & Leaderboard Endpoints
+# =============================================================================
+
+@router.get("/progression")
+async def get_user_progression(
+    request: Request,
+    user: User = Depends(get_play_authenticated_user),
+) -> Dict[str, Any]:
+    """Retrieve player level, total XP, next level target, and win streaks."""
+    prog_service = getattr(request.app.state, "progression_service", None)
+    if not prog_service:
+        return {"level": 1, "total_xp": 0, "xp_to_next_level": 200, "progress_percent": 0}
+    return prog_service.get_user_overview(user.id)
+
+
+@router.get("/achievements")
+async def get_all_achievements(
+    request: Request,
+    user: User = Depends(get_play_authenticated_user),
+) -> List[Dict[str, Any]]:
+    """Retrieve all GameVerse achievements and whether user has unlocked them."""
+    prog_service = getattr(request.app.state, "progression_service", None)
+    unlocked_ids: set = set()
+    if prog_service:
+        prog = prog_service.get_or_create_progression(user.id)
+        unlocked_ids = prog.unlocked_achievements
+
+    return [
+        {
+            "id": a.id,
+            "name": a.name,
+            "description": a.description,
+            "icon": a.icon,
+            "xp_reward": a.xp_reward,
+            "category": a.category,
+            "is_unlocked": a.id in unlocked_ids,
+        }
+        for a in ACHIEVEMENTS_CATALOG.values()
+    ]
+
+
+@router.get("/leaderboard")
+async def get_global_leaderboard(
+    request: Request,
+    limit: int = Query(10, ge=1, le=50),
+) -> List[Dict[str, Any]]:
+    """Retrieve top players ranked by level and XP."""
+    prog_service = getattr(request.app.state, "progression_service", None)
+    if not prog_service:
+        return []
+    return prog_service.get_leaderboard(limit=limit)
+
+
+# =============================================================================
+# Solo Puzzle Generator & Daily Challenge Endpoints
+# =============================================================================
+
+@router.get("/daily_challenge")
+async def get_canonical_daily_challenge(
+    request: Request,
+    date_str: Optional[str] = Query(None),
+) -> Dict[str, Any]:
+    """Retrieve the canonical Daily Mystery challenge for today (UTC)."""
+    puzzle_service = getattr(request.app.state, "puzzle_generator_service", None)
+    if not puzzle_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Puzzle generator unavailable.")
+    return puzzle_service.get_canonical_daily_challenge(date_str)
+
+
+@router.post("/daily_challenge/verify")
+async def verify_daily_challenge_solution(
+    payload: VerifyDailyRiddleRequest,
+    request: Request,
+    user: User = Depends(get_play_authenticated_user),
+) -> Dict[str, Any]:
+    """Verify daily cryptic riddle solution and award XP and achievements."""
+    puzzle_service = getattr(request.app.state, "puzzle_generator_service", None)
+    if not puzzle_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Puzzle generator unavailable.")
+
+    date_str = payload.date_str or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    is_correct, explanation = puzzle_service.verify_daily_mystery_solution(date_str, payload.answer)
+    if not is_correct:
+        return {"solved": False, "message": explanation}
+
+    # Award progression and check Daily Challenger achievement
+    prog_service = getattr(request.app.state, "progression_service", None)
+    unlocked_achievements: List[Dict[str, Any]] = []
+    if prog_service:
+        _, unlocked = prog_service.record_solo_completion(
+            user_id=user.id,
+            game_id=GameType.DAILY_MYSTERY,
+            score=100,
+            metadata={"solved": True},
+        )
+        unlocked_achievements = [a.dict() for a in unlocked]
+
+    return {
+        "solved": True,
+        "message": "🎉 Correct! Daily Mystery riddle deciphered!",
+        "explanation": explanation,
+        "xp_awarded": 150,
+        "achievements": unlocked_achievements,
+    }
+
+
+@router.get("/solo/word_hunt/generate")
+async def generate_word_hunt(
+    request: Request,
+    category: str = Query("TECH"),
+    grid_size: int = Query(5, ge=5, le=8),
+    seed: Optional[int] = Query(None),
+) -> Dict[str, Any]:
+    """Generate a verified solvable Word Hunt letter matrix."""
+    puzzle_service = getattr(request.app.state, "puzzle_generator_service", None)
+    if not puzzle_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Puzzle generator unavailable.")
+    return puzzle_service.generate_word_hunt_puzzle(grid_size=grid_size, category=category, seed=seed)
+
+
+@router.get("/solo/color_flow/generate")
+async def generate_color_flow(
+    request: Request,
+    grid_size: int = Query(4, ge=4, le=6),
+    flow_count: int = Query(3, ge=2, le=4),
+    seed: Optional[int] = Query(None),
+) -> Dict[str, Any]:
+    """Generate a verified solvable Color Flow board with non-overlapping routes."""
+    puzzle_service = getattr(request.app.state, "puzzle_generator_service", None)
+    if not puzzle_service:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Puzzle generator unavailable.")
+    return puzzle_service.generate_color_flow_puzzle(grid_size=grid_size, flow_count=flow_count, seed=seed)
+
+
+# =============================================================================
+# WebSocket Real-Time Match Hub & Protocol
 # =============================================================================
 
 class PlayConnectionManager:
-    """Manages real-time WebSockets for active duel game sessions."""
+    """Manages real-time WebSockets for active duel game sessions and matchmaking."""
 
     def __init__(self) -> None:
         self.active_connections: Dict[str, List[WebSocket]] = {}
+        self.queue_connections: Dict[str, WebSocket] = {}
 
     async def connect(self, session_id: str, websocket: WebSocket) -> None:
         await websocket.accept()
@@ -406,11 +647,11 @@ async def websocket_duel_endpoint(
     session_id: str,
     token: Optional[str] = Query(None),
 ) -> None:
-    """Live WebSocket channel for real-time multiplayer duel game synchronization."""
+    """Live WebSocket channel for real-time multiplayer duel game synchronization with typed protocol."""
     await manager.connect(session_id, websocket)
-    # Send initial connection confirmation
+    # Send initial connection confirmation with versioned schema
     await websocket.send_text(json.dumps({
-        "event": "game.state",
+        "version": 1,
         "type": "game.state",
         "session_id": session_id,
         "status": "CONNECTED",
@@ -420,24 +661,33 @@ async def websocket_duel_endpoint(
             raw_text = await websocket.receive_text()
             try:
                 data = json.loads(raw_text)
-                event_type = data.get("event") or data.get("type")
-                if event_type == "ping":
-                    await websocket.send_text(json.dumps({"event": "pong", "type": "pong"}))
-                elif event_type == "game.ready":
+                msg_type = data.get("type") or data.get("event")
+
+                if msg_type in ("connection.ping", "ping"):
+                    pong_type = "pong" if msg_type == "ping" else "connection.pong"
+                    await websocket.send_text(json.dumps({
+                        "version": 1,
+                        "type": pong_type,
+                        "session_id": session_id,
+                    }))
+                elif msg_type == "game.ready":
                     await manager.broadcast_to_session(session_id, {
-                        "event": "game.ready",
+                        "version": 1,
                         "type": "game.ready",
                         "session_id": session_id,
+                        "actor_id": data.get("user_id"),
                     })
-                elif event_type in ("game.action", "action"):
-                    action_payload = data.get("action") or data.get("payload") or {}
+                elif msg_type in ("game.input", "game.action", "action"):
+                    action_payload = data.get("payload") or data.get("action") or {}
                     await manager.broadcast_to_session(session_id, {
-                        "event": "game.state",
+                        "version": 1,
                         "type": "game.state",
                         "session_id": session_id,
                         "action": action_payload,
+                        "sequence": data.get("sequence", 0),
                     })
             except Exception:
                 pass
     except WebSocketDisconnect:
         manager.disconnect(session_id, websocket)
+

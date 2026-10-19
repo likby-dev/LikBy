@@ -1433,3 +1433,551 @@ html, body {
   box-shadow: 0 0 16px currentColor;
 }
 
+/* ==============================================================================
+   GAMEVERSE ECOSYSTEM: PROGRESSION, NAV, RADAR, BADGES & LEADERBOARD
+   ============================================================================== */
+
+/* 1. Progression Card */
+.progression-card {
+  background: var(--likby-surface);
+  border: 1px solid var(--likby-glass-border);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  position: relative;
+  overflow: hidden;
+}
+.progression-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--likby-cyan), var(--likby-violet), var(--likby-pink));
+}
+.progression-top {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.progression-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+.progression-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #1e293b, #0f172a);
+  border: 2px solid var(--likby-cyan);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-shadow: 0 0 16px rgba(34, 211, 238, 0.3);
+}
+.level-badge {
+  position: absolute;
+  bottom: -4px;
+  right: -6px;
+  background: linear-gradient(135deg, var(--likby-cyan), var(--likby-blue));
+  color: #030712;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+  letter-spacing: 0.5px;
+  border: 1.5px solid #030712;
+}
+.progression-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.progression-name-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.player-name {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 15px;
+  color: var(--likby-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.player-streak-badge {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--likby-amber);
+  background: rgba(245, 158, 11, 0.15);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.xp-bar-track {
+  width: 100%;
+  height: 7px;
+  background: rgba(15, 23, 42, 0.8);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: var(--radius-full);
+  overflow: hidden;
+  margin: 3px 0;
+}
+.xp-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--likby-cyan), var(--likby-blue), var(--likby-violet));
+  border-radius: var(--radius-full);
+  transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  box-shadow: 0 0 10px rgba(34, 211, 238, 0.6);
+}
+.xp-meta {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: var(--likby-text-muted);
+}
+
+/* 2. GameVerse Navigation Tabs */
+.gameverse-nav {
+  display: flex;
+  background: var(--likby-surface);
+  border: 1px solid var(--likby-glass-border);
+  border-radius: var(--radius-sm);
+  padding: 4px;
+  gap: 4px;
+}
+.gv-nav-btn {
+  flex: 1;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 8px 4px;
+  color: var(--likby-text-muted);
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+.gv-nav-btn.active {
+  background: var(--likby-surface-raised);
+  color: var(--likby-cyan);
+  border: 1px solid var(--likby-glass-border-hover);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+
+/* 3. Leaderboard View */
+.leaderboard-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.leaderboard-tag {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--likby-emerald);
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.section-subtitle {
+  font-size: 12px;
+  color: var(--likby-text-muted);
+  line-height: 1.4;
+}
+.leaderboard-table-wrap {
+  background: var(--likby-surface);
+  border: 1px solid var(--likby-glass-border);
+  border-radius: var(--radius-md);
+  padding: 8px;
+  max-height: 440px;
+  overflow-y: auto;
+}
+.leaderboard-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  transition: background 0.15s ease;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+.leaderboard-item:last-child {
+  border-bottom: none;
+}
+.leaderboard-item:hover {
+  background: var(--likby-surface-raised);
+}
+.lb-rank-col {
+  width: 28px;
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--likby-text-muted);
+}
+.lb-rank-1 { color: #F59E0B; font-size: 16px; }
+.lb-rank-2 { color: #94A3B8; font-size: 15px; }
+.lb-rank-3 { color: #B45309; font-size: 14px; }
+.lb-user-info {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.lb-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--likby-surface-raised);
+  border: 1px solid var(--likby-glass-border);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+.lb-name-group {
+  display: flex;
+  flex-direction: column;
+}
+.lb-name {
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--likby-text);
+}
+.lb-tier-level {
+  font-size: 11px;
+  color: var(--likby-text-muted);
+}
+.lb-score-col {
+  text-align: right;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+.lb-score {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  color: var(--likby-cyan);
+}
+.lb-score-label {
+  font-size: 10px;
+  color: var(--likby-text-muted);
+}
+
+/* 4. Badges & Achievements View */
+.badge-count-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--likby-cyan);
+  background: rgba(34, 211, 238, 0.15);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+  padding: 2px 10px;
+  border-radius: var(--radius-full);
+}
+.badges-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.badge-card {
+  background: var(--likby-surface);
+  border: 1px solid var(--likby-glass-border);
+  border-radius: var(--radius-sm);
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  transition: transform 0.2s ease, border-color 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+.badge-card.unlocked {
+  border-color: rgba(34, 211, 238, 0.4);
+  background: radial-gradient(circle at 50% 0%, rgba(34, 211, 238, 0.12), var(--likby-surface));
+}
+.badge-card.locked {
+  opacity: 0.55;
+  filter: grayscale(0.8);
+}
+.badge-card-icon {
+  font-size: 32px;
+  line-height: 1;
+}
+.badge-card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 13px;
+  color: var(--likby-text);
+}
+.badge-card-desc {
+  font-size: 11px;
+  color: var(--likby-text-muted);
+  line-height: 1.3;
+}
+.badge-card-reward {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--likby-amber);
+  background: rgba(245, 158, 11, 0.15);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+  margin-top: auto;
+}
+
+/* 5. Canonical Daily Riddle View */
+.daily-riddle-view {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.daily-card-hero {
+  background: var(--likby-surface);
+  border: 1px solid var(--likby-glass-border-hover);
+  border-radius: var(--radius-md);
+  padding: 20px 18px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.daily-badge {
+  font-size: 10px;
+  font-weight: 800;
+  color: var(--likby-cyan);
+  letter-spacing: 0.8px;
+}
+.daily-date-tag {
+  font-size: 11px;
+  color: var(--likby-text-muted);
+}
+.daily-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 18px;
+  color: #fff;
+}
+.daily-riddle-quote {
+  background: var(--likby-surface-raised);
+  border-left: 3px solid var(--likby-cyan);
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
+  padding: 12px 14px;
+  font-size: 14px;
+  font-style: italic;
+  color: #e2e8f0;
+  line-height: 1.6;
+}
+.daily-hint-box {
+  background: rgba(34, 211, 238, 0.08);
+  border: 1px dashed var(--likby-cyan);
+  border-radius: var(--radius-xs);
+  padding: 10px 12px;
+  font-size: 12px;
+  color: var(--likby-cyan);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.hint-label {
+  font-weight: 700;
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.daily-actions-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.daily-reward-pill {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--likby-amber);
+}
+.daily-input-row {
+  display: flex;
+  gap: 8px;
+}
+.daily-solved-banner {
+  background: rgba(16, 185, 129, 0.15);
+  border: 1px solid rgba(16, 185, 129, 0.4);
+  border-radius: var(--radius-sm);
+  padding: 14px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* 6. Matchmaking Radar Animation */
+.radar-container {
+  width: 140px;
+  height: 140px;
+  margin: 0 auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.radar-circle {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(34, 211, 238, 0.35);
+  pointer-events: none;
+}
+.circle-1 { width: 50px; height: 50px; }
+.circle-2 { width: 95px; height: 95px; }
+.circle-3 {
+  width: 140px;
+  height: 140px;
+  animation: radarPulse 2s ease-out infinite;
+}
+.radar-sweep {
+  position: absolute;
+  width: 70px;
+  height: 70px;
+  top: 0;
+  right: 0;
+  transform-origin: bottom left;
+  background: conic-gradient(from 0deg, rgba(34, 211, 238, 0.45) 0deg, transparent 60deg);
+  border-radius: 100% 0 0 0;
+  animation: radarSweep 2.2s linear infinite;
+  pointer-events: none;
+}
+.radar-avatar {
+  font-size: 32px;
+  z-index: 2;
+  animation: bounce 1.2s ease-in-out infinite alternate;
+}
+@keyframes radarSweep {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes radarPulse {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  100% { transform: scale(1.15); opacity: 0.1; }
+}
+.mm-game-tag {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--likby-cyan);
+  background: rgba(34, 211, 238, 0.12);
+  border: 1px solid rgba(34, 211, 238, 0.25);
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: var(--radius-full);
+  margin-bottom: 6px;
+}
+.mm-timer {
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--likby-text);
+  letter-spacing: 1px;
+}
+
+/* 7. Tutorial / How to Play Modal */
+.tutorial-body {
+  max-height: 380px;
+  overflow-y: auto;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #cbd5e1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tutorial-section-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--likby-cyan);
+  margin-top: 4px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.tutorial-pill-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.tutorial-pill {
+  background: var(--likby-surface-raised);
+  border: 1px solid var(--likby-glass-border);
+  border-radius: var(--radius-xs);
+  padding: 4px 10px;
+  font-size: 11px;
+}
+
+/* 8. Achievement Unlocked Toast Banner */
+.achievement-toast {
+  position: fixed;
+  top: -100px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.95), rgba(30, 41, 59, 0.95));
+  border: 1px solid var(--likby-cyan);
+  box-shadow: 0 10px 30px rgba(34, 211, 238, 0.35);
+  border-radius: var(--radius-md);
+  padding: 12px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 90%;
+  max-width: 380px;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: top 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+.achievement-toast.active {
+  top: 24px;
+}
+.ach-toast-icon {
+  font-size: 28px;
+  line-height: 1;
+}
+.ach-toast-info {
+  display: flex;
+  flex-direction: column;
+}
+.ach-toast-subtitle {
+  font-size: 9px;
+  font-weight: 800;
+  color: var(--likby-cyan);
+  letter-spacing: 0.8px;
+}
+.ach-toast-title {
+  font-family: var(--font-display);
+  font-weight: 800;
+  font-size: 14px;
+  color: #fff;
+}
+.ach-toast-xp {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--likby-amber);
+}
+
+

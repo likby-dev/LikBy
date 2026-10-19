@@ -72,6 +72,9 @@ from likby.services.social_service import SocialService
 from likby.services.subscription_service import SubscriptionService
 from likby.services.gaming_entitlement_service import GamingEntitlementService
 from likby.services.play_game_service import PlayGameService
+from likby.services.game_matchmaking_service import GameMatchmakingService
+from likby.services.progression_service import ProgressionService
+from likby.services.puzzle_generator_service import PuzzleGeneratorService
 from likby.services.transcript_service import TranscriptService
 from likby.services.usage_service import UsageService
 from likby.services.outbox_worker import OutboxWorker
@@ -393,6 +396,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     app.state.duel_quota_repo = duel_quota_repo
     app.state.gaming_entitlement_service = gaming_entitlement_service
     app.state.play_game_service = play_game_service
+    app.state.game_matchmaking_service = GameMatchmakingService(
+        play_service=play_game_service,
+        quota_service=gaming_entitlement_service,
+    )
+    app.state.progression_service = ProgressionService()
+    app.state.puzzle_generator_service = PuzzleGeneratorService()
     app.state.session_repo = session_repo
     app.state.message_repo = message_repo
     app.state.media_repo = media_repo

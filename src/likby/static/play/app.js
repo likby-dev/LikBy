@@ -275,8 +275,137 @@
   // ============================================================================
   // 5. Initializer & Catalogue Data
   // ============================================================================
+  const GAME_TUTORIALS = {
+    connect_four: {
+      title: "Connect Four",
+      icon: "🔵",
+      objective: "Be the first player to form a horizontal, vertical, or diagonal line of four consecutive discs.",
+      controls: "Tap or drag over any of the 7 column slots to drop your colored disc.",
+      tip: "Control the center column early to maximize your winning vectors!"
+    },
+    carrom_clash: {
+      title: "Carrom Clash",
+      icon: "🎯",
+      objective: "Strike and pocket your carrom coins into any of the 4 corner pockets. Pocket the Queen for big bonus points!",
+      controls: "Drag the baseline slider to position your striker. Pull back and release the slingshot vector to fire.",
+      tip: "Gentle bank shots off the cushions can navigate around blocking coins."
+    },
+    air_rush: {
+      title: "Air Rush",
+      icon: "🏒",
+      objective: "Score by knocking the floating neon puck into your opponent's goal defense zone while guarding yours.",
+      controls: "Touch and drag your paddle across your defending half of the arena.",
+      tip: "Strike the puck with forward momentum to send high-velocity kinetic shots."
+    },
+    pocket_pool: {
+      title: "Pocket Pool",
+      icon: "🎱",
+      objective: "Pocket your target balls using the cue ball without scratching into pockets.",
+      controls: "Aim the cue stick by dragging your finger. Pull back on the power meter and release.",
+      tip: "Use light power on close shots to avoid table rebounds."
+    },
+    stick_arena: {
+      title: "Stick Arena",
+      icon: "🤺",
+      objective: "Deplete your rival fighter's health bar in intense martial stick duel rounds.",
+      controls: "Use on-screen direction pads to advance or retreat. Tap Attack, Jump, Dash, and Block buttons.",
+      tip: "Time your Blocks to deflect heavy strikes and counter-attack with a rapid dash slash."
+    },
+    quickdraw: {
+      title: "QuickDraw",
+      icon: "🎨",
+      objective: "Take turns sketching secret prompt words or guessing what your rival is drawing before the timer expires.",
+      controls: "Smooth canvas finger drawing with color palettes and stroke width toggles.",
+      tip: "Draw key identifiable outlines first before adding small details."
+    },
+    word_rush: {
+      title: "Word Rush",
+      icon: "🔤",
+      objective: "Construct as many valid dictionary words as possible from randomized letter racks within 60 seconds.",
+      controls: "Tap letter tiles to form words, then tap Submit Word.",
+      tip: "Longer words earn massive score multipliers!"
+    },
+    brain_blitz: {
+      title: "Brain Blitz",
+      icon: "🧠",
+      objective: "Answer rapid-fire trivia questions faster than your opponent under a 15-second timer.",
+      controls: "Tap your chosen answer option before the countdown timer hits zero.",
+      tip: "Speed counts: answering within the first 3 seconds awards a 2x Blitz multiplier!"
+    },
+    reflex_rush: {
+      title: "Reflex Rush",
+      icon: "⚡",
+      objective: "React the instant the tension chamber turns from Crimson to Emerald. Millisecond reaction determines the victor!",
+      controls: "Tap anywhere on the arena as soon as the color flashes green.",
+      tip: "Do NOT tap while it's red! False starts forfeit the round instantly."
+    },
+    mindmatch: {
+      title: "MindMatch",
+      icon: "💭",
+      objective: "Compare answers to intriguing dilemma questions to compute psychological synchronicity and common ground.",
+      controls: "Tap your honest preference on each dilemma card.",
+      tip: "No right or wrong answers—pure social discovery and synergy."
+    },
+    mystery_mission: {
+      title: "Mystery Mission",
+      icon: "🔍",
+      objective: "Two detectives cooperate to decrypt cyber safe locks using shared clue fragments.",
+      controls: "Examine clues on your board, communicate via chat, and tap the keypad to enter the override code.",
+      tip: "Your partner holds clues you cannot see—collaborate!"
+    },
+    xo: {
+      title: "XO Duel",
+      icon: "❌⭕",
+      objective: "Classic Tic-Tac-Toe tactical neon arena. Align 3 of your marks horizontally, vertically, or diagonally.",
+      controls: "Tap any empty 3x3 grid cell.",
+      tip: "Taking the center or opposite corners forces defensive plays from your rival."
+    },
+    zen_merge: {
+      title: "Zen Merge (2048)",
+      icon: "🧩",
+      objective: "Slide and merge matching number tiles to reach the legendary 2048 tile.",
+      controls: "Swipe Up, Down, Left, or Right anywhere on the board.",
+      tip: "Keep your highest value tile anchored in one corner!"
+    },
+    word_hunt: {
+      title: "Word Hunt",
+      icon: "🔎",
+      objective: "Find all target words hidden in the letter matrix horizontally, vertically, or diagonally.",
+      controls: "Touch and drag across consecutive letters in the 5x5 matrix.",
+      tip: "Check word lists for starting letters and trace candidate lines."
+    },
+    color_flow: {
+      title: "Color Flow",
+      icon: "🎨",
+      objective: "Connect matching color nodes by drawing non-overlapping neon pipes that cover the entire grid.",
+      controls: "Touch an endpoint dot and drag along empty grid cells to its matching colored pair.",
+      tip: "Start by routing along the outer perimeter of the board."
+    },
+    pocket_golf: {
+      title: "Pocket Golf",
+      icon: "⛳",
+      objective: "Sink the golf ball into the cup in the fewest strokes possible while avoiding water and sand hazards.",
+      controls: "Touch and drag back from the ball to aim slingshot trajectory; release to swing.",
+      tip: "Bank off fairways and bounce surfaces to navigate sharp dog-leg holes."
+    },
+    reflex_lab: {
+      title: "Reflex Lab",
+      icon: "🧪",
+      objective: "Neuro-agility trainer: tap shrinking kinetic spheres before they disappear.",
+      controls: "Tap popping target orbs on your screen immediately as they spawn.",
+      tip: "Keep fingers hovering close to the screen surface to cut travel time."
+    },
+    daily_mystery: {
+      title: "Daily Mystery",
+      icon: "🔐",
+      objective: "Decipher the daily cryptic riddle published globally every 24 hours at 00:00 UTC.",
+      controls: "Type your deduction in the solution box and tap Solve.",
+      tip: "Look for figurative meanings, puns, and double entendres in the riddle lines."
+    }
+  };
+
   const FALLBACK_CATALOGUE = [
-    // 11 Duels
+    // 12 Duels
     { id: "connect_four", name: "Connect Four", mode: "DUEL", icon: "🔵", category: "Strategy", tagline: "Drop discs, align 4 in a row, and outwit your partner." },
     { id: "carrom_clash", name: "Carrom Clash", mode: "DUEL", icon: "🎯", category: "Physics", tagline: "Silky friction, rebound bank shots, and pocket the royal queen." },
     { id: "air_rush", name: "Air Rush", mode: "DUEL", icon: "🏒", category: "Action", tagline: "High-octane neon air hockey table with intense kinetic volleys." },
@@ -299,6 +428,105 @@
     { id: "daily_mystery", name: "Daily Mystery", mode: "SOLO", icon: "🔐", category: "Riddle", tagline: "Daily cryptographic brainteaser with animated treasure unlocks." }
   ];
 
+  // ============================================================================
+  // Progression & Leveling Engine
+  // ============================================================================
+  let playerProgression = {
+    level: 1,
+    total_xp: 0,
+    win_streak: 0,
+    best_win_streak: 0,
+    games_played: 0,
+    games_won: 0,
+    achievements: []
+  };
+
+  async function loadProgression() {
+    const p = await apiCall("/api/v1/play/progression");
+    if (p) {
+      playerProgression = p;
+    }
+    updateProgressionUI();
+  }
+
+  function getRankTitle(lvl) {
+    if (lvl >= 10) return "Grandmaster Legend";
+    if (lvl >= 7) return "Cyber Champion";
+    if (lvl >= 5) return "Arena Veteran";
+    if (lvl >= 3) return "Skilled Contender";
+    if (lvl >= 2) return "Active Cadet";
+    return "Cyber Novice";
+  }
+
+  function updateProgressionUI() {
+    const lvl = playerProgression.level || 1;
+    const xp = playerProgression.total_xp || 0;
+    const streak = playerProgression.win_streak || 0;
+    const reqCurrent = 100 * (lvl - 1) * lvl;
+    const reqNext = 100 * lvl * (lvl + 1);
+    const xpInLevel = Math.max(0, xp - reqCurrent);
+    const xpSpan = Math.max(1, reqNext - reqCurrent);
+    const pct = Math.min(100, Math.round((xpInLevel / xpSpan) * 100));
+
+    const lvlBadge = document.getElementById("playerLevelBadge");
+    if (lvlBadge) lvlBadge.textContent = `LVL ${lvl}`;
+
+    const streakBadge = document.getElementById("playerStreakBadge");
+    if (streakBadge) streakBadge.textContent = `🔥 ${streak} Streak`;
+
+    const nameText = document.getElementById("playerNameText");
+    if (nameText) {
+      const u = tg?.initDataUnsafe?.user;
+      nameText.textContent = u?.first_name ? `${u.first_name}` : "LikBy Player";
+    }
+
+    const rankTitle = document.getElementById("playerRankTitle");
+    if (rankTitle) rankTitle.textContent = getRankTitle(lvl);
+
+    const xpText = document.getElementById("playerXpText");
+    if (xpText) xpText.textContent = `${xp} / ${reqNext} XP`;
+
+    const xpBar = document.getElementById("xpBarFill");
+    if (xpBar) xpBar.style.width = `${pct}%`;
+  }
+
+  function showAchievementToast(ach) {
+    const toastElem = document.getElementById("achievementToast");
+    if (!toastElem) return;
+    document.getElementById("achToastIcon").textContent = ach.icon || "🎖";
+    document.getElementById("achToastTitle").textContent = ach.title;
+    document.getElementById("achToastXp").textContent = `+${ach.xp_reward || 100} XP`;
+    toastElem.classList.add("active");
+    playSound("win");
+    TouchSystem.triggerHaptic("success");
+    setTimeout(() => toastElem.classList.remove("active"), 3800);
+  }
+
+  function awardProgressionXP(amount = 100, isWin = true) {
+    playerProgression.total_xp = (playerProgression.total_xp || 0) + amount;
+    playerProgression.games_played = (playerProgression.games_played || 0) + 1;
+    if (isWin) {
+      playerProgression.games_won = (playerProgression.games_won || 0) + 1;
+      playerProgression.win_streak = (playerProgression.win_streak || 0) + 1;
+      if (playerProgression.win_streak > (playerProgression.best_win_streak || 0)) {
+        playerProgression.best_win_streak = playerProgression.win_streak;
+      }
+    } else {
+      playerProgression.win_streak = 0;
+    }
+
+    // Check level up
+    const nextReq = 100 * playerProgression.level * (playerProgression.level + 1);
+    if (playerProgression.total_xp >= nextReq) {
+      playerProgression.level++;
+      showToast(`🎉 Level Up! You reached Level ${playerProgression.level}!`);
+      playSound("win");
+      TouchSystem.triggerHaptic("heavy");
+    }
+
+    updateProgressionUI();
+  }
+
   async function init() {
     if (tg) {
       tg.ready();
@@ -308,6 +536,7 @@
 
     initAmbientCanvas();
     setupEventListeners();
+    setupGameVerseNav();
 
     // 1. Check URL parameters for active session or partner
     const urlParams = new URLSearchParams(window.location.search);
@@ -333,7 +562,10 @@
     const apiEntitlements = await apiCall("/api/v1/play/entitlements");
     if (apiEntitlements) currentEntitlements = apiEntitlements;
 
-    // 4. Also check active chat partner endpoint if not already in URL
+    // 4. Fetch Progression & Player Stats
+    await loadProgression();
+
+    // 5. Also check active chat partner endpoint if not already in URL
     if (!connectedPartner) {
       const partnerRes = await apiCall("/api/v1/play/active_chat_partner");
       if (partnerRes && partnerRes.has_partner && partnerRes.partner_id) {
@@ -435,9 +667,37 @@
         renderGameGrid();
         showToast(`⚔️ Connected with ${connectedPartner.name}! Select any duel.`);
       } else {
-        showToast("Open LikBy bot to start anonymous chat!");
-        if (tg?.close) tg.close();
+        openMatchmakingRadar(activeGame ? activeGame.id : "connect_four");
       }
+    });
+
+    // Matchmaking Radar Queue triggers
+    document.getElementById("openQueueBtn")?.addEventListener("click", () => {
+      inviteModal?.classList.remove("active");
+      openMatchmakingRadar(activeGame ? activeGame.id : "connect_four");
+    });
+    document.getElementById("cancelMatchmakingBtn")?.addEventListener("click", cancelMatchmaking);
+
+    // Tutorial / Rules Dialog
+    document.getElementById("viewportTutorialBtn")?.addEventListener("click", openTutorialModal);
+    document.getElementById("closeTutorialModal")?.addEventListener("click", () => {
+      document.getElementById("tutorialModal")?.classList.remove("active");
+    });
+    document.getElementById("gotItTutorialBtn")?.addEventListener("click", () => {
+      document.getElementById("tutorialModal")?.classList.remove("active");
+      playSound("click");
+    });
+
+    // Daily Riddle Interactions
+    document.getElementById("dailyRevealHintBtn")?.addEventListener("click", () => {
+      const box = document.getElementById("dailyHintBox");
+      if (box) box.style.display = "flex";
+      playSound("click");
+      TouchSystem.triggerHaptic("light");
+    });
+    document.getElementById("dailySubmitBtn")?.addEventListener("click", submitDailyAnswer);
+    document.getElementById("dailyAnswerInput")?.addEventListener("keydown", (e) => {
+      if (e.key === "Enter") submitDailyAnswer();
     });
 
     // Tab Filters
@@ -487,8 +747,7 @@
 
     modalFindMatchBtn?.addEventListener("click", () => {
       inviteModal?.classList.remove("active");
-      showToast("Open LikBy bot to find a match!");
-      if (tg?.close) tg.close();
+      openMatchmakingRadar(activeGame ? activeGame.id : "connect_four");
     });
 
     // Exit Game
@@ -510,6 +769,215 @@
       inviteModal?.classList.remove("active");
       startDuelSession(activeGame.id, "practice_bot", true);
     });
+  }
+
+  // ============================================================================
+  // GameVerse Platform Helpers: Navigation, Radar, Tutorial, Leaderboard, Badges
+  // ============================================================================
+  function setupGameVerseNav() {
+    document.querySelectorAll(".gv-nav-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        document.querySelectorAll(".gv-nav-btn").forEach((b) => b.classList.remove("active"));
+        btn.classList.add("active");
+        const view = btn.dataset.view;
+        document.querySelectorAll(".gameverse-view").forEach((v) => {
+          v.style.display = "none";
+          v.classList.remove("active");
+        });
+        const target = document.getElementById(`view${view.charAt(0).toUpperCase() + view.slice(1)}`);
+        if (target) {
+          target.style.display = "block";
+          target.classList.add("active");
+        }
+        playSound("click");
+        TouchSystem.triggerHaptic("selection");
+
+        if (view === "leaderboard") loadLeaderboard();
+        if (view === "badges") loadBadges();
+        if (view === "daily") loadDailyRiddle();
+      });
+    });
+  }
+
+  let mmPollInterval = null;
+  let mmTimerInterval = null;
+  let mmSeconds = 0;
+
+  function openMatchmakingRadar(gameId = "connect_four") {
+    const modal = document.getElementById("matchmakingModal");
+    if (!modal) return;
+    const game = gamesCatalogue.find((g) => g.id === gameId) || FALLBACK_CATALOGUE.find((g) => g.id === gameId) || { name: "Connect Four", id: "connect_four" };
+    activeGame = game;
+    document.getElementById("mmGameTag").textContent = `${game.name} • Casual Duel`;
+    document.getElementById("radarAvatar").textContent = game.icon || "⚔️";
+    document.getElementById("mmModalTitle").textContent = "Searching Opponent...";
+    document.getElementById("mmModalSub").textContent = "Finding an online contender in the GameVerse Arena";
+    modal.classList.add("active");
+    playSound("click");
+
+    mmSeconds = 0;
+    document.getElementById("mmTimer").textContent = "00:00";
+    if (mmTimerInterval) clearInterval(mmTimerInterval);
+    mmTimerInterval = setInterval(() => {
+      mmSeconds++;
+      const m = String(Math.floor(mmSeconds / 60)).padStart(2, "0");
+      const s = String(mmSeconds % 60).padStart(2, "0");
+      document.getElementById("mmTimer").textContent = `${m}:${s}`;
+    }, 1000);
+
+    // Join queue via backend API
+    apiCall("/api/v1/play/matchmaking/join", "POST", {
+      game_id: game.id,
+      mode: "casual"
+    }).then((res) => {
+      if (res && res.status === "MATCHED") {
+        handleMatchFound(res);
+        return;
+      }
+      if (mmPollInterval) clearInterval(mmPollInterval);
+      mmPollInterval = setInterval(async () => {
+        const statusRes = await apiCall("/api/v1/play/matchmaking/status");
+        if (statusRes && statusRes.status === "MATCHED") {
+          clearInterval(mmPollInterval);
+          handleMatchFound(statusRes);
+        }
+      }, 1500);
+    });
+  }
+
+  function handleMatchFound(matchData) {
+    if (mmTimerInterval) clearInterval(mmTimerInterval);
+    if (mmPollInterval) clearInterval(mmPollInterval);
+    document.getElementById("mmModalTitle").textContent = "⚔️ Opponent Found!";
+    document.getElementById("mmModalSub").textContent = `Paired with ${matchData.opponent_name || "Arena Challenger"}! Launching duel...`;
+    playSound("start");
+    TouchSystem.triggerHaptic("heavy");
+
+    setTimeout(() => {
+      document.getElementById("matchmakingModal")?.classList.remove("active");
+      startDuelSession(matchData.game_id || activeGame.id, matchData.opponent_id || "rival_player", false);
+    }, 1200);
+  }
+
+  function cancelMatchmaking() {
+    if (mmTimerInterval) clearInterval(mmTimerInterval);
+    if (mmPollInterval) clearInterval(mmPollInterval);
+    apiCall("/api/v1/play/matchmaking/leave", "POST");
+    document.getElementById("matchmakingModal")?.classList.remove("active");
+    playSound("click");
+    showToast("Matchmaking cancelled");
+  }
+
+  function openTutorialModal() {
+    const modal = document.getElementById("tutorialModal");
+    if (!modal || !activeGame) return;
+    const tut = GAME_TUTORIALS[activeGame.id] || {
+      title: activeGame.name,
+      icon: activeGame.icon || "🎮",
+      objective: activeGame.tagline || "Play and score points!",
+      controls: "Touch or click to interact.",
+      tip: "Practice moves to master the board."
+    };
+    document.getElementById("tutorialTitle").textContent = `${tut.icon} ${tut.title} — How to Play`;
+    document.getElementById("tutorialContent").innerHTML = `
+      <div>
+        <div class="tutorial-section-title">🎯 Objective</div>
+        <p>${tut.objective}</p>
+      </div>
+      <div>
+        <div class="tutorial-section-title">📱 Touch & Controls</div>
+        <p>${tut.controls}</p>
+      </div>
+      <div>
+        <div class="tutorial-section-title">💡 Pro Strategy</div>
+        <p>${tut.tip}</p>
+      </div>
+    `;
+    modal.classList.add("active");
+    playSound("click");
+  }
+
+  async function loadLeaderboard() {
+    const container = document.getElementById("leaderboardList");
+    if (!container) return;
+    container.innerHTML = '<div class="leaderboard-loading" style="padding: 20px; text-align: center; color: var(--likby-text-muted);">Fetching arena rankings...</div>';
+    const data = await apiCall("/api/v1/play/leaderboard?limit=10");
+    if (!data || !data.leaderboard || data.leaderboard.length === 0) {
+      container.innerHTML = '<div style="padding: 20px; text-align: center; color: var(--likby-text-muted);">No ranked matches recorded yet this season. Be the first champion!</div>';
+      return;
+    }
+    container.innerHTML = data.leaderboard.map((item, idx) => `
+      <div class="leaderboard-item">
+        <div class="lb-rank-col ${idx === 0 ? "lb-rank-1" : idx === 1 ? "lb-rank-2" : idx === 2 ? "lb-rank-3" : ""}">
+          ${idx === 0 ? "🥇" : idx === 1 ? "🥈" : idx === 2 ? "🥉" : `#${item.rank}`}
+        </div>
+        <div class="lb-user-info">
+          <div class="lb-avatar">${idx === 0 ? "👑" : "🎮"}</div>
+          <div class="lb-name-group">
+            <div class="lb-name">${item.user_name || item.user_id}</div>
+            <div class="lb-tier-level">Level ${item.level} • ${item.tier} Tier</div>
+          </div>
+        </div>
+        <div class="lb-score-col">
+          <div class="lb-score">${item.total_xp.toLocaleString()} XP</div>
+          <div class="lb-score-label">${item.games_won || 0} Wins</div>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  async function loadBadges() {
+    const grid = document.getElementById("badgesGrid");
+    if (!grid) return;
+    grid.innerHTML = '<div class="badges-loading" style="padding: 20px; text-align: center; color: var(--likby-text-muted);">Loading badges...</div>';
+    const data = await apiCall("/api/v1/play/achievements");
+    if (!data || !data.achievements) {
+      grid.innerHTML = '<div style="color: var(--likby-text-muted); text-align: center;">Unable to load achievements</div>';
+      return;
+    }
+    const unlocked = data.achievements.filter(a => a.unlocked).length;
+    document.getElementById("badgeUnlockedCount").textContent = `${unlocked} / ${data.achievements.length} Unlocked`;
+    grid.innerHTML = data.achievements.map(ach => `
+      <div class="badge-card ${ach.unlocked ? "unlocked" : "locked"}">
+        <div class="badge-card-icon">${ach.icon || "🎖"}</div>
+        <div class="badge-card-title">${ach.title}</div>
+        <div class="badge-card-desc">${ach.description}</div>
+        <div class="badge-card-reward">+${ach.xp_reward} XP</div>
+      </div>
+    `).join("");
+  }
+
+  async function loadDailyRiddle() {
+    const data = await apiCall("/api/v1/play/daily_challenge");
+    if (!data) return;
+    document.getElementById("dailyChallengeDate").textContent = `Challenge Date: ${data.date} (UTC)`;
+    document.getElementById("dailyRiddleTitle").textContent = data.title;
+    document.getElementById("dailyRiddleText").textContent = `"${data.clue}"`;
+    document.getElementById("dailyHintText").textContent = data.hint;
+    document.getElementById("dailyHintBox").style.display = "none";
+  }
+
+  async function submitDailyAnswer() {
+    const input = document.getElementById("dailyAnswerInput");
+    const ans = input?.value.trim();
+    if (!ans) {
+      showToast("Please enter an answer!");
+      return;
+    }
+    const res = await apiCall("/api/v1/play/daily_challenge/verify", "POST", { answer: ans });
+    if (res && res.solved) {
+      playSound("win");
+      TouchSystem.triggerHaptic("success");
+      document.getElementById("dailyInputSection").style.display = "none";
+      document.getElementById("dailySolvedSuccess").style.display = "flex";
+      document.getElementById("dailyExplanationText").textContent = res.explanation;
+      showToast(`🎉 Correct! +${res.xp_awarded} XP! Streak: ${res.current_streak} days 🔥`);
+      awardProgressionXP(res.xp_awarded, true);
+    } else {
+      playSound("error");
+      TouchSystem.triggerHaptic("warning");
+      showToast("❌ Incorrect deduction. Try again or check the hint!");
+    }
   }
 
   function renderGameGrid() {
@@ -811,6 +1279,7 @@
       playSound("win");
       TouchSystem.triggerHaptic("success");
       showToast(`🎉 Player ${player} Wins!`);
+      if (player === 1) awardProgressionXP(100, true);
     }
 
     renderConnectFour();
@@ -917,6 +1386,7 @@
       playSound("win");
       TouchSystem.triggerHaptic("success");
       showToast(activeGameState.winner === "P1" ? "🎉 Victory! You aligned 3 marks!" : "🤖 Opponent won this round!");
+      if (activeGameState.winner === "P1") awardProgressionXP(100, true);
     } else if (activeGameState.move_count >= 9) {
       activeGameState.winner = "DRAW";
       playSound("score");

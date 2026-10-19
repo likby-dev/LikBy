@@ -30,101 +30,200 @@
       </div>
     </header>
 
-    <!-- Active Partner Connection Status Banner -->
-    <section class="partner-connection-banner idle" id="partnerBanner">
-      <div class="partner-banner-content">
-        <span class="live-dot" id="partnerStatusDot"></span>
-        <div class="partner-meta">
-          <div class="partner-status-tag" id="partnerStatusTag">ANONYMOUS CHAT DUELS</div>
-          <div class="partner-title" id="partnerTitle">Duels unlock when connected in chat</div>
+    <!-- Player Progression & Leveling Card -->
+    <section class="progression-card" id="progressionCard">
+      <div class="progression-top">
+        <div class="progression-avatar-wrap">
+          <div class="progression-avatar" id="playerAvatarIcon">🎮</div>
+          <div class="level-badge" id="playerLevelBadge">LVL 1</div>
         </div>
-      </div>
-      <div id="partnerActionWrap">
-        <button class="btn-partner-cta" id="partnerCtaBtn">🎲 Find Match</button>
-      </div>
-    </section>
-
-    <!-- Daily Duel Allowance Card -->
-    <section class="quota-card" id="quotaCard">
-      <div class="quota-header">
-        <span class="quota-title">⚔️ Daily Duel Allowance</span>
-        <span class="quota-counter" id="quotaCounterText">5 of 5 remaining</span>
-      </div>
-      <div class="quota-pills" id="quotaPills">
-        <div class="quota-pill active"></div>
-        <div class="quota-pill active"></div>
-        <div class="quota-pill active"></div>
-        <div class="quota-pill active"></div>
-        <div class="quota-pill active"></div>
-      </div>
-      <div class="quota-footer">
-        <span id="quotaResetText">Resets at 00:00 UTC (Midnight IST)</span>
-        <button class="btn-link" id="upgradePlanBtn">Get More Duels ⭐️</button>
-      </div>
-    </section>
-
-    <!-- Featured Hero Banner -->
-    <section class="featured-hero">
-      <span class="featured-badge">FEATURED TOURNAMENT DUEL</span>
-      <div class="featured-title">Carrom Clash 🥇</div>
-      <div class="featured-desc">
-        Take angles, master the board with silky friction physics, and pocket the queen!
-      </div>
-      <button class="btn-primary" id="featuredPlayBtn">
-        <span>⚔️ Play Duel Now</span>
-      </button>
-    </section>
-
-    <!-- Quick Play Bar -->
-    <section>
-      <div class="section-title">⚡ Instant Quick Play</div>
-      <div class="quick-bar">
-        <div class="quick-chip" data-game="carrom_clash">
-          <span>🎯</span>
-          <span>Carrom Clash</span>
-        </div>
-        <div class="quick-chip" data-game="connect_four">
-          <span>🔵</span>
-          <span>Connect Four</span>
-        </div>
-        <div class="quick-chip" data-game="xo">
-          <span>❌⭕</span>
-          <span>XO Duel</span>
-        </div>
-        <div class="quick-chip" data-game="air_rush">
-          <span>🏒</span>
-          <span>Air Rush</span>
-        </div>
-        <div class="quick-chip" data-game="zen_merge">
-          <span>🧩</span>
-          <span>Zen Merge (2048)</span>
-        </div>
-        <div class="quick-chip" data-game="stick_arena">
-          <span>🤺</span>
-          <span>Stick Arena</span>
-        </div>
-        <div class="quick-chip" data-game="reflex_rush">
-          <span>⚡</span>
-          <span>Reflex Rush</span>
+        <div class="progression-info">
+          <div class="progression-name-row">
+            <span class="player-name" id="playerNameText">LikBy Player</span>
+            <span class="player-streak-badge" id="playerStreakBadge">🔥 0 Streak</span>
+          </div>
+          <div class="xp-bar-track">
+            <div class="xp-bar-fill" id="xpBarFill" style="width: 15%;"></div>
+          </div>
+          <div class="xp-meta">
+            <span id="playerRankTitle">Cyber Novice</span>
+            <span id="playerXpText">0 / 200 XP</span>
+          </div>
         </div>
       </div>
     </section>
 
-    <!-- Filter Tabs -->
-    <section>
-      <div class="tab-bar">
-        <button class="tab-btn active" data-filter="all">All Games</button>
-        <button class="tab-btn" data-filter="duel">⚔️ Duels</button>
-        <button class="tab-btn" data-filter="solo">🕹 Solo</button>
-      </div>
-    </section>
+    <!-- GameVerse Navigation Tabs -->
+    <nav class="gameverse-nav">
+      <button class="gv-nav-btn active" data-view="arena">🏟 Arena</button>
+      <button class="gv-nav-btn" data-view="leaderboard">🏆 Top 10</button>
+      <button class="gv-nav-btn" data-view="badges">🎖 Badges</button>
+      <button class="gv-nav-btn" data-view="daily">🧩 Daily Riddle</button>
+    </nav>
 
-    <!-- Game Cards Grid -->
-    <section>
-      <div class="game-grid" id="gameGrid">
-        <!-- Injected dynamically by app.js -->
-      </div>
-    </section>
+    <!-- VIEW 1: ARENA -->
+    <main id="viewArena" class="gameverse-view active">
+      <!-- Active Partner Connection Status Banner -->
+      <section class="partner-connection-banner idle" id="partnerBanner">
+        <div class="partner-banner-content">
+          <span class="live-dot" id="partnerStatusDot"></span>
+          <div class="partner-meta">
+            <div class="partner-status-tag" id="partnerStatusTag">ANONYMOUS CHAT DUELS</div>
+            <div class="partner-title" id="partnerTitle">Duels unlock when connected in chat</div>
+          </div>
+        </div>
+        <div id="partnerActionWrap">
+          <button class="btn-partner-cta" id="partnerCtaBtn">🎲 Find Match</button>
+        </div>
+      </section>
+
+      <!-- Daily Duel Allowance Card -->
+      <section class="quota-card" id="quotaCard">
+        <div class="quota-header">
+          <span class="quota-title">⚔️ Daily Duel Allowance</span>
+          <span class="quota-counter" id="quotaCounterText">5 of 5 remaining</span>
+        </div>
+        <div class="quota-pills" id="quotaPills">
+          <div class="quota-pill active"></div>
+          <div class="quota-pill active"></div>
+          <div class="quota-pill active"></div>
+          <div class="quota-pill active"></div>
+          <div class="quota-pill active"></div>
+        </div>
+        <div class="quota-footer">
+          <span id="quotaResetText">Resets at 00:00 UTC (Midnight IST)</span>
+          <button class="btn-link" id="upgradePlanBtn">Get More Duels ⭐️</button>
+        </div>
+      </section>
+
+      <!-- Featured Hero Banner -->
+      <section class="featured-hero">
+        <span class="featured-badge">FEATURED TOURNAMENT DUEL</span>
+        <div class="featured-title">Carrom Clash 🥇</div>
+        <div class="featured-desc">
+          Take angles, master the board with silky friction physics, and pocket the queen!
+        </div>
+        <button class="btn-primary" id="featuredPlayBtn">
+          <span>⚔️ Play Duel Now</span>
+        </button>
+      </section>
+
+      <!-- Quick Play Bar -->
+      <section>
+        <div class="section-title">⚡ Instant Quick Play</div>
+        <div class="quick-bar">
+          <div class="quick-chip" data-game="carrom_clash">
+            <span>🎯</span>
+            <span>Carrom Clash</span>
+          </div>
+          <div class="quick-chip" data-game="connect_four">
+            <span>🔵</span>
+            <span>Connect Four</span>
+          </div>
+          <div class="quick-chip" data-game="xo">
+            <span>❌⭕</span>
+            <span>XO Duel</span>
+          </div>
+          <div class="quick-chip" data-game="air_rush">
+            <span>🏒</span>
+            <span>Air Rush</span>
+          </div>
+          <div class="quick-chip" data-game="zen_merge">
+            <span>🧩</span>
+            <span>Zen Merge (2048)</span>
+          </div>
+          <div class="quick-chip" data-game="stick_arena">
+            <span>🤺</span>
+            <span>Stick Arena</span>
+          </div>
+          <div class="quick-chip" data-game="reflex_rush">
+            <span>⚡</span>
+            <span>Reflex Rush</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Filter Tabs -->
+      <section>
+        <div class="tab-bar">
+          <button class="tab-btn active" data-filter="all">All Games</button>
+          <button class="tab-btn" data-filter="duel">⚔️ Duels</button>
+          <button class="tab-btn" data-filter="solo">🕹 Solo</button>
+        </div>
+      </section>
+
+      <!-- Game Cards Grid -->
+      <section>
+        <div class="game-grid" id="gameGrid">
+          <!-- Injected dynamically by app.js -->
+        </div>
+      </section>
+    </main>
+
+    <!-- VIEW 2: LEADERBOARD -->
+    <main id="viewLeaderboard" class="gameverse-view" style="display: none;">
+      <section class="leaderboard-section">
+        <div class="section-header">
+          <div class="section-title">🏆 Global Hall of Champions</div>
+          <span class="leaderboard-tag">Season 1 Active</span>
+        </div>
+        <p class="section-subtitle">Real-time player standings ranked by total earned XP across Duels & Solo challenges.</p>
+        <div class="leaderboard-table-wrap">
+          <div class="leaderboard-list" id="leaderboardList">
+            <div class="leaderboard-loading">Loading champions...</div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- VIEW 3: BADGES & ACHIEVEMENTS -->
+    <main id="viewBadges" class="gameverse-view" style="display: none;">
+      <section class="badges-section">
+        <div class="section-header">
+          <div class="section-title">🎖 Cyber Badges & Mastery</div>
+          <span class="badge-count-pill" id="badgeUnlockedCount">0 / 10 Unlocked</span>
+        </div>
+        <p class="section-subtitle">Earn unique achievements and bonus XP by testing your skills in every arena discipline.</p>
+        <div class="badges-grid" id="badgesGrid">
+          <div class="badges-loading">Loading achievements...</div>
+        </div>
+      </section>
+    </main>
+
+    <!-- VIEW 4: DAILY RIDDLE -->
+    <main id="viewDaily" class="gameverse-view" style="display: none;">
+      <section class="daily-riddle-view">
+        <div class="daily-card-hero">
+          <div class="daily-badge">🔐 CANONICAL DAILY CHALLENGE</div>
+          <div class="daily-date-tag" id="dailyChallengeDate">Today</div>
+          <div class="daily-title" id="dailyRiddleTitle">Loading daily mystery...</div>
+          <div class="daily-riddle-quote" id="dailyRiddleText">"..."</div>
+          
+          <div class="daily-hint-box" id="dailyHintBox" style="display: none;">
+            <span class="hint-label">💡 Master Clue:</span>
+            <span id="dailyHintText">Hint will appear here</span>
+          </div>
+
+          <div class="daily-actions-row">
+            <button class="btn-secondary" id="dailyRevealHintBtn" style="padding: 8px 14px; font-size: 12px;">
+              💡 Reveal Hint
+            </button>
+            <span class="daily-reward-pill">⭐️ +50 XP Reward</span>
+          </div>
+
+          <div class="daily-input-row" id="dailyInputSection">
+            <input type="text" id="dailyAnswerInput" class="input-field" placeholder="Enter your deduction..." />
+            <button class="btn-primary" id="dailySubmitBtn">Solve 🔑</button>
+          </div>
+
+          <div id="dailySolvedSuccess" class="daily-solved-banner" style="display: none;">
+            <div style="font-size: 28px;">🎉</div>
+            <div style="font-weight: 700; color: var(--likby-emerald); font-size: 16px;">Daily Mystery Solved!</div>
+            <div id="dailyExplanationText" style="font-size: 13px; color: var(--likby-text-muted); margin-top: 4px;"></div>
+          </div>
+        </div>
+      </section>
+    </main>
   </div>
 
   <!-- Full-Screen Interactive Game Viewport / Arena -->
@@ -137,9 +236,10 @@
           <span class="viewport-turn-badge" id="viewportTurnBadge">Your Turn ⚡</span>
         </div>
       </div>
-      <div style="display: flex; gap: 8px;">
+      <div style="display: flex; gap: 8px; align-items: center;">
+        <button class="btn-icon" id="viewportTutorialBtn" title="How to Play / Rules">❓</button>
         <button class="btn-icon active" id="arenaTouchBtn" title="Touch Controls: Active">📱</button>
-        <button class="btn-icon" id="arenaSoundBtn">🔊</button>
+        <button class="btn-icon" id="arenaSoundBtn" title="Sound">🔊</button>
         <button class="btn-secondary" id="exitGameBtn" style="padding: 6px 14px; font-size: 12px;">Leave</button>
       </div>
     </div>
@@ -170,16 +270,57 @@
         <div style="background: rgba(30, 41, 59, 0.6); border: 1px solid var(--likby-glass-border); border-radius: 12px; padding: 12px; text-align: center;">
           <span style="font-size: 11px; font-weight: 800; color: var(--likby-cyan); letter-spacing: 0.5px;">💡 NO ACTIVE CHAT PARTNER</span>
           <div style="font-size: 13px; color: var(--likby-text-muted); margin-top: 4px;">
-            Connect with someone in LikBy anonymous chat to duel live, or practice right now against the AI Bot!
+            Enter the global matchmaking queue to be paired instantly with an online opponent, or practice against the AI Bot!
           </div>
         </div>
       </div>
       <input type="hidden" id="partnerIdInput" value="" />
       <div style="display: flex; flex-direction: column; gap: 8px;">
         <button class="btn-primary" id="sendInviteBtn" style="width: 100%;">⚔️ Play Live with Partner</button>
+        <button class="btn-primary" id="openQueueBtn" style="width: 100%; background: linear-gradient(135deg, var(--likby-cyan), var(--likby-blue));">
+          🌐 Global Matchmaking Radar
+        </button>
         <button class="btn-secondary" id="practiceDuelBtn" style="width: 100%;">🤖 Practice vs AI</button>
         <button class="btn-link" id="modalFindMatchBtn" style="margin-top: 4px;">🎲 Find a Partner in Bot</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Matchmaking Radar Modal -->
+  <div class="modal-overlay" id="matchmakingModal">
+    <div class="modal-box text-center">
+      <div class="radar-container">
+        <div class="radar-circle circle-1"></div>
+        <div class="radar-circle circle-2"></div>
+        <div class="radar-circle circle-3"></div>
+        <div class="radar-sweep"></div>
+        <div class="radar-avatar" id="radarAvatar">⚔️</div>
+      </div>
+      <h3 class="modal-title" id="mmModalTitle" style="margin-top: 14px;">Searching Opponent...</h3>
+      <p id="mmModalSub" style="font-size: 13px; color: var(--likby-text-muted); margin: 6px 0 16px;">
+        Finding an online contender in the GameVerse Arena
+      </p>
+      <div class="mm-game-tag" id="mmGameTag">Connect Four • Casual</div>
+      <div class="mm-timer" id="mmTimer">00:03</div>
+      <button class="btn-secondary" id="cancelMatchmakingBtn" style="width: 100%; margin-top: 14px;">
+        Cancel Search
+      </button>
+    </div>
+  </div>
+
+  <!-- Tutorial / How to Play Modal -->
+  <div class="modal-overlay" id="tutorialModal">
+    <div class="modal-box">
+      <div class="modal-header">
+        <h3 class="modal-title" id="tutorialTitle">❓ How to Play</h3>
+        <button class="btn-close" id="closeTutorialModal">✕</button>
+      </div>
+      <div id="tutorialContent" class="tutorial-body">
+        <!-- Injected dynamically based on active game -->
+      </div>
+      <button class="btn-primary" id="gotItTutorialBtn" style="width: 100%; margin-top: 16px;">
+        Got It, Let's Play! 🚀
+      </button>
     </div>
   </div>
 
@@ -196,6 +337,16 @@
         <button class="btn-secondary" id="upgradeTiersBtn">👑 Upgrade to VIP Tier</button>
         <button class="btn-link" id="closeQuotaModal">Maybe Later</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Achievement Unlocked Toast Banner -->
+  <div class="achievement-toast" id="achievementToast">
+    <div class="ach-toast-icon" id="achToastIcon">🎖</div>
+    <div class="ach-toast-info">
+      <div class="ach-toast-subtitle">ACHIEVEMENT UNLOCKED</div>
+      <div class="ach-toast-title" id="achToastTitle">First Victory</div>
+      <div class="ach-toast-xp" id="achToastXp">+100 XP</div>
     </div>
   </div>
 
