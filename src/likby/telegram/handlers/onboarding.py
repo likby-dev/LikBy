@@ -8,7 +8,7 @@ import logging
 import re
 from typing import Any, List, Optional
 import uuid
-from aiogram import Router, F
+from aiogram import Bot, Router, F
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, Message
 from likby.domain.entities.profile import Profile
@@ -185,7 +185,7 @@ async def process_age(message: Message, state: FSMContext) -> None:
     )
 
 
-@router.callback_query(OnboardingStates.waiting_for_gender, F.data.startswith("gender:"))
+@router.callback_query(F.data.startswith("gender:"))
 async def process_gender(callback: CallbackQuery, state: FSMContext) -> None:
     await callback.answer()
     if not callback.data or not callback.message:
@@ -257,12 +257,13 @@ async def finish_interests(
     state: FSMContext,
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
+    bot: Optional[Bot] = None,
     referral_service: Optional[Any] = None,
 ) -> None:
     data = await state.get_data()
     selected = list(data.get("selected_interests", []))
 
-    # Fallback to extracting from button checkmarks if state is missing
+    # Fallback to extracting from button checkmarks if state was lost
     if len(selected) < 2 and callback.message:
         recovered = extract_selected_interests_from_markup(callback.message)
         if len(recovered) >= 2:
@@ -312,11 +313,11 @@ async def finish_interests(
     age = max(18, min(99, age))
 
     # Resolve gender
-    gender_val = data.get("gender", Gender.OTHER.value)
+    gender_val = data.get("gender", Gender.PREFER_NOT_TO_SAY.value)
     try:
         gender = Gender(gender_val)
     except Exception:
-        gender = Gender.OTHER
+        gender = Gender.PREFER_NOT_TO_SAY
 
     # 1. Save user FIRST to satisfy foreign key constraints in Supabase
     user.transition_state(UserState.MAIN_MENU)
@@ -351,21 +352,22 @@ async def finish_interests(
 
     await state.clear()
 
-    # Safely delete the inline keyboard prompt if possible
-    if callback.message:
-        try:
-            await callback.message.delete()
-        except Exception:
-            pass
+    target_bot = bot or callback.bot
+    chat_id = (
+        callback.message.chat.id
+        if (callback.message and callback.message.chat)
+        else callback.from_user.id
+    )
 
-    chat_id = callback.message.chat.id if callback.message else callback.from_user.id
-    unique_tag = f"@{profile.unique_id}" if profile.unique_id else "<i>Not set</i>"
+    resolved_uid = profile.unique_id or user.unique_id
+    unique_tag = f"@{html.escape(resolved_uid)}" if resolved_uid else "<i>Not set</i>"
+    safe_name = html.escape(profile.display_name)
     gender_label = profile.gender.value.replace("_", " ").title()
     interests_label = ", ".join(profile.interests).title()
 
     welcome_text = (
         f"🎉 <b>Profile Created & Safely Saved in Memory!</b> ✨\n\n"
-        f"• 👤 <b>Display Name:</b> {profile.display_name}\n"
+        f"• 👤 <b>Display Name:</b> {safe_name}\n"
         f"• 🆔 <b>Permanent ID:</b> {unique_tag} 🔒 <i>(Immutable — cannot be edited)</i>\n"
         f"• 🎂 <b>Age & Gender:</b> {profile.age} • {gender_label}\n"
         f"• 🎯 <b>Interests ({len(profile.interests)}):</b> {interests_label}\n"
@@ -377,20 +379,44 @@ async def finish_interests(
         f"Tap <b>🎲 Find Match</b> below whenever you're ready to start chatting!"
     )
 
-    try:
-        await callback.bot.send_message(
-            chat_id=chat_id,
-            text=welcome_text,
-            parse_mode="HTML",
-            reply_markup=get_main_menu_keyboard(),
-        )
-    except Exception:
-        if callback.message:
+    message_sent = False
+    if target_bot:
+        try:
+            await target_bot.send_message(
+                chat_id=chat_id,
+                text=welcome_text,
+                parse_mode="HTML",
+                reply_markup=get_main_menu_keyboard(),
+            )
+            message_sent = True
+        except Exception as exc:
+            logger.warning("[Onboarding] HTML send failed, trying plain text: %s", exc)
             try:
-                await callback.message.answer(
-                    text=welcome_text,
-                    parse_mode="HTML",
+                plain_text = (
+                    f"🎉 Profile Created & Safely Saved in Memory! ✨\n\n"
+                    f"• 👤 Display Name: {profile.display_name}\n"
+                    f"• 🆔 Permanent ID: @{resolved_uid}\n"
+                    f"• 🎂 Age & Gender: {profile.age} • {gender_label}\n"
+                    f"• 🎯 Interests: {interests_label}\n"
+                    f"• 🌟 Karma Standing: {user.karma_score} / 500\n\n"
+                    f"🔒 Privacy Shield Guarantee:\n"
+                    f"• 🛡 Your Telegram info is 100% confidential.\n"
+                    f"• 🎮 All 17 games are ready in the LikBy Play Mini App!\n\n"
+                    f"Tap 🎲 Find Match below to start chatting!"
+                )
+                await target_bot.send_message(
+                    chat_id=chat_id,
+                    text=plain_text,
                     reply_markup=get_main_menu_keyboard(),
                 )
-            except Exception as exc:
-                logger.error("[Onboarding] Failed to send completion message: %s", exc)
+                message_sent = True
+            except Exception as final_exc:
+                logger.error("[Onboarding] Both HTML and plain text sends failed: %s", final_exc)
+
+    # Delete the inline topic selector keyboard only after sending the welcome message
+    if callback.message:
+        try:
+            await callback.message.delete()
+        except Exception:
+            pass
+

@@ -3,6 +3,7 @@ tests.unit.test_telegram_menu_hubs
 Tests verifying the 5-button main navigation keyboard and inside architecture hubs.
 """
 
+import pytest
 from likby.telegram.keyboards import (
     get_chat_hub_keyboard,
     get_connections_hub_keyboard,
@@ -138,3 +139,83 @@ def test_interests_keyboard_five_selected_and_markup_extraction():
     extracted = extract_selected_interests_from_markup(msg)
     assert set(extracted) == set(selected_5)
     assert len(extracted) == 5
+
+
+@pytest.mark.asyncio
+async def test_finish_interests_handler_creates_user_and_sends_welcome():
+    """Verify that finish_interests processes 5 topics, saves user and profile, and sends welcome."""
+    from unittest.mock import AsyncMock, MagicMock
+    from aiogram.types import CallbackQuery, Chat, Message, User as TgUser
+    from likby.telegram.handlers.onboarding import finish_interests
+    from likby.telegram.keyboards import get_interests_keyboard
+    from likby.repositories.sqlite.database import init_sqlite_db
+    from likby.repositories.sqlite.user_repository import SqliteUserRepository
+    from likby.repositories.sqlite.profile_repository import SqliteProfileRepository
+
+    conn = await init_sqlite_db(":memory:")
+    u_repo = SqliteUserRepository(conn)
+    p_repo = SqliteProfileRepository(conn)
+
+    selected_5 = ["coffee", "gaming", "tech", "music", "books"]
+    kb = get_interests_keyboard(selected=selected_5)
+
+    # Mock Telegram types
+    tg_user = TgUser(id=12345678, is_bot=False, first_name="Jasvanth", username="jasvanth")
+    chat = Chat(id=12345678, type="private")
+
+    msg = MagicMock()
+    msg.message_id = 999
+    msg.chat = chat
+    msg.from_user = tg_user
+    msg.reply_markup = kb
+    msg.delete = AsyncMock()
+
+    bot_mock = MagicMock()
+    bot_mock.send_message = AsyncMock()
+
+    cb = MagicMock()
+    cb.id = "cb_test_01"
+    cb.from_user = tg_user
+    cb.message = msg
+    cb.data = "interest_done"
+    cb.answer = AsyncMock()
+    cb.bot = bot_mock
+
+    # Mock FSM context
+    state_mock = MagicMock()
+    state_mock.get_data = AsyncMock(return_value={"selected_interests": selected_5, "age": 21, "unique_id": "jasvanth"})
+    state_mock.clear = AsyncMock()
+
+    await finish_interests(
+        callback=cb,
+        state=state_mock,
+        user_repo=u_repo,
+        profile_repo=p_repo,
+        bot=bot_mock,
+    )
+
+    # Validate callback acknowledged
+    cb.answer.assert_called_once()
+    # Validate bot sent welcome message with main menu keyboard
+    bot_mock.send_message.assert_called_once()
+    send_args = bot_mock.send_message.call_args[1]
+    assert send_args["chat_id"] == 12345678
+    assert "Profile Created & Safely Saved in Memory!" in send_args["text"]
+    assert send_args["reply_markup"] is not None
+
+    # Validate message was deleted
+    msg.delete.assert_called_once()
+
+    # Validate user and profile persisted
+    saved_user = await u_repo.get_by_telegram_id(12345678)
+    assert saved_user is not None
+    assert saved_user.unique_id == "jasvanth"
+    assert saved_user.state.value == "MAIN_MENU"
+
+    saved_profile = await p_repo.get_by_user_id(saved_user.id)
+    assert saved_profile is not None
+    assert set(saved_profile.interests) == set(selected_5)
+    assert saved_profile.age == 21
+
+    await conn.close()
+

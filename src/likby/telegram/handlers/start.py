@@ -3,6 +3,7 @@ likby.telegram.handlers.start
 Handlers for /start command and 18+ age verification gate.
 """
 
+import html
 from typing import Any, Optional
 import uuid
 from aiogram import Router, F
@@ -64,10 +65,11 @@ async def handle_start(
                 else ("Trusted Member ✨" if karma >= 100 else "Good Standing")
             )
 
+            safe_name = html.escape(profile.display_name)
             await message.answer(
-                f"👋 <b>Welcome back to LikBy, {profile.display_name}!</b> ✨\n\n"
+                f"👋 <b>Welcome back to LikBy, {safe_name}!</b> ✨\n\n"
                 f"🔒 <b>Your Profile is Safely Preserved in Memory:</b>\n"
-                f"• 👤 <b>Display Name:</b> {profile.display_name}\n"
+                f"• 👤 <b>Display Name:</b> {safe_name}\n"
                 f"• 🆔 <b>Permanent ID:</b> {unique_tag} 🔒 <i>(Immutable)</i>\n"
                 f"• 🎂 <b>Age & Gender:</b> {profile.age} • {gender_str}\n"
                 f"• 🎯 <b>Interests ({len(profile.interests)}):</b> {interests_str}\n"

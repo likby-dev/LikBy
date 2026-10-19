@@ -24,7 +24,7 @@ class SupabaseProfileRepository(ProfileRepository):
     async def get_by_user_id(self, user_id: str) -> Optional[Profile]:
         try:
             res = await asyncio.to_thread(
-                self._client.table("profiles").select("*").eq("user_id", user_id).limit(1).execute
+                self._client.table("profiles").select("*, users(unique_id)").eq("user_id", user_id).limit(1).execute
             )
             if res.data:
                 profile = self._row_to_entity(res.data[0])
@@ -115,9 +115,13 @@ class SupabaseProfileRepository(ProfileRepository):
             except Exception:
                 pref_list.append(GenderPreference.ANY)
 
+        unique_id = row.get("unique_id")
+        if not unique_id and isinstance(row.get("users"), dict):
+            unique_id = row["users"].get("unique_id")
+
         return Profile(
             user_id=row["user_id"],
-            unique_id=row.get("unique_id"),
+            unique_id=unique_id,
             display_name=row["display_name"],
             age=int(row["age"]),
             gender=Gender(row["gender"]),
