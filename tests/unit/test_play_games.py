@@ -24,6 +24,7 @@ from likby.games.duel_engines import (
     ReflexRushEngine,
     StickArenaEngine,
     WordRushEngine,
+    XOEngine,
 )
 from likby.games.solo_engines import (
     ColorFlowEngine,
@@ -35,9 +36,9 @@ from likby.games.solo_engines import (
 )
 
 
-def test_registry_contains_all_17_games():
+def test_registry_contains_all_18_games():
     games = list_available_games()
-    assert len(games) == 17
+    assert len(games) == 18
     duel_types = [
         GameType.CARROM_CLASH,
         GameType.AIR_RUSH,
@@ -50,6 +51,7 @@ def test_registry_contains_all_17_games():
         GameType.CONNECT_FOUR,
         GameType.MINDMATCH,
         GameType.MYSTERY_MISSION,
+        GameType.XO,
     ]
     solo_types = [
         GameType.ZEN_MERGE,
@@ -400,3 +402,97 @@ def test_daily_mystery_mechanics():
     assert ok is True
     assert state["solved"] is True
     assert state["status"] == "COMPLETED"
+
+
+# ============================================================
+# 18. XO DUEL (MULTIPLAYER DUEL #12)
+# ============================================================
+
+def test_xo_mechanics_and_horizontal_win():
+    engine = XOEngine()
+    state = engine.init_game_state({}, ["player_x", "player_o"])
+    assert state["current_turn"] == "player_x"
+    assert state["move_count"] == 0
+    assert len(state["board"]) == 3
+    assert len(state["board"][0]) == 3
+
+    # Turn validation: player_o cannot play first
+    ok, msg, state, winner = engine.process_action(state, "player_o", "place_mark", {"row": 0, "col": 0})
+    assert ok is False
+    assert "not your turn" in msg.lower()
+
+    # Move 1: X plays (0, 0)
+    ok, msg, state, winner = engine.process_action(state, "player_x", "place_mark", {"row": 0, "col": 0})
+    assert ok is True
+    assert state["board"][0][0] == "X"
+    assert state["current_turn"] == "player_o"
+
+    # Cannot overwrite occupied cell
+    ok, msg, state, winner = engine.process_action(state, "player_o", "place_mark", {"row": 0, "col": 0})
+    assert ok is False
+    assert "already occupied" in msg.lower()
+
+    # Move 2: O plays (1, 0)
+    ok, msg, state, winner = engine.process_action(state, "player_o", "place_mark", {"row": 1, "col": 0})
+    assert ok is True
+
+    # Move 3: X plays (0, 1) using cell index 1
+    ok, msg, state, winner = engine.process_action(state, "player_x", "place_mark", {"cell": 1})
+    assert ok is True
+    assert state["board"][0][1] == "X"
+
+    # Move 4: O plays (1, 1)
+    ok, msg, state, winner = engine.process_action(state, "player_o", "place_mark", {"row": 1, "col": 1})
+    assert ok is True
+
+    # Move 5: X plays (0, 2) -> Horizontal win on row 0!
+    ok, msg, state, winner = engine.process_action(state, "player_x", "place_mark", {"row": 0, "col": 2})
+    assert ok is True
+    assert state["winner"] == "player_x"
+    assert winner == "player_x"
+    assert state["status"] == "COMPLETED"
+    assert state["winning_cells"] == [[0, 0], [0, 1], [0, 2]]
+
+    # Subsequent move rejected
+    ok, msg, state, _ = engine.process_action(state, "player_o", "place_mark", {"row": 2, "col": 2})
+    assert ok is False
+    assert "already completed" in msg.lower()
+
+
+def test_xo_diagonal_win_and_draw():
+    engine = XOEngine()
+    # Test diagonal win
+    state = engine.init_game_state({}, ["px", "po"])
+    ok, msg, state, _ = engine.process_action(state, "px", "place_mark", {"row": 0, "col": 0}) # X
+    ok, msg, state, _ = engine.process_action(state, "po", "place_mark", {"row": 0, "col": 1}) # O
+    ok, msg, state, _ = engine.process_action(state, "px", "place_mark", {"row": 1, "col": 1}) # X
+    ok, msg, state, _ = engine.process_action(state, "po", "place_mark", {"row": 0, "col": 2}) # O
+    ok, msg, state, winner = engine.process_action(state, "px", "place_mark", {"row": 2, "col": 2}) # X wins diagonal
+    assert ok is True
+    assert state["winner"] == "px"
+    assert state["winning_cells"] == [[0, 0], [1, 1], [2, 2]]
+
+    # Test Draw
+    # Board:
+    # X O X
+    # X O O
+    # O X X
+    state = engine.init_game_state({}, ["px", "po"])
+    moves = [
+        ("px", 0, 0), ("po", 0, 1), ("px", 0, 2),
+        ("po", 1, 1), ("px", 1, 0), ("po", 1, 2),
+        ("px", 2, 1), ("po", 2, 0), ("px", 2, 2),
+    ]
+    for user, r, c in moves[:-1]:
+        ok, msg, state, w = engine.process_action(state, user, "place_mark", {"row": r, "col": c})
+        assert ok is True
+        assert w is None
+
+    # Final move -> Draw
+    user, r, c = moves[-1]
+    ok, msg, state, w = engine.process_action(state, user, "place_mark", {"row": r, "col": c})
+    assert ok is True
+    assert state["winner"] == "DRAW"
+    assert w == "DRAW"
+    assert state["status"] == "COMPLETED"
+

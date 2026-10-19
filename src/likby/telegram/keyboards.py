@@ -444,7 +444,7 @@ def get_solo_game_card_keyboard(game_id: str, mini_app_url: Optional[str] = None
 
 def get_duel_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """
-    Dedicated interactive selector keyboard for all 11 official LikBy Multiplayer Duels.
+    Dedicated interactive selector keyboard for all 12 official LikBy Multiplayer Duels.
     Provides clickable buttons for every single duel game with detail cards & instant launch.
     """
     mini_app_url = _normalize_mini_app_url(mini_app_url)
@@ -480,21 +480,11 @@ def get_duel_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboar
         ],
         [
             _btn("🔍 11. Mystery Mission", "mystery_mission"),
+            _btn("❌⭕ 12. XO Duel", "xo"),
         ],
     ]
 
-    if is_https:
-        clean_base = mini_app_url.split("?")[0].rstrip("/")
-        duel_hub_url = f"{clean_base}?mode=duel"
-        rows.append([
-            InlineKeyboardButton(
-                text="🚀 Open Duels in LikBy Play (Mini App)",
-                web_app=WebAppInfo(url=duel_hub_url),
-            )
-        ])
-
     rows.append([
-        InlineKeyboardButton(text="🧩 Solo Games", callback_data="play:solo_info"),
         InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
     ])
 

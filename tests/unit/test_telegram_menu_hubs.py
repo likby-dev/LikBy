@@ -308,14 +308,14 @@ async def test_chat_message_unrelayed_solo_shortcut_and_idle_help():
     assert "Free Solo Games" in text_sent
 
 
-def test_duel_games_keyboards_all_eleven_buttons():
-    """Validates that duel games keyboard provides all 11 games as selectable buttons."""
+def test_duel_games_keyboards_all_twelve_buttons():
+    """Validates that duel games keyboard provides all 12 games as selectable buttons without open or solo buttons."""
     from likby.telegram.keyboards import get_duel_games_keyboard, get_duel_game_card_keyboard
 
     # Local / non-https -> callbacks
     kb_local = get_duel_games_keyboard("http://localhost:8000/play/")
     game_callbacks = [btn.callback_data for row in kb_local.inline_keyboard[:6] for btn in row]
-    assert len(game_callbacks) == 11
+    assert len(game_callbacks) == 12
     assert "play:duel_card:connect_four" in game_callbacks
     assert "play:duel_card:carrom_clash" in game_callbacks
     assert "play:duel_card:air_rush" in game_callbacks
@@ -327,9 +327,21 @@ def test_duel_games_keyboards_all_eleven_buttons():
     assert "play:duel_card:reflex_rush" in game_callbacks
     assert "play:duel_card:mindmatch" in game_callbacks
     assert "play:duel_card:mystery_mission" in game_callbacks
+    assert "play:duel_card:xo" in game_callbacks
+
+    # Verify solo and open mini app buttons are removed from duels keyboard
+    all_callbacks = [btn.callback_data for row in kb_local.inline_keyboard for btn in row if btn.callback_data]
+    assert "play:solo_info" not in all_callbacks
+    assert "play:hub" in all_callbacks
+
+    # HTTPS Mini App keyboard also does not include Open Duels top button
+    kb_https = get_duel_games_keyboard("https://likby.onrender.com/play/")
+    all_https_texts = [btn.text for row in kb_https.inline_keyboard for btn in row]
+    assert not any("Open Duels in LikBy Play" in t for t in all_https_texts)
+    assert not any("Solo Games" in t for t in all_https_texts)
 
     # Card keyboard
-    card_kb = get_duel_game_card_keyboard("carrom_clash", "https://likby-dev.onrender.com/play/", in_active_session=False)
+    card_kb = get_duel_game_card_keyboard("carrom_clash", "https://likby.onrender.com/play/", in_active_session=False)
     assert card_kb.inline_keyboard[0][0].web_app is not None
     assert "game=carrom_clash" in card_kb.inline_keyboard[0][0].web_app.url
 

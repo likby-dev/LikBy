@@ -170,6 +170,18 @@ GAME_CATALOGUE: Dict[GameType, GameDefinition] = {
         max_players=2,
         config={"max_time_seconds": 300, "stages": 3, "hints_allowed": 2},
     ),
+    GameType.XO: GameDefinition(
+        id=GameType.XO,
+        name="XO Duel",
+        mode=GameMode.DUEL,
+        category="Classic Strategy",
+        typical_duration="1–3 min",
+        tagline="Cyber-neon 3x3 tactical Tic-Tac-Toe duel with glowing alignment strikes",
+        description="Place marks on a 3x3 matrix. Align 3 in a row horizontally, vertically, or diagonally to win.",
+        min_players=2,
+        max_players=2,
+        config={"grid_size": 3, "turn_time_seconds": 30},
+    ),
 
     # -------------------------------------------------------------------------
     # 6 Solo Games (Unlimited Daily Access for All Tiers)

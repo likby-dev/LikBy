@@ -228,9 +228,28 @@ DUEL_GAMES_DETAILS = {
         ],
         "reward": "Cracking the safe awards +20 Karma to both partners!",
     },
+    "xo": {
+        "num": 12,
+        "name": "XO Duel",
+        "emoji": "❌⭕",
+        "category": "Classic Neon Strategy",
+        "duration": "1–3 mins",
+        "desc": "The timeless 3x3 tactical showdown upgraded with cyber-neon laser aesthetics! Challenge your chat partner or practice tactics against the AI Bot.",
+        "rules": [
+            "Players take turns placing their designated mark (X for P1, O for P2) into empty cells.",
+            "Form an unbroken line of 3 marks horizontally, vertically, or diagonally.",
+            "First player to align 3 pieces claims instant victory!",
+        ],
+        "reward": "Winning an XO duel awards +15 Karma and Tactical Ace status!",
+    },
 }
 
 DUEL_NUM_MAP = {
+    "12": "xo",
+    "xo": "xo",
+    "tictactoe": "xo",
+    "tic tac toe": "xo",
+    "x o": "xo",
     "connect four": "connect_four",
     "c4": "connect_four",
     "carrom": "carrom_clash",
@@ -307,7 +326,8 @@ async def show_duels(
         "8. 🧠 <b>Brain Blitz</b> — <i>Simultaneous esports trivia battle</i>\n"
         "9. ⚡️ <b>Reflex Rush</b> — <i>Sub-180ms reaction test chamber</i>\n"
         "10. 💭 <b>MindMatch</b> — <i>Social compatibility & harmony</i>\n"
-        "11. 🔍 <b>Mystery Mission</b> — <i>Co-op escape room clues</i>\n\n"
+        "11. 🔍 <b>Mystery Mission</b> — <i>Co-op escape room clues</i>\n"
+        "12. ❌⭕ <b>XO Duel</b> — <i>Classic 3x3 cyber-neon alignment race</i>\n\n"
         "👉 <b>Tap any game button below to select and view rules or challenge!</b>"
     )
 
@@ -661,7 +681,7 @@ async def not_in_active_session_filter(message: Message, chat_relay: Optional[An
 COMBINED_GAMES_MAP = {**SOLO_NUM_MAP, **DUEL_NUM_MAP}
 
 
-@router.message(F.text.in_(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]), not_in_active_session_filter)
+@router.message(F.text.in_(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"]), not_in_active_session_filter)
 @router.message(F.text.lower().in_(list(COMBINED_GAMES_MAP.keys())), not_in_active_session_filter)
 async def handle_solo_number_shortcut(
     message: Message,
@@ -700,7 +720,7 @@ async def handle_solo_number_shortcut(
 async def show_catalogue(
     callback: CallbackQuery,
 ) -> None:
-    """Displays the entire 17-game collection overview."""
+    """Displays the entire game collection overview."""
     settings = get_settings()
     mini_app_url = settings.telegram_mini_app_url
     await callback.answer()
@@ -708,24 +728,25 @@ async def show_catalogue(
     text = (
         "✨ <b>LikBy Play — Games Catalogue</b> 🩵\n\n"
         "<b>Multiplayer Duels:</b>\n"
-        "1. 🎱 Carrom Clash (Physics)\n"
-        "2. 🏒 Air Rush (Arcade)\n"
-        "3. 🎱 Pocket Pool (Precision)\n"
-        "4. ⚔️ Stick Arena (Action)\n"
-        "5. 🎨 QuickDraw (Drawing & Guessing)\n"
-        "6. 🔤 Word Rush (Word Challenge)\n"
-        "7. 🧠 Brain Blitz (Trivia)\n"
-        "8. ⚡ Reflex Rush (Reaction)\n"
-        "9. 🔴 Connect Four (Strategy)\n"
+        "1. 🔴 Connect Four (Strategy)\n"
+        "2. 🎯 Carrom Clash (Physics)\n"
+        "3. 🏒 Air Rush (Arcade)\n"
+        "4. 🎱 Pocket Pool (Precision)\n"
+        "5. 🤺 Stick Arena (Action)\n"
+        "6. 🎨 QuickDraw (Drawing & Guessing)\n"
+        "7. 🔤 Word Rush (Word Challenge)\n"
+        "8. 🧠 Brain Blitz (Trivia)\n"
+        "9. ⚡ Reflex Rush (Reaction)\n"
         "10. 💭 MindMatch (Social Discovery)\n"
-        "11. 🕵️ Mystery Mission (Co-op Deduction)\n\n"
+        "11. 🔍 Mystery Mission (Co-op Deduction)\n"
+        "12. ❌⭕ XO Duel (Classic Neon Strategy)\n\n"
         "<b>Solo Experiences (Unlimited):</b>\n"
-        "12. 🧩 Zen Merge (Number logic)\n"
-        "13. 🔎 Word Hunt (Word search)\n"
-        "14. 🎨 Color Flow (Color logic)\n"
-        "15. ⛳ Pocket Golf (Mini golf)\n"
-        "16. ⚡ Reflex Lab (Cognitive & focus)\n"
-        "17. 🔐 Daily Mystery (Daily riddle)\n\n"
+        "• 🧘 Zen Merge (2048 sliding puzzle)\n"
+        "• 🔤 Word Hunt (Word search matrix)\n"
+        "• 🎨 Color Flow (Path connection)\n"
+        "• ⛳ Pocket Golf (Mini golf slingshot)\n"
+        "• ⚡ Reflex Lab (Neuro reaction speed)\n"
+        "• 🔍 Daily Mystery (Cryptic daily riddle)\n\n"
         "<i>Launch LikBy Play to experience them all!</i>"
     )
 

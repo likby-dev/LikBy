@@ -28,7 +28,7 @@ router = APIRouter(prefix="/api/v1/play", tags=["LikBy Play Gaming Ecosystem"])
 
 class InviteDuelRequest(BaseModel):
     recipient_id: str = Field(..., description="Target User.id or recipient Telegram user ID")
-    game_id: str = Field(..., description="Identifier for one of the 11 duel games e.g. connect_four")
+    game_id: str = Field(..., description="Identifier for one of the registered duel games e.g. connect_four, xo")
 
 
 class ActionRequest(BaseModel):
@@ -157,12 +157,15 @@ async def invite_to_duel(
     Verifies that both users have remaining daily duel credits.
     Does not consume credits until the challenge is accepted.
     """
+    raw_id = payload.game_id.lower().strip()
+    if raw_id == "tictactoe":
+        raw_id = "xo"
     try:
-        game_type = GameType(payload.game_id.lower())
+        game_type = GameType(raw_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid game_id '{payload.game_id}'. Must be one of the 11 duel games.",
+            detail=f"Invalid game_id '{payload.game_id}'. Must be one of the registered duel games.",
         )
 
     play_service: PlayGameService = request.app.state.play_game_service

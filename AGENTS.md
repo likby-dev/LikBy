@@ -78,10 +78,10 @@ The four authoritative tiers are:
 
 ---
 
-## 4. Games Catalog (11 Duels + 6 Solo)
+## 4. Games Catalog (12 Duels + 6 Solo)
 
-All 17 games are registered in `src/likby/games/registry.py` and run server-authoritative logic:
-- **11 Duel Games (turn-based / 2-player):**
+All 18 games are registered in `src/likby/games/registry.py` and run server-authoritative logic:
+- **12 Duel Games (turn-based / 2-player):**
   1. `connect_four` (Connect Four)
   2. `carrom_clash` (Carrom Clash)
   3. `air_rush` (Air Rush)
@@ -93,6 +93,7 @@ All 17 games are registered in `src/likby/games/registry.py` and run server-auth
   9. `reflex_rush` (Reflex Rush)
   10. `mindmatch` (MindMatch)
   11. `mystery_mission` (Mystery Mission)
+  12. `xo` (XO Duel)
 - **6 Solo Games (unlimited plays for Base tier):**
   1. `zen_merge` (Zen Merge)
   2. `word_hunt` (Word Hunt)

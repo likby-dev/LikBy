@@ -90,6 +90,7 @@ class GameType(str, Enum):
     CONNECT_FOUR = "connect_four"
     MINDMATCH = "mindmatch"
     MYSTERY_MISSION = "mystery_mission"
+    XO = "xo"
 
     # 6 Solo Games
     ZEN_MERGE = "zen_merge"

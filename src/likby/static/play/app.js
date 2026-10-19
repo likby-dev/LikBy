@@ -234,6 +234,7 @@
     { id: "reflex_rush", name: "Reflex Rush", mode: "DUEL", icon: "⚡", category: "Reaction", tagline: "Tension chamber testing millisecond reactions. Avoid false starts!" },
     { id: "mindmatch", name: "MindMatch", mode: "DUEL", icon: "💭", category: "Social", tagline: "Discover harmonious choices and compute your synchro harmony." },
     { id: "mystery_mission", name: "Mystery Mission", mode: "DUEL", icon: "🔍", category: "Co-op", tagline: "Cyber-noir escape console: combine clues to crack the safe." },
+    { id: "xo", name: "XO Duel", mode: "DUEL", icon: "❌⭕", category: "Strategy", tagline: "Cyber-neon tactical Tic-Tac-Toe duel with glowing alignment strikes." },
 
     // 6 Solo Games
     { id: "zen_merge", name: "Zen Merge (2048)", mode: "SOLO", icon: "🧩", category: "Puzzle", tagline: "Slide numbered tiles, merge identical values, reach 2048!" },
@@ -612,6 +613,18 @@
         };
       case "mystery_mission":
         return { stage: 1, prompt: "Classified Safe: Enter Cipher Passcode", hint: "The answer is the founding year of LikBy (2026)." };
+      case "xo":
+        return {
+          board: [
+            ["", "", ""],
+            ["", "", ""],
+            ["", "", ""]
+          ],
+          current_turn: "P1",
+          winner: null,
+          winning_cells: [],
+          move_count: 0
+        };
 
       // Solo games
       case "zen_merge":
@@ -674,6 +687,8 @@
         const randCol = emptyCols[Math.floor(Math.random() * emptyCols.length)];
         dropDisc(randCol, 2);
       }
+    } else if (activeGame.id === "xo" && activeGameState.current_turn === "P2" && !activeGameState.winner) {
+      makeAiXOMove();
     } else if (activeGame.id === "stick_arena") {
       activeGameState.p1_hp = Math.max(0, activeGameState.p1_hp - 15);
       renderStickArena();
@@ -682,12 +697,13 @@
   }
 
   // ============================================================================
-  // 7. Interactive Game Renderers (All 17 Games)
+  // 7. Interactive Game Renderers (All 18 Games)
   // ============================================================================
   function renderActiveGame() {
     if (!canvasContainer || !activeGame) return;
     switch (activeGame.id) {
       case "connect_four": renderConnectFour(); break;
+      case "xo": renderXO(); break;
       case "carrom_clash": renderCarromClash(); break;
       case "air_rush": renderAirRush(); break;
       case "pocket_pool": renderPocketPool(); break;
@@ -777,6 +793,188 @@
         dropDisc(col, activeGameState.current_turn === "P1" ? 1 : 2);
         submitAction("drop_disc", { column: col });
       });
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // GAME 1B: XO (TIC-TAC-TOE DUEL)
+  // --------------------------------------------------------------------------
+  function placeXOMark(r, c) {
+    if (!activeGameState || activeGameState.winner) return;
+    if (activeGameState.board[r][c] !== "") {
+      playSound("error");
+      return;
+    }
+    if (isPracticeMode && activeGameState.current_turn !== "P1") {
+      playSound("error");
+      return;
+    }
+
+    const mark = activeGameState.current_turn === "P1" ? "X" : "O";
+    activeGameState.board[r][c] = mark;
+    activeGameState.move_count = (activeGameState.move_count || 0) + 1;
+    playSound(mark === "X" ? "strike" : "drop");
+
+    const winResult = checkXOWin(activeGameState.board, mark);
+    if (winResult.won) {
+      activeGameState.winner = activeGameState.current_turn;
+      activeGameState.winning_cells = winResult.cells;
+      playSound("win");
+      showToast(activeGameState.winner === "P1" ? "🎉 Victory! You aligned 3 marks!" : "🤖 Opponent won this round!");
+    } else if (activeGameState.move_count >= 9) {
+      activeGameState.winner = "DRAW";
+      playSound("score");
+      showToast("🤝 Match ended in a draw!");
+    } else {
+      activeGameState.current_turn = (activeGameState.current_turn === "P1" ? "P2" : "P1");
+    }
+
+    submitAction("place_mark", { row: r, col: c, cell: r * 3 + c });
+    renderXO();
+  }
+
+  function checkXOWin(b, m) {
+    for (let r = 0; r < 3; r++) {
+      if (b[r][0] === m && b[r][1] === m && b[r][2] === m) {
+        return { won: true, cells: [[r,0], [r,1], [r,2]] };
+      }
+    }
+    for (let c = 0; c < 3; c++) {
+      if (b[0][c] === m && b[1][c] === m && b[2][c] === m) {
+        return { won: true, cells: [[0,c], [1,c], [2,c]] };
+      }
+    }
+    if (b[0][0] === m && b[1][1] === m && b[2][2] === m) {
+      return { won: true, cells: [[0,0], [1,1], [2,2]] };
+    }
+    if (b[0][2] === m && b[1][1] === m && b[2][0] === m) {
+      return { won: true, cells: [[0,2], [1,1], [2,0]] };
+    }
+    return { won: false, cells: [] };
+  }
+
+  function makeAiXOMove() {
+    if (!activeGameState || activeGameState.winner || activeGameState.current_turn !== "P2") return;
+    const b = activeGameState.board;
+
+    function findWinningMove(mark) {
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (b[r][c] === "") {
+            b[r][c] = mark;
+            const res = checkXOWin(b, mark);
+            b[r][c] = "";
+            if (res.won) return { r, c };
+          }
+        }
+      }
+      return null;
+    }
+
+    let move = findWinningMove("O");
+    if (!move) move = findWinningMove("X");
+    if (!move && b[1][1] === "") move = { r: 1, c: 1 };
+    if (!move) {
+      const corners = [[0,0], [0,2], [2,0], [2,2]].filter(([r,c]) => b[r][c] === "");
+      if (corners.length > 0) {
+        const [cr, cc] = corners[Math.floor(Math.random() * corners.length)];
+        move = { r: cr, c: cc };
+      }
+    }
+    if (!move) {
+      const empties = [];
+      for (let r = 0; r < 3; r++) {
+        for (let c = 0; c < 3; c++) {
+          if (b[r][c] === "") empties.push({ r, c });
+        }
+      }
+      if (empties.length > 0) {
+        move = empties[Math.floor(Math.random() * empties.length)];
+      }
+    }
+
+    if (move) {
+      b[move.r][move.c] = "O";
+      activeGameState.move_count = (activeGameState.move_count || 0) + 1;
+      playSound("drop");
+
+      const winResult = checkXOWin(b, "O");
+      if (winResult.won) {
+        activeGameState.winner = "P2";
+        activeGameState.winning_cells = winResult.cells;
+        playSound("win");
+        showToast("🤖 AI Bot aligned 3 marks!");
+      } else if (activeGameState.move_count >= 9) {
+        activeGameState.winner = "DRAW";
+        playSound("score");
+        showToast("🤝 Match ended in a draw!");
+      } else {
+        activeGameState.current_turn = "P1";
+      }
+      renderXO();
+    }
+  }
+
+  function renderXO() {
+    if (!canvasContainer || !activeGameState) return;
+    const b = activeGameState.board;
+    const winCells = activeGameState.winning_cells || [];
+    const isWinCell = (r, c) => winCells.some(([wr, wc]) => wr === r && wc === c);
+
+    let statusText = "";
+    if (activeGameState.winner === "P1") {
+      statusText = "🏆 <b style='color: var(--likby-cyan);'>Player 1 (X) Wins!</b>";
+    } else if (activeGameState.winner === "P2") {
+      statusText = "🏆 <b style='color: var(--likby-pink);'>Player 2 (O) Wins!</b>";
+    } else if (activeGameState.winner === "DRAW") {
+      statusText = "🤝 <b style='color: var(--likby-amber);'>Match Drawn!</b>";
+    } else if (activeGameState.current_turn === "P1") {
+      statusText = "⚡ <b style='color: var(--likby-cyan);'>Your Turn (X)</b>";
+    } else {
+      statusText = `⏳ <b style='color: var(--likby-pink);'>${isPracticeMode ? "AI Thinking..." : "Partner Turn (O)"}</b>`;
+    }
+
+    canvasContainer.innerHTML = `
+      <div class="xo-arena">
+        <div class="xo-status-panel">
+          <div class="xo-player-badge x">❌ P1 (X)</div>
+          <div style="font-size: 13px;">${statusText}</div>
+          <div class="xo-player-badge o">⭕ P2 (O)</div>
+        </div>
+
+        <div class="xo-board">
+          ${[0, 1, 2].map(r => [0, 1, 2].map(c => {
+            const val = b[r][c];
+            const cls = val === 'X' ? 'x' : val === 'O' ? 'o' : '';
+            const winCls = isWinCell(r, c) ? 'winning' : '';
+            return `<button class="xo-cell ${cls} ${winCls}" data-row="${r}" data-col="${c}">${val}</button>`;
+          }).join('')).join('')}
+        </div>
+
+        <div class="xo-actions">
+          ${activeGameState.winner ? `
+            <button class="btn-primary" id="xoRematchBtn" style="flex: 1;">🔄 Play Again</button>
+          ` : `
+            <div style="font-size: 12px; color: var(--likby-text-muted); text-align: center; width: 100%;">
+              Align 3 symbols horizontally, vertically, or diagonally to win.
+            </div>
+          `}
+        </div>
+      </div>
+    `;
+
+    canvasContainer.querySelectorAll(".xo-cell").forEach(cell => {
+      cell.addEventListener("click", () => {
+        const r = parseInt(cell.dataset.row, 10);
+        const c = parseInt(cell.dataset.col, 10);
+        placeXOMark(r, c);
+      });
+    });
+
+    document.getElementById("xoRematchBtn")?.addEventListener("click", () => {
+      playSound("click");
+      activeGameState = getInitialGameState("xo");
+      renderXO();
     });
   }
 

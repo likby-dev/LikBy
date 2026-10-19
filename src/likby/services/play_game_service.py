@@ -47,7 +47,7 @@ class PlayGameService:
         self._block_repo = block_repo
 
     def get_catalogue(self) -> List[GameDefinition]:
-        """Returns the full 17-game catalogue."""
+        """Returns the full LikBy Play game catalogue."""
         return list(GAME_CATALOGUE.values())
 
     def get_game_definition(self, game_id: GameType) -> Optional[GameDefinition]:

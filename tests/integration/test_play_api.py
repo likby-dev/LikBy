@@ -65,15 +65,15 @@ def test_telegram_init_data_cryptographic_verification():
     assert validate_telegram_init_data(forged_raw, bot_token) is None
 
 
-def test_catalogue_returns_exact_17_games():
+def test_catalogue_returns_exact_18_games():
     with TestClient(app) as client:
         resp = client.get("/api/v1/play/catalogue")
         assert resp.status_code == 200
         catalogue = resp.json()
-        assert len(catalogue) == 17
+        assert len(catalogue) == 18
 
         game_ids = [g["id"] for g in catalogue]
-        # 11 duels
+        # 12 duels
         assert "carrom_clash" in game_ids
         assert "air_rush" in game_ids
         assert "pocket_pool" in game_ids
@@ -85,6 +85,7 @@ def test_catalogue_returns_exact_17_games():
         assert "connect_four" in game_ids
         assert "mindmatch" in game_ids
         assert "mystery_mission" in game_ids
+        assert "xo" in game_ids
         # 6 solos
         assert "zen_merge" in game_ids
         assert "word_hunt" in game_ids
@@ -351,8 +352,8 @@ def test_all_six_solo_games_api_lifecycle():
                 assert resp_act.status_code == 200, f"Action failed for {game_id}: {resp_act.text}"
 
 
-def test_all_eleven_duel_games_api_lifecycle():
-    """Validates that all 11 multiplayer duel games can be invited, accepted, and played."""
+def test_all_twelve_duel_games_api_lifecycle():
+    """Validates that all 12 multiplayer duel games can be invited, accepted, and played."""
     import uuid
 
     with TestClient(app) as client:
@@ -370,6 +371,7 @@ def test_all_eleven_duel_games_api_lifecycle():
             "reflex_rush": ("tap", lambda s: {"client_timestamp_ms": s["cue_time_ms"] + 200}),
             "mindmatch": ("select_option", {"choice": "a"}),
             "mystery_mission": ("submit_solution", {"answer": "12"}),
+            "xo": ("place_mark", {"row": 0, "col": 0}),
         }
 
         for game_id, (action_type, payload_gen) in duel_actions.items():

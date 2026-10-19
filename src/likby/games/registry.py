@@ -1,6 +1,6 @@
 """
 likby.games.registry
-Engine registry mapping all 17 LikBy Play games to their authoritative rules engines.
+Engine registry mapping all 18 LikBy Play games to their authoritative rules engines.
 """
 
 from typing import Dict, Optional
@@ -18,6 +18,7 @@ from likby.games.duel_engines import (
     ReflexRushEngine,
     StickArenaEngine,
     WordRushEngine,
+    XOEngine,
 )
 from likby.games.engine_interface import BasePlayGameEngine
 from likby.games.solo_engines import (
@@ -31,7 +32,7 @@ from likby.games.solo_engines import (
 
 
 _GAME_ENGINES: Dict[GameType, BasePlayGameEngine] = {
-    # 11 Multiplayer Duels
+    # 12 Multiplayer Duels
     GameType.CONNECT_FOUR: ConnectFourEngine(),
     GameType.CARROM_CLASH: CarromClashEngine(),
     GameType.AIR_RUSH: AirRushEngine(),
@@ -43,6 +44,7 @@ _GAME_ENGINES: Dict[GameType, BasePlayGameEngine] = {
     GameType.REFLEX_RUSH: ReflexRushEngine(),
     GameType.MINDMATCH: MindMatchEngine(),
     GameType.MYSTERY_MISSION: MysteryMissionEngine(),
+    GameType.XO: XOEngine(),
 
     # 6 Solo Games
     GameType.ZEN_MERGE: ZenMergeEngine(),
@@ -70,5 +72,5 @@ def get_solo_engine(game_type: GameType) -> Optional[BasePlayGameEngine]:
 
 
 def list_available_games():
-    """List all 17 registered game types."""
+    """List all 18 registered game types."""
     return list(_GAME_ENGINES.keys())

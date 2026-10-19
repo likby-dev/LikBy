@@ -1,6 +1,6 @@
 """
 likby.games.duel_engines
-Full, authoritative implementations of all 11 LikBy Play multiplayer duel games.
+Full, authoritative implementations of all 12 LikBy Play multiplayer duel games.
 """
 
 from datetime import datetime, timezone
@@ -946,3 +946,103 @@ class MysteryMissionEngine(BasePlayGameEngine):
                 clean["private_clue"] = stage["clue_b"]
                 clean["my_clue"] = stage["clue_b"]
         return clean
+
+
+# =============================================================================
+# 12. XO (TIC-TAC-TOE) ENGINE (3x3 Grid, Cyber-Neon Strategy, Alternating Turns)
+# =============================================================================
+class XOEngine(BasePlayGameEngine):
+    """Authoritative XO (Tic-Tac-Toe) duel engine."""
+
+    GRID_SIZE = 3
+
+    def init_game_state(self, config: Dict[str, Any], player_ids: List[str]) -> Dict[str, Any]:
+        p1 = player_ids[0] if len(player_ids) > 0 else "player_1"
+        p2 = player_ids[1] if len(player_ids) > 1 else "player_2"
+        return {
+            "board": [["" for _ in range(self.GRID_SIZE)] for _ in range(self.GRID_SIZE)],
+            "player_x": p1,
+            "player_o": p2,
+            "current_turn": p1,
+            "move_count": 0,
+            "winner": None,
+            "winning_cells": [],
+            "status": "IN_PROGRESS",
+        }
+
+    def process_action(
+        self,
+        current_state: Dict[str, Any],
+        user_id: str,
+        action_type: str,
+        action_payload: Dict[str, Any],
+    ) -> Tuple[bool, str, Dict[str, Any], Optional[str]]:
+        state = dict(current_state)
+        if state.get("winner") or state.get("status") == "COMPLETED":
+            return False, "Game is already completed.", state, state.get("winner")
+
+        if action_type not in ("place_mark", "make_move"):
+            return False, f"Unknown action type '{action_type}'.", state, None
+
+        if user_id != state.get("current_turn"):
+            return False, "It is not your turn.", state, None
+
+        # Accept either {"row": r, "col": c} or {"cell": 0..8}
+        if "cell" in action_payload:
+            try:
+                cell = int(action_payload["cell"])
+                row, col = cell // self.GRID_SIZE, cell % self.GRID_SIZE
+            except (ValueError, TypeError):
+                return False, "Invalid cell index.", state, None
+        else:
+            row = action_payload.get("row")
+            col = action_payload.get("col")
+
+        if row is None or col is None or not (0 <= row < self.GRID_SIZE and 0 <= col < self.GRID_SIZE):
+            return False, "Row and column must be integers between 0 and 2.", state, None
+
+        board = [list(r) for r in state["board"]]
+        if board[row][col] != "":
+            return False, f"Cell ({row}, {col}) is already occupied.", state, None
+
+        mark = "X" if user_id == state["player_x"] else "O"
+        board[row][col] = mark
+        state["board"] = board
+        state["move_count"] = state.get("move_count", 0) + 1
+
+        # Check win condition
+        has_won, winning_cells = self._check_win(board, mark)
+        if has_won:
+            state["winner"] = user_id
+            state["winning_cells"] = winning_cells
+            state["status"] = "COMPLETED"
+            return True, f"Player {mark} aligned 3 marks and won!", state, user_id
+
+        # Check draw condition
+        if state["move_count"] >= self.GRID_SIZE * self.GRID_SIZE:
+            state["winner"] = "DRAW"
+            state["status"] = "COMPLETED"
+            return True, "Board is full. Match ended in a draw.", state, "DRAW"
+
+        # Toggle turn
+        state["current_turn"] = state["player_o"] if user_id == state["player_x"] else state["player_x"]
+        return True, f"Mark {mark} placed at ({row}, {col}).", state, None
+
+    def _check_win(self, board: List[List[str]], mark: str) -> Tuple[bool, List[List[int]]]:
+        # Rows
+        for r in range(self.GRID_SIZE):
+            if board[r][0] == board[r][1] == board[r][2] == mark:
+                return True, [[r, 0], [r, 1], [r, 2]]
+        # Columns
+        for c in range(self.GRID_SIZE):
+            if board[0][c] == board[1][c] == board[2][c] == mark:
+                return True, [[0, c], [1, c], [2, c]]
+        # Main diagonal
+        if board[0][0] == board[1][1] == board[2][2] == mark:
+            return True, [[0, 0], [1, 1], [2, 2]]
+        # Anti-diagonal
+        if board[0][2] == board[1][1] == board[2][0] == mark:
+            return True, [[0, 2], [1, 1], [2, 0]]
+
+        return False, []
+
