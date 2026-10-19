@@ -38,7 +38,7 @@ async def get_authenticated_chat_user(
     if x_telegram_init_data:
         validated = validate_telegram_init_data(
             x_telegram_init_data,
-            settings.telegram_bot_token.get_secret_value(),
+            settings.bot_token.get_secret_value(),
         )
         if not validated or "user" not in validated:
             raise HTTPException(

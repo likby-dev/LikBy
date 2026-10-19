@@ -7,13 +7,19 @@ Reference: https://core.telegram.org/bots/webapps#validating-data-received-via-t
 import hashlib
 import hmac
 import json
+import time
 from typing import Any, Dict, Optional
 from urllib.parse import parse_qsl, unquote
 
 
-def validate_telegram_init_data(init_data: str, bot_token: str) -> Optional[Dict[str, Any]]:
+def validate_telegram_init_data(
+    init_data: str,
+    bot_token: str,
+    max_age_seconds: Optional[int] = 86400,
+) -> Optional[Dict[str, Any]]:
     """
     Validates Telegram WebApp initData against the bot token.
+    Enforces authentication age policy (default 24h) to prevent replay attacks.
     Returns parsed dictionary (including 'user') if signature is valid, or None if invalid.
     """
     if not init_data or not bot_token:
@@ -47,6 +53,17 @@ def validate_telegram_init_data(init_data: str, bot_token: str) -> Optional[Dict
 
         if not hmac.compare_digest(calculated_hash, received_hash):
             return None
+
+        # 3. Enforce authentication freshness (prevent replay attacks)
+        if max_age_seconds is not None and "auth_date" in parsed_data:
+            try:
+                auth_timestamp = int(parsed_data["auth_date"])
+                current_timestamp = int(time.time())
+                # Reject if older than max_age_seconds or > 300s in future
+                if (current_timestamp - auth_timestamp) > max_age_seconds or (auth_timestamp - current_timestamp) > 300:
+                    return None
+            except (ValueError, TypeError):
+                return None
 
         # Parse user JSON if present
         if "user" in parsed_data:

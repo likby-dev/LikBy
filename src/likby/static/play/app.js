@@ -264,10 +264,16 @@
       });
       if (!res.ok) {
         const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.detail || errData.message || `HTTP ${res.status}`);
+        const errorMsg = errData.detail || errData.message || `HTTP ${res.status}`;
+        console.warn(`[LikBy Play API] ${method} ${endpoint} returned ${res.status}:`, errorMsg);
+        if (res.status === 403 && String(errorMsg).toLowerCase().includes("quota")) {
+          showToast("⚡ Daily duel allowance reached!");
+        }
+        throw new Error(errorMsg);
       }
       return await res.json();
     } catch (e) {
+      console.warn(`[LikBy Play Engine] Falling back to local client mode for ${endpoint}:`, e.message || e);
       return null; // Graceful fallback to client engine
     }
   }

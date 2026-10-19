@@ -13,6 +13,7 @@ import sys
 import time
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional
+import uuid
 
 logger = logging.getLogger(__name__)
 
@@ -123,6 +124,7 @@ async def cron_background_worker(cron_service: MaintenanceCronService, interval:
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     """Application lifespan managing DB, Bot, background tasks, and all services."""
     settings = get_settings()
+    app.state.active_update_tasks = set()
 
     # 1. Initialize Database (Zero Local SQLite Disk Storage)
     if settings.database_backend in ("postgres", "supabase"):
@@ -475,7 +477,12 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
     yield
 
-    # Teardown
+    # Teardown: drain in-flight webhook update tasks gracefully (up to 5.0 seconds)
+    pending_updates = getattr(app.state, "active_update_tasks", set())
+    if pending_updates:
+        with contextlib.suppress(asyncio.CancelledError, asyncio.TimeoutError):
+            await asyncio.wait_for(asyncio.gather(*list(pending_updates), return_exceptions=True), timeout=5.0)
+
     tasks_to_cancel = [worker_task, outbox_task, cron_task]
     for t in tasks_to_cancel:
         t.cancel()
@@ -501,6 +508,56 @@ app.include_router(chat_sessions_api_router)
 _static_play_dir = os.path.join(os.path.dirname(__file__), "static", "play")
 os.makedirs(_static_play_dir, exist_ok=True)
 app.mount("/play", StaticFiles(directory=_static_play_dir, html=True), name="play")
+
+
+@app.middleware("http")
+async def request_correlation_and_security_middleware(request: Request, call_next):
+    """Enforces request correlation IDs, security headers, and safe error boundary."""
+    correlation_id = request.headers.get("X-Request-Id") or f"req_{uuid.uuid4().hex[:12]}"
+    request.state.request_id = correlation_id
+
+    start_time = time.perf_counter()
+    try:
+        response: Response = await call_next(request)
+    except Exception as exc:
+        logger.error(
+            "Unhandled exception processing HTTP request",
+            request_id=correlation_id,
+            path=request.url.path,
+            method=request.method,
+            error=str(exc),
+            exc_info=True,
+        )
+        response = JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content={
+                "error": "InternalServerError",
+                "message": "An unexpected error occurred while processing your request.",
+                "request_id": correlation_id,
+            },
+        )
+
+    duration_ms = (time.perf_counter() - start_time) * 1000
+    response.headers["X-Request-Id"] = correlation_id
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "SAMEORIGIN"
+    response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
+    response.headers["X-Response-Time-Ms"] = f"{duration_ms:.2f}"
+    return response
+
+
+@app.exception_handler(HTTPException)
+async def custom_http_exception_handler(request: Request, exc: HTTPException) -> JSONResponse:
+    request_id = getattr(request.state, "request_id", None) or request.headers.get("X-Request-Id") or "unknown"
+    return JSONResponse(
+        status_code=exc.status_code,
+        headers=exc.headers,
+        content={
+            "detail": exc.detail,
+            "status_code": exc.status_code,
+            "request_id": request_id,
+        },
+    )
 
 
 @app.get("/")
@@ -774,7 +831,10 @@ async def telegram_webhook(
             traceback.print_exc()
             print(f"❌ [Telegram Webhook] Error processing update_id={update_id}: {exc}")
 
-    asyncio.create_task(_safe_feed_update(data))
+    task = asyncio.create_task(_safe_feed_update(data))
+    if hasattr(app.state, "active_update_tasks"):
+        app.state.active_update_tasks.add(task)
+        task.add_done_callback(app.state.active_update_tasks.discard)
     return Response(status_code=status.HTTP_200_OK)
 
 

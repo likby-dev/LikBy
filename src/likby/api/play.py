@@ -67,7 +67,7 @@ async def get_play_authenticated_user(
     if x_telegram_init_data:
         validated = validate_telegram_init_data(
             x_telegram_init_data,
-            settings.telegram_bot_token.get_secret_value(),
+            settings.bot_token.get_secret_value(),
         )
         if validated and "user" in validated and "id" in validated["user"]:
             tg_id = validated["user"]["id"]
@@ -648,6 +648,48 @@ async def websocket_duel_endpoint(
     token: Optional[str] = Query(None),
 ) -> None:
     """Live WebSocket channel for real-time multiplayer duel game synchronization with typed protocol."""
+    settings = get_settings()
+    user_repo = getattr(websocket.app.state, "user_repo", None)
+    play_service = getattr(websocket.app.state, "play_game_service", None)
+
+    # 1. Authenticate connecting user via token query or headers
+    auth_user = None
+    target_token = token or websocket.headers.get("x-user-id")
+    raw_init_data = websocket.headers.get("x-telegram-init-data")
+
+    if raw_init_data and user_repo:
+        validated = validate_telegram_init_data(
+            raw_init_data,
+            settings.bot_token.get_secret_value(),
+        )
+        if validated and "user" in validated and "id" in validated["user"]:
+            auth_user = await user_repo.get_by_telegram_id(validated["user"]["id"])
+
+    if not auth_user and target_token and user_repo:
+        auth_user = await user_repo.get_by_id(target_token)
+        if not auth_user and "hash=" in target_token:
+            validated = validate_telegram_init_data(
+                target_token,
+                settings.bot_token.get_secret_value(),
+            )
+            if validated and "user" in validated and "id" in validated["user"]:
+                auth_user = await user_repo.get_by_telegram_id(validated["user"]["id"])
+
+    # Reject unauthenticated connections with Policy Violation
+    if not auth_user:
+        await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Unauthorized: Valid authentication required")
+        return
+
+    # 2. Authorize participant membership for known duel or solo session
+    if play_service and hasattr(play_service, "_play_repo"):
+        session = await play_service._play_repo.get_session(session_id)
+        if session:
+            participants = await play_service._play_repo.get_participants(session_id)
+            allowed = {p.user_id for p in participants}
+            if allowed and auth_user.id not in allowed and auth_user.id != "practice_bot":
+                await websocket.close(code=status.WS_1008_POLICY_VIOLATION, reason="Forbidden: Not a participant in this game session")
+                return
+
     await manager.connect(session_id, websocket)
     # Send initial connection confirmation with versioned schema
     await websocket.send_text(json.dumps({

@@ -24,17 +24,17 @@
         </div>
       </div>
       <div class="user-badge-wrap">
-        <button class="btn-icon active" id="touchToggleBtn" title="Touch Controls: Active">📱</button>
-        <span class="tier-badge" id="userTierBadge">BASE</span>
-        <button class="btn-icon" id="soundToggleBtn" title="Toggle Sound">🔊</button>
+        <button class="btn-icon active" id="touchToggleBtn" title="Touch Controls: Active" aria-label="Toggle touch controls">📱</button>
+        <span class="tier-badge" id="userTierBadge" aria-label="Subscription tier">BASE</span>
+        <button class="btn-icon" id="soundToggleBtn" title="Toggle Sound" aria-label="Toggle sound effects">🔊</button>
       </div>
     </header>
 
     <!-- Player Progression & Leveling Card -->
-    <section class="progression-card" id="progressionCard">
+    <section class="progression-card" id="progressionCard" aria-label="Player level and XP progression">
       <div class="progression-top">
         <div class="progression-avatar-wrap">
-          <div class="progression-avatar" id="playerAvatarIcon">🎮</div>
+          <div class="progression-avatar" id="playerAvatarIcon" aria-hidden="true">🎮</div>
           <div class="level-badge" id="playerLevelBadge">LVL 1</div>
         </div>
         <div class="progression-info">
@@ -42,7 +42,7 @@
             <span class="player-name" id="playerNameText">LikBy Player</span>
             <span class="player-streak-badge" id="playerStreakBadge">🔥 0 Streak</span>
           </div>
-          <div class="xp-bar-track">
+          <div class="xp-bar-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="15" id="xpProgressBar">
             <div class="xp-bar-fill" id="xpBarFill" style="width: 15%;"></div>
           </div>
           <div class="xp-meta">
@@ -54,11 +54,11 @@
     </section>
 
     <!-- GameVerse Navigation Tabs -->
-    <nav class="gameverse-nav">
-      <button class="gv-nav-btn active" data-view="arena">🏟 Arena</button>
-      <button class="gv-nav-btn" data-view="leaderboard">🏆 Top 10</button>
-      <button class="gv-nav-btn" data-view="badges">🎖 Badges</button>
-      <button class="gv-nav-btn" data-view="daily">🧩 Daily Riddle</button>
+    <nav class="gameverse-nav" role="tablist" aria-label="GameVerse Views">
+      <button class="gv-nav-btn active" data-view="arena" role="tab" aria-selected="true" id="tab-arena" aria-controls="viewArena">🏟 Arena</button>
+      <button class="gv-nav-btn" data-view="leaderboard" role="tab" aria-selected="false" id="tab-leaderboard" aria-controls="viewLeaderboard">🏆 Top 10</button>
+      <button class="gv-nav-btn" data-view="badges" role="tab" aria-selected="false" id="tab-badges" aria-controls="viewBadges">🎖 Badges</button>
+      <button class="gv-nav-btn" data-view="daily" role="tab" aria-selected="false" id="tab-daily" aria-controls="viewDaily">🧩 Daily Riddle</button>
     </nav>
 
     <!-- VIEW 1: ARENA -->
@@ -212,12 +212,12 @@
           </div>
 
           <div class="daily-input-row" id="dailyInputSection">
-            <input type="text" id="dailyAnswerInput" class="input-field" placeholder="Enter your deduction..." />
+            <input type="text" id="dailyAnswerInput" class="input-field" placeholder="Enter your deduction..." aria-label="Enter your answer for the daily riddle" />
             <button class="btn-primary" id="dailySubmitBtn">Solve 🔑</button>
           </div>
 
-          <div id="dailySolvedSuccess" class="daily-solved-banner" style="display: none;">
-            <div style="font-size: 28px;">🎉</div>
+          <div id="dailySolvedSuccess" class="daily-solved-banner" style="display: none;" role="status" aria-live="polite">
+            <div style="font-size: 28px;" aria-hidden="true">🎉</div>
             <div style="font-weight: 700; color: var(--likby-emerald); font-size: 16px;">Daily Mystery Solved!</div>
             <div id="dailyExplanationText" style="font-size: 13px; color: var(--likby-text-muted); margin-top: 4px;"></div>
           </div>
@@ -227,20 +227,20 @@
   </div>
 
   <!-- Full-Screen Interactive Game Viewport / Arena -->
-  <div class="game-viewport" id="gameViewport">
+  <div class="game-viewport" id="gameViewport" role="region" aria-label="Game Arena Viewport">
     <div class="viewport-nav">
       <div class="viewport-title-wrap">
-        <span class="viewport-icon" id="viewportIcon">🎮</span>
+        <span class="viewport-icon" id="viewportIcon" aria-hidden="true">🎮</span>
         <div>
           <div class="viewport-title" id="viewportTitle">Game Name</div>
-          <span class="viewport-turn-badge" id="viewportTurnBadge">Your Turn ⚡</span>
+          <span class="viewport-turn-badge" id="viewportTurnBadge" role="status" aria-live="polite">Your Turn ⚡</span>
         </div>
       </div>
       <div style="display: flex; gap: 8px; align-items: center;">
-        <button class="btn-icon" id="viewportTutorialBtn" title="How to Play / Rules">❓</button>
-        <button class="btn-icon active" id="arenaTouchBtn" title="Touch Controls: Active">📱</button>
-        <button class="btn-icon" id="arenaSoundBtn" title="Sound">🔊</button>
-        <button class="btn-secondary" id="exitGameBtn" style="padding: 6px 14px; font-size: 12px;">Leave</button>
+        <button class="btn-icon" id="viewportTutorialBtn" title="How to Play / Rules" aria-label="View game rules and tutorial">❓</button>
+        <button class="btn-icon active" id="arenaTouchBtn" title="Touch Controls: Active" aria-label="Toggle touch controls">📱</button>
+        <button class="btn-icon" id="arenaSoundBtn" title="Sound" aria-label="Toggle arena sound effects">🔊</button>
+        <button class="btn-secondary" id="exitGameBtn" style="padding: 6px 14px; font-size: 12px;" aria-label="Leave current game">Leave</button>
       </div>
     </div>
     <div class="viewport-body" id="viewportBody">
@@ -251,11 +251,11 @@
   </div>
 
   <!-- Challenge Partner / Duel Active Modal -->
-  <div class="modal-overlay" id="inviteModal">
+  <div class="modal-overlay" id="inviteModal" role="dialog" aria-modal="true" aria-labelledby="inviteModalTitle">
     <div class="modal-box">
       <div class="modal-header">
         <h3 class="modal-title" id="inviteModalTitle">⚔️ Multiplayer Duel</h3>
-        <button class="btn-close" id="closeInviteModal">✕</button>
+        <button class="btn-close" id="closeInviteModal" aria-label="Close duel dialog">✕</button>
       </div>
       <p id="inviteModalDesc" style="font-size: 13px; color: var(--likby-text-muted); line-height: 1.5; margin-bottom: 12px;">
         Multiplayer duels are designed to be played with your active conversation partner in LikBy chat.
@@ -287,9 +287,9 @@
   </div>
 
   <!-- Matchmaking Radar Modal -->
-  <div class="modal-overlay" id="matchmakingModal">
+  <div class="modal-overlay" id="matchmakingModal" role="dialog" aria-modal="true" aria-labelledby="mmModalTitle">
     <div class="modal-box text-center">
-      <div class="radar-container">
+      <div class="radar-container" aria-hidden="true">
         <div class="radar-circle circle-1"></div>
         <div class="radar-circle circle-2"></div>
         <div class="radar-circle circle-3"></div>
@@ -301,19 +301,19 @@
         Finding an online contender in the GameVerse Arena
       </p>
       <div class="mm-game-tag" id="mmGameTag">Connect Four • Casual</div>
-      <div class="mm-timer" id="mmTimer">00:03</div>
-      <button class="btn-secondary" id="cancelMatchmakingBtn" style="width: 100%; margin-top: 14px;">
+      <div class="mm-timer" id="mmTimer" role="timer" aria-live="polite">00:03</div>
+      <button class="btn-secondary" id="cancelMatchmakingBtn" style="width: 100%; margin-top: 14px;" aria-label="Cancel matchmaking search">
         Cancel Search
       </button>
     </div>
   </div>
 
   <!-- Tutorial / How to Play Modal -->
-  <div class="modal-overlay" id="tutorialModal">
+  <div class="modal-overlay" id="tutorialModal" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
     <div class="modal-box">
       <div class="modal-header">
         <h3 class="modal-title" id="tutorialTitle">❓ How to Play</h3>
-        <button class="btn-close" id="closeTutorialModal">✕</button>
+        <button class="btn-close" id="closeTutorialModal" aria-label="Close tutorial dialog">✕</button>
       </div>
       <div id="tutorialContent" class="tutorial-body">
         <!-- Injected dynamically based on active game -->
@@ -325,23 +325,23 @@
   </div>
 
   <!-- Quota Limit Modal -->
-  <div class="modal-overlay" id="quotaExhaustedModal">
+  <div class="modal-overlay" id="quotaExhaustedModal" role="dialog" aria-modal="true" aria-labelledby="quotaModalTitle">
     <div class="modal-box" style="text-align: center;">
-      <div style="font-size: 42px; margin-bottom: 6px;">⚡</div>
-      <h3 class="modal-title">Daily Duel Allowance Reached</h3>
+      <div style="font-size: 42px; margin-bottom: 6px;" aria-hidden="true">⚡</div>
+      <h3 class="modal-title" id="quotaModalTitle">Daily Duel Allowance Reached</h3>
       <p style="font-size: 13px; color: var(--likby-text-muted); line-height: 1.5; margin: 8px 0;">
         You've used all duel credits for today on your current plan. Solo games are <b>100% unlimited</b>, or upgrade your VIP tier for more plays!
       </p>
       <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
         <button class="btn-primary" id="exploreSoloBtn">🕹 Play Unlimited Solo Games</button>
         <button class="btn-secondary" id="upgradeTiersBtn">👑 Upgrade to VIP Tier</button>
-        <button class="btn-link" id="closeQuotaModal">Maybe Later</button>
+        <button class="btn-link" id="closeQuotaModal" aria-label="Close dialog">Maybe Later</button>
       </div>
     </div>
   </div>
 
   <!-- Achievement Unlocked Toast Banner -->
-  <div class="achievement-toast" id="achievementToast">
+  <div class="achievement-toast" id="achievementToast" role="status" aria-live="polite">
     <div class="ach-toast-icon" id="achToastIcon">🎖</div>
     <div class="ach-toast-info">
       <div class="ach-toast-subtitle">ACHIEVEMENT UNLOCKED</div>

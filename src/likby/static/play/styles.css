@@ -56,6 +56,36 @@
   user-select: none;
 }
 
+/* Accessibility Focus Indicators (WCAG 2.2 AA) */
+:focus-visible {
+  outline: 2px solid var(--likby-cyan);
+  outline-offset: 2px;
+}
+
+button:focus-visible,
+input:focus-visible,
+a:focus-visible,
+.btn-icon:focus-visible,
+.tab-btn:focus-visible,
+.gv-nav-btn:focus-visible {
+  outline: 2px solid var(--likby-cyan);
+  outline-offset: 3px;
+  box-shadow: 0 0 12px rgba(34, 211, 238, 0.4);
+}
+
+/* Reduced Motion Preference (WCAG 2.2 AA) */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  #ambientCanvas {
+    display: none !important;
+  }
+}
+
 html, body {
   width: 100%;
   height: 100%;

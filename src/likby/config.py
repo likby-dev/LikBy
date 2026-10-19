@@ -178,6 +178,11 @@ class Settings(BaseSettings):
         return v
 
     @property
+    def telegram_bot_token(self) -> SecretStr:
+        """Alias for bot_token for backward compatibility across endpoints and services."""
+        return self.bot_token
+
+    @property
     def effective_mini_app_url(self) -> str:
         """Returns the canonical public Mini App URL guaranteed to have a trailing slash."""
         url = self.telegram_mini_app_url or f"{self.base_url.rstrip('/')}/play/"
