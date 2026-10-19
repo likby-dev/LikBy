@@ -445,17 +445,10 @@ def get_solo_game_card_keyboard(game_id: str, mini_app_url: Optional[str] = None
 def get_duel_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
     """
     Dedicated interactive selector keyboard for all 12 official LikBy Multiplayer Duels.
-    Provides clickable buttons for every single duel game with detail cards & instant launch.
+    Provides clickable buttons for every single duel game with active session validation & partner challenge.
     """
-    mini_app_url = _normalize_mini_app_url(mini_app_url)
-    is_https = bool(mini_app_url and mini_app_url.startswith("https://"))
-
     def _btn(label: str, game_id: str) -> InlineKeyboardButton:
-        if is_https:
-            clean_base = mini_app_url.split("?")[0].rstrip("/")
-            game_url = f"{clean_base}?game={game_id}"
-            return InlineKeyboardButton(text=label, web_app=WebAppInfo(url=game_url))
-        return InlineKeyboardButton(text=label, callback_data=f"play:duel_card:{game_id}")
+        return InlineKeyboardButton(text=label, callback_data=f"play:duel_select:{game_id}")
 
     rows = [
         [
@@ -499,20 +492,16 @@ def get_duel_game_card_keyboard(
     """Action keyboard for a specific multiplayer duel game card."""
     mini_app_url = _normalize_mini_app_url(mini_app_url)
     rows = []
-    if mini_app_url and mini_app_url.startswith("https://"):
-        clean_base = mini_app_url.split("?")[0].rstrip("/")
-        game_url = f"{clean_base}?game={game_id}"
-        rows.append([
-            InlineKeyboardButton(text="🚀 Play in LikBy Play (Mini App)", web_app=WebAppInfo(url=game_url))
-        ])
-
     if in_active_session:
         rows.append([
-            InlineKeyboardButton(text="⚔️ Challenge Active Partner", callback_data=f"duel:invite:{game_id}")
+            InlineKeyboardButton(text="⚔️ Challenge Active Partner", callback_data=f"play:duel_select:{game_id}")
         ])
     else:
         rows.append([
+            InlineKeyboardButton(text="⚔️ Challenge Partner", callback_data=f"play:duel_select:{game_id}"),
             InlineKeyboardButton(text="🤖 Practice vs AI Bot", callback_data=f"duel:practice:{game_id}"),
+        ])
+        rows.append([
             InlineKeyboardButton(text="🎲 Find Partner", callback_data="queue:find_new"),
         ])
 
@@ -521,6 +510,77 @@ def get_duel_game_card_keyboard(
         InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
     ])
     return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_duel_challenge_response_keyboard(invitation_id: str, game_id: str) -> InlineKeyboardMarkup:
+    """Keyboard sent to active chat partner to accept or decline a duel challenge."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="⚔️ Accept Challenge & Play",
+                    callback_data=f"duel:accept:{invitation_id}:{game_id}",
+                ),
+                InlineKeyboardButton(
+                    text="❌ Decline",
+                    callback_data=f"duel:decline:{invitation_id}:{game_id}",
+                ),
+            ],
+        ]
+    )
+
+
+def get_duel_challenge_sender_keyboard(invitation_id: str, game_id: str) -> InlineKeyboardMarkup:
+    """Keyboard sent to duel challenge host while waiting for partner response."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="❌ Cancel Challenge",
+                    callback_data=f"duel:cancel:{invitation_id}:{game_id}",
+                ),
+            ],
+            [
+                InlineKeyboardButton(text="« Back to Duels", callback_data="play:duels"),
+            ],
+        ]
+    )
+
+
+def get_duel_launch_keyboard(game_name: str, game_url: str) -> InlineKeyboardMarkup:
+    """Keyboard providing immediate entry into the specific duel game Mini App for accepted players."""
+    game_url = _normalize_mini_app_url(game_url) or game_url
+    btn = (
+        InlineKeyboardButton(text=f"🚀 Enter {game_name} (Mini App)", web_app=WebAppInfo(url=game_url))
+        if game_url and game_url.startswith("https://")
+        else InlineKeyboardButton(text=f"🚀 Enter {game_name}", url=game_url)
+    )
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [btn],
+            [InlineKeyboardButton(text="« Back to Chat", callback_data="chat:hub")],
+        ]
+    )
+
+
+def get_duel_session_required_keyboard(game_id: str) -> InlineKeyboardMarkup:
+    """Keyboard shown when a user selects a duel game but is not in an active conversation session."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="🎲 Find Match Now", callback_data="queue:find_new"),
+            ],
+            [
+                InlineKeyboardButton(text="🧩 Solo Games (Unlimited)", callback_data="play:solo_info"),
+                InlineKeyboardButton(text="🤖 Practice vs AI Bot", callback_data=f"duel:practice:{game_id}"),
+            ],
+            [
+                InlineKeyboardButton(text="« Back to Duels", callback_data="play:duels"),
+                InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
+            ],
+        ]
+    )
+
 
 
 

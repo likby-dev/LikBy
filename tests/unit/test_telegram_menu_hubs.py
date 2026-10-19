@@ -309,46 +309,45 @@ async def test_chat_message_unrelayed_solo_shortcut_and_idle_help():
 
 
 def test_duel_games_keyboards_all_twelve_buttons():
-    """Validates that duel games keyboard provides all 12 games as selectable buttons without open or solo buttons."""
+    """Validates that duel games keyboard provides all 12 games as selectable buttons with session validation."""
     from likby.telegram.keyboards import get_duel_games_keyboard, get_duel_game_card_keyboard
 
     # Local / non-https -> callbacks
     kb_local = get_duel_games_keyboard("http://localhost:8000/play/")
     game_callbacks = [btn.callback_data for row in kb_local.inline_keyboard[:6] for btn in row]
     assert len(game_callbacks) == 12
-    assert "play:duel_card:connect_four" in game_callbacks
-    assert "play:duel_card:carrom_clash" in game_callbacks
-    assert "play:duel_card:air_rush" in game_callbacks
-    assert "play:duel_card:pocket_pool" in game_callbacks
-    assert "play:duel_card:stick_arena" in game_callbacks
-    assert "play:duel_card:quickdraw" in game_callbacks
-    assert "play:duel_card:word_rush" in game_callbacks
-    assert "play:duel_card:brain_blitz" in game_callbacks
-    assert "play:duel_card:reflex_rush" in game_callbacks
-    assert "play:duel_card:mindmatch" in game_callbacks
-    assert "play:duel_card:mystery_mission" in game_callbacks
-    assert "play:duel_card:xo" in game_callbacks
+    assert "play:duel_select:connect_four" in game_callbacks
+    assert "play:duel_select:carrom_clash" in game_callbacks
+    assert "play:duel_select:air_rush" in game_callbacks
+    assert "play:duel_select:pocket_pool" in game_callbacks
+    assert "play:duel_select:stick_arena" in game_callbacks
+    assert "play:duel_select:quickdraw" in game_callbacks
+    assert "play:duel_select:word_rush" in game_callbacks
+    assert "play:duel_select:brain_blitz" in game_callbacks
+    assert "play:duel_select:reflex_rush" in game_callbacks
+    assert "play:duel_select:mindmatch" in game_callbacks
+    assert "play:duel_select:mystery_mission" in game_callbacks
+    assert "play:duel_select:xo" in game_callbacks
 
     # Verify solo and open mini app buttons are removed from duels keyboard
     all_callbacks = [btn.callback_data for row in kb_local.inline_keyboard for btn in row if btn.callback_data]
     assert "play:solo_info" not in all_callbacks
     assert "play:hub" in all_callbacks
 
-    # HTTPS Mini App keyboard also does not include Open Duels top button
+    # HTTPS Mini App keyboard also uses session-gated callbacks instead of un-gated mini app bypass
     kb_https = get_duel_games_keyboard("https://likby.onrender.com/play/")
-    all_https_texts = [btn.text for row in kb_https.inline_keyboard for btn in row]
-    assert not any("Open Duels in LikBy Play" in t for t in all_https_texts)
-    assert not any("Solo Games" in t for t in all_https_texts)
+    https_callbacks = [btn.callback_data for row in kb_https.inline_keyboard[:6] for btn in row]
+    assert len(https_callbacks) == 12
+    assert "play:duel_select:xo" in https_callbacks
 
-    # Card keyboard
-    card_kb = get_duel_game_card_keyboard("carrom_clash", "https://likby.onrender.com/play/", in_active_session=False)
-    assert card_kb.inline_keyboard[0][0].web_app is not None
-    assert "game=carrom_clash" in card_kb.inline_keyboard[0][0].web_app.url
+    # Card keyboard provides challenge action
+    card_kb = get_duel_game_card_keyboard("carrom_clash", in_active_session=True)
+    assert card_kb.inline_keyboard[0][0].callback_data == "play:duel_select:carrom_clash"
 
 
 @pytest.mark.asyncio
 async def test_show_duels_handler_presents_button_selector():
-    """Validates that show_duels handler renders all 11 duels as clickable buttons."""
+    """Validates that show_duels handler renders all 12 duels as clickable buttons."""
     from unittest.mock import AsyncMock, MagicMock
     from aiogram.types import CallbackQuery, Message, User
     from likby.telegram.handlers.play import show_duels
@@ -372,8 +371,177 @@ async def test_show_duels_handler_presents_button_selector():
     markup = kwargs["reply_markup"]
     assert markup is not None
     callbacks = [btn.callback_data for row in markup.inline_keyboard for btn in row if btn.callback_data]
-    assert "play:duel_card:connect_four" in callbacks
-    assert "play:duel_card:carrom_clash" in callbacks
+    assert "play:duel_select:connect_four" in callbacks
+    assert "play:duel_select:carrom_clash" in callbacks
+    assert "play:duel_select:xo" in callbacks
+
+
+@pytest.mark.asyncio
+async def test_duel_select_when_idle_shows_active_session_required_notification():
+    """Validates that selecting a duel game without an active session alerts that an active session is needed."""
+    from unittest.mock import AsyncMock, MagicMock
+    from aiogram.types import CallbackQuery, Message, User
+    from likby.telegram.handlers.play import duel_game_select_callback
+
+    cb = MagicMock(spec=CallbackQuery)
+    cb.data = "play:duel_select:connect_four"
+    cb.from_user = User(id=11111, is_bot=False, first_name="IdlePlayer")
+    cb.answer = AsyncMock()
+    msg = MagicMock(spec=Message)
+    msg.edit_text = AsyncMock()
+    cb.message = msg
+
+    relay_mock = MagicMock()
+    relay_mock.get_or_warm_session = AsyncMock(return_value=None)
+    user_repo_mock = MagicMock()
+
+    await duel_game_select_callback(
+        cb,
+        user_repo=user_repo_mock,
+        chat_relay=relay_mock,
+    )
+
+    cb.answer.assert_called_once()
+    assert "Multiplayer Duel games require an active conversation session" in cb.answer.call_args[0][0]
+    msg.edit_text.assert_called_once()
+    text_sent = msg.edit_text.call_args[0][0]
+    assert "Active Session Required for Duels" in text_sent
+    assert "Connect Four" in text_sent
+
+    # Verify buttons to find match and solo games
+    markup = msg.edit_text.call_args[1]["reply_markup"]
+    cbs = [b.callback_data for r in markup.inline_keyboard for b in r if b.callback_data]
+    assert "queue:find_new" in cbs
+    assert "play:solo_info" in cbs
+
+
+@pytest.mark.asyncio
+async def test_duel_challenge_flow_and_mutual_entry_with_quota_decrement():
+    """Validates duel invite, accept, -1 credit deduction, and mutual Mini App launch."""
+    from unittest.mock import AsyncMock, MagicMock
+    from aiogram import Bot
+    from aiogram.types import CallbackQuery, Message, User
+    from likby.domain.entities.play_game import GameInvitation, PlayGameSession
+    from likby.domain.enums import GameInvitationStatus, GameMode, GameType, PlaySessionStatus
+    from likby.services.session_cache import CachedSession
+    from likby.telegram.handlers.play import duel_game_select_callback, duel_accept_callback
+    from datetime import datetime, timedelta, timezone
+
+    now = datetime.now(timezone.utc)
+    cached = CachedSession(
+        session_id="ses_abc123",
+        user_a_id="usr_host",
+        user_b_id="usr_partner",
+        user_a_tg_id=12345,
+        user_b_tg_id=67890,
+    )
+
+    # 1. Host selects duel game -> challenge is sent to partner
+    cb_select = MagicMock(spec=CallbackQuery)
+    cb_select.data = "play:duel_select:carrom_clash"
+    cb_select.from_user = User(id=12345, is_bot=False, first_name="Host")
+    cb_select.answer = AsyncMock()
+    msg_host = MagicMock(spec=Message)
+    msg_host.edit_text = AsyncMock()
+    cb_select.message = msg_host
+
+    relay_mock = MagicMock()
+    relay_mock.get_or_warm_session = AsyncMock(return_value=cached)
+
+    invitation = GameInvitation(
+        id="inv_9999",
+        sender_id="usr_host",
+        recipient_id="usr_partner",
+        game_id=GameType.CARROM_CLASH,
+        status=GameInvitationStatus.PENDING,
+        expires_at=now + timedelta(minutes=10),
+        created_at=now,
+    )
+
+    play_mock = MagicMock()
+    play_mock.create_duel_invitation = AsyncMock(return_value=(True, "Challenge sent", invitation))
+
+    ent_mock = MagicMock()
+    ent_mock.can_start_duel = AsyncMock(return_value=(True, "OK", 5))
+
+    bot_mock = MagicMock(spec=Bot)
+    bot_mock.send_message = AsyncMock()
+
+    user_repo_mock = MagicMock()
+
+    await duel_game_select_callback(
+        cb_select,
+        user_repo=user_repo_mock,
+        play_game_service=play_mock,
+        chat_relay=relay_mock,
+        gaming_entitlement_service=ent_mock,
+        bot=bot_mock,
+    )
+
+    # Verify challenge sent to partner
+    bot_mock.send_message.assert_called_once()
+    partner_msg_call = bot_mock.send_message.call_args
+    assert partner_msg_call[1]["chat_id"] == 67890
+    assert "Carrom Clash" in partner_msg_call[1]["text"]
+    assert "Accept Challenge & Play" in partner_msg_call[1]["reply_markup"].inline_keyboard[0][0].text
+
+    # Verify host message updated to waiting
+    msg_host.edit_text.assert_called_once()
+    assert "Waiting for your partner to accept" in msg_host.edit_text.call_args[0][0]
+
+    # 2. Partner accepts challenge -> -1 duel credit deducted from both, launch buttons sent to both
+    play_session = PlayGameSession(
+        id="play_ses_777",
+        game_id=GameType.CARROM_CLASH,
+        mode=GameMode.DUEL,
+        status=PlaySessionStatus.ACTIVE,
+        state_data={},
+        current_turn_user_id="usr_host",
+        started_at=now,
+        created_at=now,
+    )
+    play_mock.accept_invitation = AsyncMock(return_value=(True, "Invitation accepted", play_session))
+    ent_mock.get_user_entitlements = AsyncMock(return_value={"daily_duels_remaining": 4, "tier": "BASE"})
+
+    cb_accept = MagicMock(spec=CallbackQuery)
+    cb_accept.data = "duel:accept:inv_9999:carrom_clash"
+    cb_accept.from_user = User(id=67890, is_bot=False, first_name="Partner")
+    cb_accept.answer = AsyncMock()
+    msg_partner = MagicMock(spec=Message)
+    msg_partner.edit_text = AsyncMock()
+    cb_accept.message = msg_partner
+
+    bot_mock.send_message.reset_mock()
+
+    await duel_accept_callback(
+        cb_accept,
+        user_repo=user_repo_mock,
+        play_game_service=play_mock,
+        chat_relay=relay_mock,
+        gaming_entitlement_service=ent_mock,
+        bot=bot_mock,
+    )
+
+    # Verify accept_invitation called with partner user id (triggers -1 quota deduction)
+    play_mock.accept_invitation.assert_called_once_with(
+        invitation_id="inv_9999",
+        recipient_id="usr_partner",
+    )
+
+    # Verify partner received launch button
+    msg_partner.edit_text.assert_called_once()
+    partner_text = msg_partner.edit_text.call_args[0][0]
+    assert "-1 play deducted" in partner_text
+    partner_markup = msg_partner.edit_text.call_args[1]["reply_markup"]
+    assert "Enter Carrom Clash" in partner_markup.inline_keyboard[0][0].text
+
+    # Verify host received launch button via bot.send_message
+    bot_mock.send_message.assert_called_once()
+    host_msg_call = bot_mock.send_message.call_args
+    assert host_msg_call[1]["chat_id"] == 12345
+    assert "-1 play deducted" in host_msg_call[1]["text"]
+    assert "Enter Carrom Clash" in host_msg_call[1]["reply_markup"].inline_keyboard[0][0].text
+
 
 
 

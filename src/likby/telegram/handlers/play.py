@@ -11,13 +11,17 @@ from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMar
 
 from likby.config import get_settings
 from likby.domain.entities.play_game import GAME_CATALOGUE
-from likby.domain.enums import GameMode, SubscriptionTier
+from likby.domain.enums import GameMode, GameType, SubscriptionTier
 from likby.repositories.interfaces import UserRepository
 from likby.services.gaming_entitlement_service import GamingEntitlementService
 from likby.services.play_game_service import PlayGameService
 from likby.telegram.keyboards import (
+    get_duel_challenge_response_keyboard,
+    get_duel_challenge_sender_keyboard,
     get_duel_game_card_keyboard,
     get_duel_games_keyboard,
+    get_duel_launch_keyboard,
+    get_duel_session_required_keyboard,
     get_play_hub_keyboard,
     get_solo_game_card_keyboard,
     get_solo_games_keyboard,
@@ -616,53 +620,323 @@ async def duel_practice_callback(
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
 
 
+@router.callback_query(F.data.startswith("play:duel_select:"))
 @router.callback_query(F.data.startswith("duel:invite:"))
-async def duel_invite_callback(
+async def duel_game_select_callback(
     callback: CallbackQuery,
+    user_repo: UserRepository,
+    play_game_service: Optional[PlayGameService] = None,
     chat_relay: Optional[Any] = None,
+    gaming_entitlement_service: Optional[GamingEntitlementService] = None,
     bot: Optional[Bot] = None,
 ) -> None:
-    """Challenges the user's active conversation partner to this duel game."""
+    """
+    Handles selection of any multiplayer duel game.
+    Enforces that duel games require an active chat session.
+    If idle: notifies user that multiplayer duels need an active session.
+    If in active session: sends duel challenge to partner. Only upon acceptance
+    does the match begin with -1 duel credit deducted from both players.
+    """
     if not callback.data or not callback.from_user:
         return
-    game_id = callback.data.split("duel:invite:")[1]
+
+    # Extract game_id
+    if callback.data.startswith("play:duel_select:"):
+        game_id = callback.data.split("play:duel_select:")[1]
+    else:
+        game_id = callback.data.split("duel:invite:")[1]
+
     info = DUEL_GAMES_DETAILS.get(game_id)
     game_name = info["name"] if info else game_id.replace("_", " ").title()
+    game_emoji = info["emoji"] if info else "⚔️"
 
-    if not chat_relay:
-        await callback.answer("Chat service unavailable.", show_alert=True)
-        return
+    tg_id = callback.from_user.id
+    cached_session = await chat_relay.get_or_warm_session(tg_id) if chat_relay else None
 
-    session = await chat_relay.get_or_warm_session(callback.from_user.id)
-    if not session:
-        await callback.answer("You are not currently in an active chat session.", show_alert=True)
-        return
-
-    partner_tg_id = session.user2_tg_id if session.user1_tg_id == callback.from_user.id else session.user1_tg_id
-
-    settings = get_settings()
-    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
-    clean_base = mini_app_url.split("?")[0].rstrip("/")
-    duel_url = f"{clean_base}?game={game_id}&partner_id={callback.from_user.id}&session_id={session.id}"
-
-    if bot:
-        partner_btn = (
-            InlineKeyboardButton(text=f"⚔️ Accept {game_name} Duel", web_app=WebAppInfo(url=duel_url))
-            if mini_app_url and mini_app_url.startswith("https://")
-            else InlineKeyboardButton(text=f"⚔️ Accept {game_name} Duel", callback_data=f"play:duel_card:{game_id}")
+    # CASE 1: USER DOES NOT HAVE AN ACTIVE SESSION
+    if not cached_session:
+        await callback.answer(
+            "⚠️ Multiplayer Duel games require an active conversation session with a partner!",
+            show_alert=True,
         )
-        partner_kb = InlineKeyboardMarkup(inline_keyboard=[[partner_btn]])
+        notice_text = (
+            f"⚠️ <b>Active Session Required for Duels</b>\n\n"
+            f"<b>{game_emoji} {game_name}</b> is a live 2-player multiplayer duel.\n\n"
+            f"Multiplayer duel games require an active conversation session with a partner!\n\n"
+            f"<b>How to play:</b>\n"
+            f"1️⃣ Tap <b>🎲 Find Match Now</b> below to connect with an anonymous partner.\n"
+            f"2️⃣ Once connected in chat, select any duel game to challenge your partner live!\n\n"
+            f"💡 <i>Want to play right now without a partner? Enjoy our 6 unlimited <b>Solo Games</b>!</i>"
+        )
+        kb = get_duel_session_required_keyboard(game_id)
+        if callback.message:
+            await callback.message.edit_text(notice_text, parse_mode="HTML", reply_markup=kb)
+        return
+
+    # CASE 2: USER DOES HAVE AN ACTIVE SESSION -> INITIATE CHALLENGE
+    partner_tg_id = cached_session.get_partner_tg_id(tg_id)
+    sender_user_id = cached_session.user_a_id if tg_id == cached_session.user_a_tg_id else cached_session.user_b_id
+    partner_user_id = cached_session.get_partner_user_id(sender_user_id)
+
+    # 1. Check duel quotas for both players
+    if gaming_entitlement_service:
+        can_a, reason_a, _ = await gaming_entitlement_service.can_start_duel(sender_user_id)
+        if not can_a:
+            await callback.answer(f"⚠️ You cannot start a duel: {reason_a}", show_alert=True)
+            return
+
+        can_b, reason_b, _ = await gaming_entitlement_service.can_start_duel(partner_user_id)
+        if not can_b:
+            await callback.answer("⚠️ Your partner has reached their daily duel limit for today.", show_alert=True)
+            return
+
+    # 2. Create pending invitation
+    if not play_game_service:
+        await callback.answer("Gaming service is currently unavailable.", show_alert=True)
+        return
+
+    try:
+        game_type = GameType(game_id)
+    except ValueError:
+        game_type = GameType.XO if game_id == "xo" else None
+        if not game_type:
+            await callback.answer(f"Unsupported game: {game_id}", show_alert=True)
+            return
+
+    ok, msg, invitation = await play_game_service.create_duel_invitation(
+        sender_id=sender_user_id,
+        recipient_id=partner_user_id,
+        game_id=game_type,
+    )
+    if not ok or not invitation:
+        await callback.answer(f"⚠️ {msg}", show_alert=True)
+        return
+
+    # 3. Send Challenge Message to Partner
+    partner_text = (
+        f"⚔️ <b>Duel Challenge Received!</b>\n\n"
+        f"Your active conversation partner has challenged you to a game of <b>{game_emoji} {game_name}</b>!\n\n"
+        f"🌟 <b>Genre:</b> {info['category'] if info else 'Arcade Duel'}\n"
+        f"⏱ <b>Duration:</b> {info['duration'] if info else '2-5 mins'}\n\n"
+        f"📖 <b>Quick Rules:</b>\n"
+        f"• {info['rules'][0] if info and info.get('rules') else 'Head-to-head live duel'}\n"
+        f"• {info['rules'][1] if info and len(info.get('rules', [])) > 1 else 'Server-authoritative match'}\n\n"
+        f"⚠️ <i>Accepting will launch the match and decrease -1 duel credit from BOTH players' daily allowances.</i>"
+    )
+    partner_kb = get_duel_challenge_response_keyboard(invitation.id, game_id)
+    if bot:
         try:
             await bot.send_message(
                 chat_id=partner_tg_id,
-                text=f"⚔️ <b>Your partner has challenged you to {game_name}!</b>\n\n<i>Tap below to accept and enter the match:</i>",
+                text=partner_text,
                 parse_mode="HTML",
                 reply_markup=partner_kb,
             )
         except Exception:
             pass
 
-    await callback.answer(f"⚔️ Challenge sent for {game_name}!", show_alert=True)
+    # 4. Update Sender's message
+    sender_text = (
+        f"📨 <b>Duel Challenge Sent!</b>\n\n"
+        f"We've sent a challenge request for <b>{game_emoji} {game_name}</b> to your partner!\n\n"
+        f"⏳ <i>Waiting for your partner to accept...</i>\n"
+        f"<i>Both players' duel allowances will decrease by 1 upon acceptance.</i>"
+    )
+    sender_kb = get_duel_challenge_sender_keyboard(invitation.id, game_id)
+    await callback.answer(f"⚔️ Challenge sent to partner for {game_name}!")
+    if callback.message:
+        await callback.message.edit_text(sender_text, parse_mode="HTML", reply_markup=sender_kb)
+
+
+@router.callback_query(F.data.startswith("duel:accept:"))
+async def duel_accept_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    play_game_service: Optional[PlayGameService] = None,
+    chat_relay: Optional[Any] = None,
+    gaming_entitlement_service: Optional[GamingEntitlementService] = None,
+    bot: Optional[Bot] = None,
+) -> None:
+    """
+    Handles partner acceptance of a duel challenge.
+    Atomically deducts -1 duel credit from BOTH players' daily limits,
+    and sends direct entry Mini App buttons for that particular game to both players.
+    """
+    if not callback.data or not callback.from_user:
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) < 4:
+        return
+    invitation_id = parts[2]
+    game_id = parts[3]
+
+    info = DUEL_GAMES_DETAILS.get(game_id)
+    game_name = info["name"] if info else game_id.replace("_", " ").title()
+    game_emoji = info["emoji"] if info else "⚔️"
+
+    tg_id = callback.from_user.id
+    cached_session = await chat_relay.get_or_warm_session(tg_id) if chat_relay else None
+    if not cached_session:
+        await callback.answer("Active chat session has ended.", show_alert=True)
+        return
+
+    recip_user_id = cached_session.user_a_id if tg_id == cached_session.user_a_tg_id else cached_session.user_b_id
+    host_tg_id = cached_session.get_partner_tg_id(tg_id)
+    host_user_id = cached_session.get_partner_user_id(recip_user_id)
+
+    if not play_game_service:
+        await callback.answer("Gaming service unavailable.", show_alert=True)
+        return
+
+    # Accept invitation -> atomically consumes 1 duel credit from BOTH players
+    ok, msg, play_session = await play_game_service.accept_invitation(
+        invitation_id=invitation_id,
+        recipient_id=recip_user_id,
+    )
+    if not ok or not play_session:
+        await callback.answer(f"⚠️ {msg}", show_alert=True)
+        if callback.message:
+            await callback.message.edit_text(
+                f"⚠️ <b>Could Not Start Duel</b>\n\n{msg}",
+                parse_mode="HTML",
+            )
+        return
+
+    # Check updated quotas for both players
+    rem_host_text = ""
+    rem_recip_text = ""
+    if gaming_entitlement_service:
+        try:
+            ent_h = await gaming_entitlement_service.get_user_entitlements(host_user_id)
+            ent_r = await gaming_entitlement_service.get_user_entitlements(recip_user_id)
+            rem_h = ent_h["daily_duels_remaining"]
+            rem_r = ent_r["daily_duels_remaining"]
+            rem_host_text = f" ({rem_h} remaining today)" if rem_h != -1 else " (Unlimited)"
+            rem_recip_text = f" ({rem_r} remaining today)" if rem_r != -1 else " (Unlimited)"
+        except Exception:
+            pass
+
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+    clean_base = mini_app_url.split("?")[0].rstrip("/")
+
+    # URLs for the particular game
+    host_game_url = f"{clean_base}?game={game_id}&session_id={play_session.id}&partner_id={tg_id}&role=host"
+    recip_game_url = f"{clean_base}?game={game_id}&session_id={play_session.id}&partner_id={host_tg_id}&role=challenger"
+
+    recip_text = (
+        f"🎉 <b>Duel Challenge Accepted!</b>\n\n"
+        f"Both of you are entering <b>{game_emoji} {game_name}</b>!\n"
+        f"🎯 <b>Duel Allowance:</b> -1 play deducted{rem_recip_text}.\n\n"
+        f"👉 <i>Tap below to enter the game arena now:</i>"
+    )
+    recip_kb = get_duel_launch_keyboard(game_name, recip_game_url)
+
+    host_text = (
+        f"⚔️ <b>Your Partner Accepted the Challenge!</b>\n\n"
+        f"Both of you are entering <b>{game_emoji} {game_name}</b>!\n"
+        f"🎯 <b>Duel Allowance:</b> -1 play deducted{rem_host_text}.\n\n"
+        f"👉 <i>Tap below to enter the game arena now:</i>"
+    )
+    host_kb = get_duel_launch_keyboard(game_name, host_game_url)
+
+    await callback.answer(f"🎉 Challenge accepted! Launching {game_name}...")
+    if callback.message:
+        await callback.message.edit_text(recip_text, parse_mode="HTML", reply_markup=recip_kb)
+
+    if bot:
+        try:
+            await bot.send_message(
+                chat_id=host_tg_id,
+                text=host_text,
+                parse_mode="HTML",
+                reply_markup=host_kb,
+            )
+        except Exception:
+            pass
+
+
+@router.callback_query(F.data.startswith("duel:decline:"))
+async def duel_decline_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    play_game_service: Optional[PlayGameService] = None,
+    chat_relay: Optional[Any] = None,
+    bot: Optional[Bot] = None,
+) -> None:
+    """Handles partner declining a duel challenge with 0 credits deducted."""
+    if not callback.data or not callback.from_user:
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) < 4:
+        return
+    invitation_id = parts[2]
+    game_id = parts[3]
+
+    info = DUEL_GAMES_DETAILS.get(game_id)
+    game_name = info["name"] if info else game_id.replace("_", " ").title()
+
+    tg_id = callback.from_user.id
+    cached_session = await chat_relay.get_or_warm_session(tg_id) if chat_relay else None
+    if cached_session and play_game_service:
+        recip_user_id = cached_session.user_a_id if tg_id == cached_session.user_a_tg_id else cached_session.user_b_id
+        host_tg_id = cached_session.get_partner_tg_id(tg_id)
+        await play_game_service.reject_invitation(invitation_id, recip_user_id)
+
+        if bot:
+            try:
+                await bot.send_message(
+                    chat_id=host_tg_id,
+                    text=f"❌ <b>Challenge Declined</b>\n\nYour partner declined the invitation for <b>{game_name}</b>. No duel credits were consumed.",
+                    parse_mode="HTML",
+                )
+            except Exception:
+                pass
+
+    await callback.answer("Challenge declined.")
+    if callback.message:
+        await callback.message.edit_text(
+            f"❌ <b>Challenge Declined</b>\n\nYou declined the duel invitation for <b>{game_name}</b>. No duel credits were consumed.",
+            parse_mode="HTML",
+        )
+
+
+@router.callback_query(F.data.startswith("duel:cancel:"))
+async def duel_cancel_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    play_game_service: Optional[PlayGameService] = None,
+    chat_relay: Optional[Any] = None,
+    bot: Optional[Bot] = None,
+) -> None:
+    """Handles host cancelling a pending duel challenge with 0 credits deducted."""
+    if not callback.data or not callback.from_user:
+        return
+
+    parts = callback.data.split(":")
+    if len(parts) < 4:
+        return
+    invitation_id = parts[2]
+    game_id = parts[3]
+
+    info = DUEL_GAMES_DETAILS.get(game_id)
+    game_name = info["name"] if info else game_id.replace("_", " ").title()
+
+    tg_id = callback.from_user.id
+    cached_session = await chat_relay.get_or_warm_session(tg_id) if chat_relay else None
+    if cached_session and play_game_service:
+        sender_user_id = cached_session.user_a_id if tg_id == cached_session.user_a_tg_id else cached_session.user_b_id
+        await play_game_service.cancel_invitation(invitation_id, sender_user_id)
+
+    await callback.answer("Challenge cancelled.")
+    if callback.message:
+        await callback.message.edit_text(
+            f"❌ <b>Challenge Cancelled</b>\n\nYou cancelled the challenge for <b>{game_name}</b>. No duel credits were consumed.",
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup(inline_keyboard=[[InlineKeyboardButton(text="« Back to Duels", callback_data="play:duels")]]),
+        )
 
 
 async def not_in_active_session_filter(message: Message, chat_relay: Optional[Any] = None) -> bool:

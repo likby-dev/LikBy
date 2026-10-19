@@ -1245,3 +1245,191 @@ html, body {
   transform: translateX(-50%) translateY(0);
   opacity: 1;
 }
+
+/* ==============================================================================
+   TOUCH INTERACTION & TOUCHSCREEN CONTROLS ENGINE
+   ============================================================================== */
+.carrom-board,
+.air-hockey-table,
+.arena-stage,
+.zen-grid,
+.c4-board,
+.xo-board,
+#qdCanvas,
+.pool-table-surface,
+.golf-green-surface,
+.touch-interactive-surface {
+  touch-action: none;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Touch active toggle state */
+.btn-icon.active {
+  border-color: var(--likby-cyan);
+  background: rgba(34, 211, 238, 0.2);
+  color: #fff;
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.4);
+}
+
+/* Touch Targets: minimum 44px for accessibility and finger accuracy */
+.c4-btn,
+.xo-cell,
+.zm-dir,
+.wh-tile,
+.wr-tile,
+.bb-opt-btn,
+.mm-btn,
+.arena-touch-btn {
+  min-height: 44px;
+  min-width: 44px;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+  touch-action: manipulation;
+}
+
+/* Tactile Active feedback */
+.c4-btn:active,
+.xo-cell:active,
+.zm-dir:active,
+.wh-tile:active,
+.wr-tile:active,
+.bb-opt-btn:active,
+.mm-btn:active,
+.arena-touch-btn:active {
+  transform: scale(0.94);
+  transition: transform 0.05s ease-out;
+}
+
+/* Touch Slingshot Indicator */
+.touch-slingshot-line {
+  position: absolute;
+  pointer-events: none;
+  z-index: 50;
+  border-top: 2px dashed var(--likby-cyan);
+  transform-origin: 0 0;
+  filter: drop-shadow(0 0 8px var(--likby-cyan));
+}
+
+/* Touch Aim Circle / Halo */
+.touch-aim-halo {
+  position: absolute;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 2px solid var(--likby-cyan);
+  background: rgba(34, 211, 238, 0.2);
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  z-index: 45;
+  animation: pulseGlow 1.2s infinite alternate;
+}
+
+/* Connect Four Column Drag Highlight */
+.c4-board .c4-col-highlight {
+  background: rgba(34, 211, 238, 0.15);
+  box-shadow: inset 0 0 12px rgba(34, 211, 238, 0.4);
+  border-radius: var(--radius-sm);
+}
+
+/* Touch mode status badge */
+.touch-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: var(--radius-full);
+  background: rgba(34, 211, 238, 0.15);
+  color: var(--likby-cyan);
+  border: 1px solid rgba(34, 211, 238, 0.3);
+}
+
+.touch-status-pill.disabled {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--likby-text-muted);
+  border-color: rgba(148, 163, 184, 0.2);
+}
+
+/* Touch-enhanced Game UI Elements */
+/* Mystery Mission Safe Keypad */
+.safe-keypad {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  width: 220px;
+  margin: 0 auto;
+}
+.safe-key {
+  height: 48px;
+  background: var(--likby-surface-raised);
+  border: 1px solid var(--likby-glass-border);
+  border-radius: var(--radius-md);
+  color: #fff;
+  font-family: var(--font-display);
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  touch-action: manipulation;
+  transition: transform 0.08s ease, background 0.12s ease;
+}
+.safe-key:active {
+  transform: scale(0.92);
+  background: rgba(34, 211, 238, 0.25);
+  border-color: var(--likby-cyan);
+}
+.safe-code-dots {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin-bottom: 12px;
+}
+.safe-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid var(--likby-glass-border-hover);
+  background: transparent;
+  transition: all 0.2s ease;
+}
+.safe-dot.filled {
+  background: var(--likby-cyan);
+  box-shadow: 0 0 10px var(--likby-cyan);
+  border-color: var(--likby-cyan);
+}
+
+/* Word Rush & Word Hunt Touch Trays */
+.wr-tile.touched, .wh-tile.touched {
+  transform: scale(0.92);
+  background: rgba(34, 211, 238, 0.3) !important;
+  border-color: var(--likby-cyan) !important;
+}
+.wh-tile.active-drag {
+  background: linear-gradient(135deg, var(--likby-cyan), var(--likby-blue)) !important;
+  color: #030712 !important;
+  box-shadow: 0 0 14px rgba(34, 211, 238, 0.8) !important;
+  transform: scale(1.08);
+}
+.wh-matrix {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* Color Flow Touch Dot */
+.cf-dot {
+  cursor: pointer;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  user-select: none;
+}
+.cf-dot:active, .cf-dot.active {
+  transform: scale(1.2);
+  box-shadow: 0 0 16px currentColor;
+}
+

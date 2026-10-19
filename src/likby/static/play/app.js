@@ -138,6 +138,60 @@
   }
 
   // ============================================================================
+  // 1B. Touch Screen Interactivity & Validation Engine (With Telegram Haptics)
+  // ============================================================================
+  let touchEnabled = true;
+
+  const TouchSystem = {
+    triggerHaptic(type) {
+      if (!touchEnabled || !window.Telegram?.WebApp?.HapticFeedback) return;
+      try {
+        const hf = window.Telegram.WebApp.HapticFeedback;
+        if (["light", "medium", "heavy", "rigid", "soft"].includes(type)) {
+          hf.impactOccurred(type);
+        } else if (["success", "warning", "error"].includes(type)) {
+          hf.notificationOccurred(type);
+        } else if (type === "selection") {
+          hf.selectionChanged();
+        }
+      } catch (err) {
+        // Safe fallback
+      }
+    },
+
+    toggleTouchControls() {
+      touchEnabled = !touchEnabled;
+      document.querySelectorAll("#touchToggleBtn, #arenaTouchBtn").forEach((btn) => {
+        if (touchEnabled) {
+          btn.classList.add("active");
+          btn.title = "Touch Controls: Active";
+        } else {
+          btn.classList.remove("active");
+          btn.title = "Touch Controls: Disabled";
+        }
+      });
+      showToast(touchEnabled ? "📱 Touch Screen Controls: Enabled" : "📱 Touch Screen Controls: Disabled");
+      TouchSystem.triggerHaptic("selection");
+    },
+
+    getTouchPos(e, element) {
+      const rect = element.getBoundingClientRect();
+      const touch = e.touches ? (e.touches[0] || e.changedTouches[0]) : e;
+      return {
+        x: touch.clientX - rect.left,
+        y: touch.clientY - rect.top,
+        clientX: touch.clientX,
+        clientY: touch.clientY,
+        rect,
+      };
+    },
+
+    validateInBounds(x, y, rect) {
+      return x >= 0 && x <= rect.width && y >= 0 && y <= rect.height;
+    }
+  };
+
+  // ============================================================================
   // 2. Ambient Canvas Starfield Background
   // ============================================================================
   function initAmbientCanvas() {
@@ -367,6 +421,10 @@
     };
     soundToggleBtn?.addEventListener("click", toggleSound);
     arenaSoundBtn?.addEventListener("click", toggleSound);
+
+    // Touch Screen Controls Toggle
+    document.getElementById("touchToggleBtn")?.addEventListener("click", TouchSystem.toggleTouchControls);
+    document.getElementById("arenaTouchBtn")?.addEventListener("click", TouchSystem.toggleTouchControls);
 
     // Partner Banner CTA
     partnerCtaBtn?.addEventListener("click", () => {
@@ -738,20 +796,25 @@
     }
     if (placedRow === -1) {
       playSound("error");
-      return;
+      TouchSystem.triggerHaptic("warning");
+      showToast("⚠️ Column is full! Pick another.");
+      return false;
     }
 
     playSound("drop");
+    TouchSystem.triggerHaptic("medium");
     activeGameState.current_turn = player === 1 ? "P2" : "P1";
 
     // Win check
     if (checkC4Win(board, player)) {
       activeGameState.winner = player;
       playSound("win");
+      TouchSystem.triggerHaptic("success");
       showToast(`🎉 Player ${player} Wins!`);
     }
 
     renderConnectFour();
+    return true;
   }
 
   function checkC4Win(b, p) {
@@ -773,9 +836,9 @@
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
         <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Turn: <b style="color: ${activeGameState.current_turn === 'P1' ? 'var(--likby-cyan)' : 'var(--likby-pink)'};">${activeGameState.current_turn === 'P1' ? 'Your Disc (Cyan)' : 'Opponent (Pink)'}</b></span>
-          <span>${activeGameState.winner ? '🏆 Match Concluded' : 'Align 4 Discs'}</span>
+          <span class="touch-status-pill">📱 Touch Column / Drag</span>
         </div>
-        <div class="c4-board">
+        <div class="c4-board touch-interactive-surface" id="c4Board">
           ${board.map((row, r) => row.map((cell, c) => `
             <div class="c4-cell ${cell === 1 ? 'p1' : cell === 2 ? 'p2' : ''}" data-col="${c}"></div>
           `).join("")).join("")}
@@ -786,12 +849,40 @@
       </div>
     `;
 
+    const boardEl = document.getElementById("c4Board");
+    if (boardEl) {
+      const handleTouchMove = (e) => {
+        if (activeGameState.winner) return;
+        const pos = TouchSystem.getTouchPos(e, boardEl);
+        const colWidth = pos.rect.width / 7;
+        const col = Math.floor(pos.x / colWidth);
+        if (col >= 0 && col < 7) {
+          boardEl.querySelectorAll(".c4-cell").forEach((cell) => {
+            cell.classList.toggle("c4-col-highlight", parseInt(cell.dataset.col) === col);
+          });
+        }
+      };
+
+      boardEl.addEventListener("touchmove", handleTouchMove, { passive: true });
+      boardEl.addEventListener("touchend", (e) => {
+        if (activeGameState.winner) return;
+        const pos = TouchSystem.getTouchPos(e, boardEl);
+        const colWidth = pos.rect.width / 7;
+        const col = Math.min(6, Math.max(0, Math.floor(pos.x / colWidth)));
+        boardEl.querySelectorAll(".c4-cell").forEach((cell) => cell.classList.remove("c4-col-highlight"));
+        if (dropDisc(col, activeGameState.current_turn === "P1" ? 1 : 2)) {
+          submitAction("drop_disc", { column: col });
+        }
+      });
+    }
+
     canvasContainer.querySelectorAll(".c4-cell, .c4-btn").forEach((el) => {
       el.addEventListener("click", () => {
         if (activeGameState.winner) return;
         const col = parseInt(el.dataset.col);
-        dropDisc(col, activeGameState.current_turn === "P1" ? 1 : 2);
-        submitAction("drop_disc", { column: col });
+        if (dropDisc(col, activeGameState.current_turn === "P1" ? 1 : 2)) {
+          submitAction("drop_disc", { column: col });
+        }
       });
     });
   }
@@ -803,10 +894,13 @@
     if (!activeGameState || activeGameState.winner) return;
     if (activeGameState.board[r][c] !== "") {
       playSound("error");
+      TouchSystem.triggerHaptic("warning");
+      showToast("⚠️ Cell already marked!");
       return;
     }
     if (isPracticeMode && activeGameState.current_turn !== "P1") {
       playSound("error");
+      TouchSystem.triggerHaptic("warning");
       return;
     }
 
@@ -814,16 +908,19 @@
     activeGameState.board[r][c] = mark;
     activeGameState.move_count = (activeGameState.move_count || 0) + 1;
     playSound(mark === "X" ? "strike" : "drop");
+    TouchSystem.triggerHaptic("light");
 
     const winResult = checkXOWin(activeGameState.board, mark);
     if (winResult.won) {
       activeGameState.winner = activeGameState.current_turn;
       activeGameState.winning_cells = winResult.cells;
       playSound("win");
+      TouchSystem.triggerHaptic("success");
       showToast(activeGameState.winner === "P1" ? "🎉 Victory! You aligned 3 marks!" : "🤖 Opponent won this round!");
     } else if (activeGameState.move_count >= 9) {
       activeGameState.winner = "DRAW";
       playSound("score");
+      TouchSystem.triggerHaptic("selection");
       showToast("🤝 Match ended in a draw!");
     } else {
       activeGameState.current_turn = (activeGameState.current_turn === "P1" ? "P2" : "P1");
@@ -986,10 +1083,10 @@
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
         <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
           <span>P1 Score: <b style="color: var(--likby-cyan);">${activeGameState.p1_score}</b></span>
-          <span>Target: <b>25 pts</b></span>
+          <span class="touch-status-pill">📱 Touch Drag & Aim</span>
           <span>P2 Score: <b style="color: var(--likby-pink);">${activeGameState.p2_score}</b></span>
         </div>
-        <div class="carrom-board" id="carromBoard">
+        <div class="carrom-board touch-interactive-surface" id="carromBoard">
           <div class="carrom-pocket" style="top: 8px; left: 8px;"></div>
           <div class="carrom-pocket" style="top: 8px; right: 8px;"></div>
           <div class="carrom-pocket" style="bottom: 8px; left: 8px;"></div>
@@ -1003,6 +1100,7 @@
           <div class="carrom-piece black" style="top: 135px; left: 160px;"></div>
           <!-- Striker -->
           <div class="carrom-striker" id="carromStriker" style="bottom: 34px; left: 130px;"></div>
+          <div id="carromAimLine" class="touch-slingshot-line" style="display: none;"></div>
         </div>
         <div style="display: flex; flex-direction: column; gap: 8px;">
           <div style="display: flex; align-items: center; gap: 10px; font-size: 12px;">
@@ -1014,20 +1112,81 @@
       </div>
     `;
 
-    document.getElementById("carromStrikeBtn")?.addEventListener("click", () => {
-      const angle = parseFloat(document.getElementById("carromAngle")?.value || 0);
+    const striker = document.getElementById("carromStriker");
+    const board = document.getElementById("carromBoard");
+    const aimLine = document.getElementById("carromAimLine");
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+
+    const executeStrike = (angle, power) => {
       playSound("strike");
-      const striker = document.getElementById("carromStriker");
+      TouchSystem.triggerHaptic("heavy");
       if (striker) {
         striker.style.transform = `translate(${angle * 1.5}px, -180px)`;
         setTimeout(() => {
           striker.style.transform = "none";
           activeGameState.p1_score += 10;
           playSound("score");
+          TouchSystem.triggerHaptic("success");
           renderCarromClash();
         }, 350);
       }
-      submitAction("strike", { angle, power: 85 });
+      submitAction("strike", { angle, power });
+    };
+
+    if (striker && board) {
+      const onTouchStart = (e) => {
+        isDragging = true;
+        const pos = TouchSystem.getTouchPos(e, board);
+        dragStartX = pos.x;
+        dragStartY = pos.y;
+        TouchSystem.triggerHaptic("light");
+      };
+
+      const onTouchMove = (e) => {
+        if (!isDragging) return;
+        const pos = TouchSystem.getTouchPos(e, board);
+        const dx = pos.x - dragStartX;
+        const dy = pos.y - dragStartY;
+
+        // Position striker along baseline
+        const clampedX = Math.min(250, Math.max(40, pos.x - 16));
+        striker.style.left = `${clampedX}px`;
+
+        if (dy > 10 && aimLine) {
+          // Draw slingshot aim line
+          aimLine.style.display = "block";
+          aimLine.style.left = `${clampedX + 16}px`;
+          aimLine.style.top = "266px";
+          const dist = Math.min(100, Math.hypot(dx, dy));
+          const rad = Math.atan2(-dy, -dx);
+          aimLine.style.width = `${dist * 1.5}px`;
+          aimLine.style.transform = `rotate(${rad}rad)`;
+        }
+      };
+
+      const onTouchEnd = (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (aimLine) aimLine.style.display = "none";
+        const pos = TouchSystem.getTouchPos(e, board);
+        const dx = pos.x - dragStartX;
+        const dy = pos.y - dragStartY;
+        if (dy > 15) {
+          const power = Math.min(100, Math.round(Math.hypot(dx, dy) * 1.5));
+          const angle = Math.min(60, Math.max(-60, Math.round(-dx * 1.2)));
+          executeStrike(angle, power);
+        }
+      };
+
+      striker.addEventListener("touchstart", onTouchStart, { passive: true });
+      board.addEventListener("touchmove", onTouchMove, { passive: true });
+      window.addEventListener("touchend", onTouchEnd);
+    }
+
+    document.getElementById("carromStrikeBtn")?.addEventListener("click", () => {
+      const angle = parseFloat(document.getElementById("carromAngle")?.value || 0);
+      executeStrike(angle, 85);
     });
   }
 
@@ -1039,10 +1198,10 @@
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
         <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
           <span>Goals P1: <b style="color: var(--likby-cyan);">${activeGameState.p1_score}</b></span>
-          <span>First to 5 Goals</span>
+          <span class="touch-status-pill">📱 Drag Paddle 1:1</span>
           <span>Goals P2: <b style="color: var(--likby-pink);">${activeGameState.p2_score}</b></span>
         </div>
-        <div class="air-hockey-table" id="airTable">
+        <div class="air-hockey-table touch-interactive-surface" id="airTable">
           <div style="position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: rgba(34, 211, 238, 0.4);"></div>
           <div class="air-paddle p2" id="airP2Paddle" style="top: 20px; left: 128px;"></div>
           <div class="air-puck" id="airPuck" style="top: 177px; left: 137px;"></div>
@@ -1055,25 +1214,54 @@
       </div>
     `;
 
-    document.getElementById("airShootBtn")?.addEventListener("click", () => {
+    const table = document.getElementById("airTable");
+    const paddle = document.getElementById("airP1Paddle");
+    const puck = document.getElementById("airPuck");
+
+    const shootGoal = () => {
       playSound("strike");
-      const puck = document.getElementById("airPuck");
+      TouchSystem.triggerHaptic("heavy");
       if (puck) {
         puck.style.transform = "translate(40px, -140px)";
         setTimeout(() => {
           puck.style.transform = "none";
           activeGameState.p1_score++;
           playSound("win");
+          TouchSystem.triggerHaptic("success");
           showToast("⚡ GOAL SCORED!");
           renderAirRush();
         }, 350);
       }
       submitAction("score_goal", {});
-    });
+    };
 
+    if (table && paddle) {
+      const handleTableTouch = (e) => {
+        const pos = TouchSystem.getTouchPos(e, table);
+        // Validate paddle coordinates: strictly within player's lower half
+        const clampedX = Math.min(256, Math.max(0, pos.x - 22));
+        const clampedY = Math.min(336, Math.max(190, pos.y - 22));
+        paddle.style.left = `${clampedX}px`;
+        paddle.style.top = `${clampedY}px`;
+        paddle.style.bottom = "auto";
+
+        // Collision check with puck
+        if (puck && clampedY <= 205 && Math.abs(clampedX - 128) < 40) {
+          shootGoal();
+        }
+      };
+
+      table.addEventListener("touchstart", (e) => {
+        TouchSystem.triggerHaptic("light");
+        handleTableTouch(e);
+      }, { passive: true });
+      table.addEventListener("touchmove", handleTableTouch, { passive: true });
+    }
+
+    document.getElementById("airShootBtn")?.addEventListener("click", shootGoal);
     document.getElementById("airDefendBtn")?.addEventListener("click", () => {
       playSound("move");
-      const paddle = document.getElementById("airP1Paddle");
+      TouchSystem.triggerHaptic("medium");
       if (paddle) paddle.style.transform = "translateX(-50px)";
       setTimeout(() => paddle && (paddle.style.transform = "none"), 300);
       submitAction("move_paddle", { x: 80, y: 300 });
@@ -1086,16 +1274,27 @@
   function renderPocketPool() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
-          <span>Solids Left: <b style="color: #facc15;">${activeGameState.solids_left}</b></span>
-          <span>Turn: <b style="color: var(--likby-cyan);">${activeGameState.current_turn}</b></span>
-          <span>Stripes Left: <b style="color: #38bdf8;">${activeGameState.stripes_left}</b></span>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 13px;">
+          <span>Solids: <b style="color: #facc15;">${activeGameState.solids_left}</b></span>
+          <span class="touch-status-pill">📱 Cue Ball Slingshot</span>
+          <span>Stripes: <b style="color: #38bdf8;">${activeGameState.stripes_left}</b></span>
         </div>
-        <div style="width: 310px; height: 210px; background: #064e3b; border: 12px solid #78350f; border-radius: 16px; position: relative; margin: 0 auto; box-shadow: inset 0 0 20px rgba(0,0,0,0.6);">
-          <div style="position: absolute; top: 85px; left: 60px; width: 18px; height: 18px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px #fff;"></div>
-          <div style="position: absolute; top: 85px; left: 190px; width: 18px; height: 18px; background: #000; color: #fff; font-size: 10px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800;">8</div>
-          <div style="position: absolute; top: 70px; left: 210px; width: 18px; height: 18px; background: #facc15; border-radius: 50%;"></div>
-          <div style="position: absolute; top: 100px; left: 210px; width: 18px; height: 18px; background: #38bdf8; border-radius: 50%;"></div>
+        <div id="poolTable" class="touch-interactive-surface" style="width: 310px; height: 210px; background: #064e3b; border: 12px solid #78350f; border-radius: 16px; position: relative; margin: 0 auto; box-shadow: inset 0 0 20px rgba(0,0,0,0.6); overflow: hidden;">
+          <!-- 6 Pockets -->
+          <div style="position: absolute; top: 4px; left: 4px; width: 22px; height: 22px; background: #000; border-radius: 50%;"></div>
+          <div style="position: absolute; top: 4px; left: 144px; width: 22px; height: 22px; background: #000; border-radius: 50%;"></div>
+          <div style="position: absolute; top: 4px; right: 4px; width: 22px; height: 22px; background: #000; border-radius: 50%;"></div>
+          <div style="position: absolute; bottom: 4px; left: 4px; width: 22px; height: 22px; background: #000; border-radius: 50%;"></div>
+          <div style="position: absolute; bottom: 4px; left: 144px; width: 22px; height: 22px; background: #000; border-radius: 50%;"></div>
+          <div style="position: absolute; bottom: 4px; right: 4px; width: 22px; height: 22px; background: #000; border-radius: 50%;"></div>
+          <!-- Cue Ball -->
+          <div id="cueBall" style="position: absolute; top: 96px; left: 60px; width: 18px; height: 18px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px #fff; cursor: grab; z-index: 10;"></div>
+          <!-- Object Balls -->
+          <div id="poolBall8" style="position: absolute; top: 96px; left: 190px; width: 18px; height: 18px; background: #000; color: #fff; font-size: 10px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 800; transition: transform 0.3s ease;">8</div>
+          <div id="poolBallSolid" style="position: absolute; top: 80px; left: 210px; width: 18px; height: 18px; background: #facc15; border-radius: 50%; transition: transform 0.3s ease;"></div>
+          <div id="poolBallStripe" style="position: absolute; top: 110px; left: 210px; width: 18px; height: 18px; background: #38bdf8; border-radius: 50%; transition: transform 0.3s ease;"></div>
+          <!-- Slingshot Aim Line -->
+          <div id="poolAimLine" class="touch-slingshot-line" style="display: none;"></div>
         </div>
         <div style="display: flex; gap: 8px;">
           <button class="btn-secondary" id="potSolidBtn" style="flex: 1;">Pot Solid 🟡</button>
@@ -1105,22 +1304,92 @@
       </div>
     `;
 
+    const cueBall = document.getElementById("cueBall");
+    const poolTable = document.getElementById("poolTable");
+    const poolAimLine = document.getElementById("poolAimLine");
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+
+    const executeCueShot = (angle, power) => {
+      playSound("strike");
+      TouchSystem.triggerHaptic("heavy");
+      if (cueBall) {
+        cueBall.style.transform = `translate(${Math.cos(angle * Math.PI / 180) * power * 1.5}px, ${Math.sin(angle * Math.PI / 180) * power * 1.5}px)`;
+        setTimeout(() => {
+          cueBall.style.transform = "none";
+          const ball8 = document.getElementById("poolBall8");
+          const ballS = document.getElementById("poolBallSolid");
+          const ballSt = document.getElementById("poolBallStripe");
+          if (ball8) ball8.style.transform = "translate(20px, -15px)";
+          if (ballS) ballS.style.transform = "translate(30px, 25px)";
+          if (ballSt) ballSt.style.transform = "translate(35px, -30px)";
+          playSound("score");
+          TouchSystem.triggerHaptic("success");
+          if (activeGameState.solids_left > 0) activeGameState.solids_left--;
+          showToast("🎱 Solid shot! Ball potted into corner pocket!");
+          setTimeout(() => renderPocketPool(), 500);
+        }, 300);
+      }
+      submitAction("strike_cue_ball", { angle, power });
+    };
+
+    if (cueBall && poolTable) {
+      cueBall.addEventListener("touchstart", (e) => {
+        isDragging = true;
+        const pos = TouchSystem.getTouchPos(e, poolTable);
+        dragStartX = pos.x;
+        dragStartY = pos.y;
+        TouchSystem.triggerHaptic("light");
+      }, { passive: true });
+
+      poolTable.addEventListener("touchmove", (e) => {
+        if (!isDragging) return;
+        const pos = TouchSystem.getTouchPos(e, poolTable);
+        const dx = pos.x - dragStartX;
+        const dy = pos.y - dragStartY;
+        if (poolAimLine) {
+          poolAimLine.style.display = "block";
+          poolAimLine.style.left = "69px";
+          poolAimLine.style.top = "105px";
+          const dist = Math.min(100, Math.hypot(dx, dy));
+          const rad = Math.atan2(-dy, -dx);
+          poolAimLine.style.width = `${dist * 1.6}px`;
+          poolAimLine.style.transform = `rotate(${rad}rad)`;
+        }
+      }, { passive: true });
+
+      window.addEventListener("touchend", (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (poolAimLine) poolAimLine.style.display = "none";
+        const pos = TouchSystem.getTouchPos(e, poolTable);
+        const dx = pos.x - dragStartX;
+        const dy = pos.y - dragStartY;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 15) {
+          const power = Math.min(100, Math.round(dist * 1.4));
+          const angle = Math.round(Math.atan2(-dy, -dx) * (180 / Math.PI));
+          executeCueShot(angle, power);
+        }
+      }, { once: true });
+    }
+
     document.getElementById("potSolidBtn")?.addEventListener("click", () => {
       if (activeGameState.solids_left > 0) activeGameState.solids_left--;
       playSound("score");
+      TouchSystem.triggerHaptic("medium");
       renderPocketPool();
       submitAction("pot_ball", { ball: "SOLID" });
     });
     document.getElementById("potStripeBtn")?.addEventListener("click", () => {
       if (activeGameState.stripes_left > 0) activeGameState.stripes_left--;
       playSound("score");
+      TouchSystem.triggerHaptic("medium");
       renderPocketPool();
       submitAction("pot_ball", { ball: "STRIPE" });
     });
     document.getElementById("cueStrikeBtn")?.addEventListener("click", () => {
-      playSound("strike");
-      showToast("🎱 Solid break shot!");
-      submitAction("strike_cue_ball", { angle: 45, power: 90 });
+      executeCueShot(0, 85);
     });
   }
 
@@ -1130,21 +1399,22 @@
   function renderStickArena() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <div style="width: 45%;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <div style="width: 40%;">
             <div style="font-size: 11px; font-weight: 800; color: var(--likby-cyan);">PLAYER 1: ${activeGameState.p1_hp}% HP</div>
             <div style="height: 10px; background: #1e293b; border-radius: 6px; overflow: hidden; margin-top: 4px;">
               <div style="width: ${activeGameState.p1_hp}%; height: 100%; background: var(--likby-cyan); transition: width 0.3s ease;"></div>
             </div>
           </div>
-          <div style="width: 45%; text-align: right;">
+          <span class="touch-status-pill">📱 Touch Arena / Swipe</span>
+          <div style="width: 40%; text-align: right;">
             <div style="font-size: 11px; font-weight: 800; color: var(--likby-pink);">PLAYER 2: ${activeGameState.p2_hp}% HP</div>
             <div style="height: 10px; background: #1e293b; border-radius: 6px; overflow: hidden; margin-top: 4px;">
               <div style="width: ${activeGameState.p2_hp}%; height: 100%; background: var(--likby-pink); float: right; transition: width 0.3s ease;"></div>
             </div>
           </div>
         </div>
-        <div class="arena-stage">
+        <div class="arena-stage touch-interactive-surface" id="arenaStage">
           <div class="fighter-sprite" id="f1" style="left: ${activeGameState.p1_x}px;">🤺</div>
           <div class="fighter-sprite" id="f2" style="left: ${activeGameState.p2_x}px; transform: scaleX(-1);">🥷</div>
         </div>
@@ -1157,38 +1427,79 @@
       </div>
     `;
 
-    document.getElementById("stickLeft")?.addEventListener("click", () => {
+    const stage = document.getElementById("arenaStage");
+    let stageTouchStartX = 0;
+    if (stage) {
+      stage.addEventListener("touchstart", (e) => {
+        const pos = TouchSystem.getTouchPos(e, stage);
+        stageTouchStartX = pos.x;
+        TouchSystem.triggerHaptic("light");
+      }, { passive: true });
+
+      stage.addEventListener("touchend", (e) => {
+        const pos = TouchSystem.getTouchPos(e, stage);
+        const dx = pos.x - stageTouchStartX;
+        if (Math.abs(dx) > 30) {
+          if (dx > 0) {
+            activeGameState.p1_x = Math.min(160, activeGameState.p1_x + 40);
+          } else {
+            activeGameState.p1_x = Math.max(10, activeGameState.p1_x - 40);
+          }
+          playSound("move");
+          TouchSystem.triggerHaptic("medium");
+          renderStickArena();
+          submitAction("move", { dx: dx > 0 ? 40 : -40 });
+        } else {
+          // Tap on stage to slash
+          triggerAttack("light");
+        }
+      });
+    }
+
+    const triggerAttack = (type) => {
+      playSound("strike");
+      TouchSystem.triggerHaptic(type === "heavy" ? "heavy" : "medium");
+      const f1 = document.getElementById("f1");
+      const f2 = document.getElementById("f2");
+      f1?.classList.add("attack");
+      f2?.classList.add("hit");
+      const dmg = type === "heavy" ? 30 : 15;
+      activeGameState.p2_hp = Math.max(0, activeGameState.p2_hp - dmg);
+      if (activeGameState.p2_hp === 0) {
+        playSound("win");
+        TouchSystem.triggerHaptic("success");
+        showToast("🏆 K.O.! You defeated your rival!");
+      }
+      setTimeout(() => renderStickArena(), 250);
+      submitAction("attack", { attack_type: type });
+    };
+
+    const bindTouchAction = (id, fn) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      el.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        fn();
+      });
+      el.addEventListener("click", fn);
+    };
+
+    bindTouchAction("stickLeft", () => {
       activeGameState.p1_x = Math.max(10, activeGameState.p1_x - 30);
       playSound("move");
+      TouchSystem.triggerHaptic("light");
       renderStickArena();
       submitAction("move", { dx: -30 });
     });
-    document.getElementById("stickRight")?.addEventListener("click", () => {
+    bindTouchAction("stickRight", () => {
       activeGameState.p1_x = Math.min(160, activeGameState.p1_x + 30);
       playSound("move");
+      TouchSystem.triggerHaptic("light");
       renderStickArena();
       submitAction("move", { dx: 30 });
     });
-    document.getElementById("stickSlash")?.addEventListener("click", () => {
-      playSound("strike");
-      const f1 = document.getElementById("f1");
-      const f2 = document.getElementById("f2");
-      f1?.classList.add("attack");
-      f2?.classList.add("hit");
-      activeGameState.p2_hp = Math.max(0, activeGameState.p2_hp - 15);
-      setTimeout(() => renderStickArena(), 250);
-      submitAction("attack", { attack_type: "light" });
-    });
-    document.getElementById("stickHeavy")?.addEventListener("click", () => {
-      playSound("strike");
-      const f1 = document.getElementById("f1");
-      const f2 = document.getElementById("f2");
-      f1?.classList.add("attack");
-      f2?.classList.add("hit");
-      activeGameState.p2_hp = Math.max(0, activeGameState.p2_hp - 30);
-      setTimeout(() => renderStickArena(), 250);
-      submitAction("attack", { attack_type: "heavy" });
-    });
+    bindTouchAction("stickSlash", () => triggerAttack("light"));
+    bindTouchAction("stickHeavy", () => triggerAttack("heavy"));
   }
 
   // --------------------------------------------------------------------------
@@ -1197,13 +1508,20 @@
   function renderQuickDraw() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 12px;">
-        <div style="text-align: center; font-size: 13px;">
-          Draw: <b style="color: var(--likby-cyan); font-size: 16px;">${activeGameState.word}</b>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 13px;">
+          <span>Draw: <b style="color: var(--likby-cyan); font-size: 16px;">${activeGameState.word}</b></span>
+          <span class="touch-status-pill">📱 Touch Stylus / Canvas</span>
         </div>
-        <canvas id="qdCanvas" width="300" height="260" style="background: #ffffff; border-radius: 14px; margin: 0 auto; touch-action: none; cursor: crosshair;"></canvas>
-        <div style="display: flex; gap: 8px;">
-          <button class="btn-secondary" id="qdClear" style="flex: 1;">Clear 🗑</button>
-          <button class="btn-primary" id="qdSend" style="flex: 2;">Submit Drawing 🚀</button>
+        <canvas id="qdCanvas" width="300" height="250" style="background: #ffffff; border-radius: 14px; margin: 0 auto; touch-action: none; cursor: crosshair; box-shadow: 0 4px 16px rgba(0,0,0,0.5);"></canvas>
+        <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+          <div style="display: flex; gap: 6px;" id="qdColorPalette">
+            <div class="qd-col-dot" data-col="#0f172a" style="width: 24px; height: 24px; border-radius: 50%; background: #0f172a; border: 2px solid #fff; cursor: pointer;"></div>
+            <div class="qd-col-dot" data-col="#22d3ee" style="width: 24px; height: 24px; border-radius: 50%; background: #22d3ee; cursor: pointer;"></div>
+            <div class="qd-col-dot" data-col="#ec4899" style="width: 24px; height: 24px; border-radius: 50%; background: #ec4899; cursor: pointer;"></div>
+            <div class="qd-col-dot" data-col="#f59e0b" style="width: 24px; height: 24px; border-radius: 50%; background: #f59e0b; cursor: pointer;"></div>
+          </div>
+          <button class="btn-secondary" id="qdClear" style="padding: 8px 14px;">Clear 🗑</button>
+          <button class="btn-primary" id="qdSend" style="flex: 1;">Submit 🚀</button>
         </div>
       </div>
     `;
@@ -1212,12 +1530,25 @@
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     let isDrawing = false;
+    let strokeCount = 0;
     ctx.strokeStyle = "#0f172a";
     ctx.lineWidth = 4;
     ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+
+    document.querySelectorAll(".qd-col-dot").forEach((dot) => {
+      dot.addEventListener("click", () => {
+        ctx.strokeStyle = dot.dataset.col;
+        document.querySelectorAll(".qd-col-dot").forEach(d => d.style.border = "none");
+        dot.style.border = "2px solid #fff";
+        TouchSystem.triggerHaptic("selection");
+      });
+    });
 
     const startDraw = (e) => {
       isDrawing = true;
+      strokeCount++;
+      TouchSystem.triggerHaptic("soft");
       ctx.beginPath();
       const rect = canvas.getBoundingClientRect();
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
@@ -1227,6 +1558,7 @@
 
     const draw = (e) => {
       if (!isDrawing) return;
+      if (e.cancelable) e.preventDefault();
       const rect = canvas.getBoundingClientRect();
       const clientX = e.touches ? e.touches[0].clientX : e.clientX;
       const clientY = e.touches ? e.touches[0].clientY : e.clientY;
@@ -1240,16 +1572,26 @@
     canvas.addEventListener("mousemove", draw);
     window.addEventListener("mouseup", stopDraw);
 
-    canvas.addEventListener("touchstart", startDraw);
-    canvas.addEventListener("touchmove", draw);
+    canvas.addEventListener("touchstart", startDraw, { passive: false });
+    canvas.addEventListener("touchmove", draw, { passive: false });
     window.addEventListener("touchend", stopDraw);
 
     document.getElementById("qdClear")?.addEventListener("click", () => {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
+      strokeCount = 0;
       playSound("click");
+      TouchSystem.triggerHaptic("light");
     });
+
     document.getElementById("qdSend")?.addEventListener("click", () => {
+      if (strokeCount === 0) {
+        playSound("error");
+        TouchSystem.triggerHaptic("warning");
+        showToast("⚠️ Please draw something before submitting!");
+        return;
+      }
       playSound("win");
+      TouchSystem.triggerHaptic("success");
       showToast("✨ Drawing sent to partner!");
       submitAction("add_stroke", {});
     });
@@ -1261,28 +1603,59 @@
   function renderWordRush() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; width: 100%;">
-          <span>Letters Available:</span>
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%;">
+          <span>Letters:</span>
+          <span class="touch-status-pill">📱 Tap Letter Tiles</span>
           <span>Score: <b style="color: var(--likby-cyan);">${activeGameState.score} pts</b></span>
         </div>
-        <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 20px 0;">
+        <div style="display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; padding: 16px 0;">
           ${activeGameState.letters.map((l) => `
-            <div class="quick-chip wr-tile" data-letter="${l}" style="font-size: 20px; font-weight: 800; width: 44px; height: 44px; justify-content: center; background: var(--likby-surface-raised); border-color: var(--likby-cyan);">${l}</div>
+            <div class="quick-chip wr-tile" data-letter="${l}" style="font-size: 20px; font-weight: 800; width: 44px; height: 44px; justify-content: center; background: var(--likby-surface-raised); border-color: var(--likby-cyan); cursor: pointer; user-select: none;">${l}</div>
           `).join("")}
         </div>
+        <div style="display: flex; gap: 6px; margin-bottom: 8px; justify-content: center;">
+          <button class="btn-secondary" id="wrBackspaceBtn" style="padding: 8px 16px;">⌫ Backspace</button>
+          <button class="btn-secondary" id="wrClearBtn" style="padding: 8px 16px;">🗑 Clear</button>
+        </div>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="wrInput" class="input-field" placeholder="Enter word..." />
-          <button class="btn-primary" id="wrSubmit">Submit</button>
+          <input type="text" id="wrInput" class="input-field" placeholder="Form word..." readonly style="font-weight: 800; letter-spacing: 2px; font-size: 16px;" />
+          <button class="btn-primary" id="wrSubmit">Submit 🔤</button>
         </div>
       </div>
     `;
 
     document.querySelectorAll(".wr-tile").forEach((tile) => {
-      tile.addEventListener("click", () => {
+      const handleTilePick = () => {
         const input = document.getElementById("wrInput");
         if (input) input.value += tile.dataset.letter;
         playSound("click");
+        TouchSystem.triggerHaptic("light");
+        tile.classList.add("touched");
+        setTimeout(() => tile.classList.remove("touched"), 150);
+      };
+      tile.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        handleTilePick();
       });
+      tile.addEventListener("click", handleTilePick);
+    });
+
+    document.getElementById("wrBackspaceBtn")?.addEventListener("click", () => {
+      const input = document.getElementById("wrInput");
+      if (input && input.value.length > 0) {
+        input.value = input.value.slice(0, -1);
+        playSound("click");
+        TouchSystem.triggerHaptic("light");
+      }
+    });
+
+    document.getElementById("wrClearBtn")?.addEventListener("click", () => {
+      const input = document.getElementById("wrInput");
+      if (input) {
+        input.value = "";
+        playSound("click");
+        TouchSystem.triggerHaptic("selection");
+      }
     });
 
     document.getElementById("wrSubmit")?.addEventListener("click", () => {
@@ -1291,12 +1664,15 @@
       if (word && word.length >= 2) {
         activeGameState.score += word.length * 10;
         playSound("score");
-        showToast(`+${word.length * 10} Points! 🔤`);
+        TouchSystem.triggerHaptic("success");
+        showToast(`+${word.length * 10} Points for "${word}"! 🔤`);
         input.value = "";
         renderWordRush();
         submitAction("submit_word", { word });
       } else {
         playSound("error");
+        TouchSystem.triggerHaptic("warning");
+        showToast("⚠️ Form at least a 2-letter word!");
       }
     });
   }
@@ -1308,8 +1684,9 @@
     const q = activeGameState.questions[activeGameState.question_idx] || { q: "All questions finished!", options: [] };
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Question ${activeGameState.question_idx + 1} of 3</span>
+          <span class="touch-status-pill">📱 Instant Touch Answers</span>
           <span>Score: <b style="color: var(--likby-cyan);">${activeGameState.p1_score} pts</b></span>
         </div>
         <div style="text-align: center; font-size: 17px; font-weight: 800; line-height: 1.4; margin: 20px 0;">
@@ -1317,36 +1694,45 @@
         </div>
         <div style="display: flex; flex-direction: column; gap: 10px;">
           ${q.options.map((opt, i) => `
-            <button class="btn-secondary bb-opt-btn" data-idx="${i}" style="text-align: left; padding: 14px 18px; font-size: 14px;">${opt}</button>
+            <button class="btn-secondary bb-opt-btn" data-idx="${i}" style="text-align: left; padding: 14px 18px; font-size: 14px; user-select: none;">${opt}</button>
           `).join("")}
         </div>
       </div>
     `;
 
     document.querySelectorAll(".bb-opt-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      const handleAnswer = () => {
         const chosen = parseInt(btn.dataset.idx);
         if (chosen === q.ans) {
           activeGameState.p1_score += 100;
           playSound("score");
+          TouchSystem.triggerHaptic("success");
           btn.style.borderColor = "var(--likby-emerald)";
-          btn.style.background = "rgba(16, 185, 129, 0.2)";
+          btn.style.background = "rgba(16, 185, 129, 0.25)";
         } else {
           playSound("error");
+          TouchSystem.triggerHaptic("warning");
           btn.style.borderColor = "var(--likby-pink)";
-          btn.style.background = "rgba(236, 72, 153, 0.2)";
+          btn.style.background = "rgba(236, 72, 153, 0.25)";
         }
 
         setTimeout(() => {
           activeGameState.question_idx++;
           if (activeGameState.question_idx >= activeGameState.questions.length) {
             playSound("win");
+            TouchSystem.triggerHaptic("success");
             showToast("🧠 Trivia Duel Completed!");
           }
           renderBrainBlitz();
           submitAction("answer_question", { question_index: activeGameState.question_idx, chosen_index: chosen });
         }, 500);
+      };
+
+      btn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        handleAnswer();
       });
+      btn.addEventListener("click", handleAnswer);
     });
   }
 
@@ -1356,11 +1742,12 @@
   function renderReflexRush() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; padding: 20px;">
-        <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 13px;">
           <span>Round ${activeGameState.round} of 3</span>
+          <span class="touch-status-pill">📱 Zero-Latency Reflex Tap</span>
           <span>Reaction Duel</span>
         </div>
-        <div id="reflexOrb" style="width: 220px; height: 220px; border-radius: 50%; background: #ef4444; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 22px; font-weight: 900; color: #fff; cursor: pointer; box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); transition: all 0.2s ease;">
+        <div id="reflexOrb" style="width: 220px; height: 220px; border-radius: 50%; background: #ef4444; display: flex; align-items: center; justify-content: center; font-family: var(--font-display); font-size: 22px; font-weight: 900; color: #fff; cursor: pointer; box-shadow: 0 0 40px rgba(239, 68, 68, 0.6); transition: all 0.2s ease; user-select: none;">
           WAIT... 🛑
         </div>
         <div style="font-size: 12px; color: var(--likby-text-muted);">
@@ -1381,23 +1768,32 @@
       orb.style.boxShadow = "0 0 50px rgba(16, 185, 129, 0.9)";
       orb.textContent = "TAP NOW! ⚡";
       playSound("click");
+      TouchSystem.triggerHaptic("medium");
     }, delay);
 
-    orb?.addEventListener("click", () => {
+    const handleOrbTap = () => {
       if (!activeGameState.ready) {
         clearTimeout(timer);
         playSound("error");
+        TouchSystem.triggerHaptic("warning");
         showToast("⚠️ False start! Wait for green.");
         renderReflexRush();
       } else {
         const ms = Date.now() - activeGameState.green_time;
         playSound("win");
+        TouchSystem.triggerHaptic("heavy");
         showToast(`⚡ Superfast! ${ms} ms reaction!`);
         activeGameState.round++;
         setTimeout(() => renderReflexRush(), 1200);
         submitAction("tap", { reaction_ms: ms });
       }
+    };
+
+    orb?.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      handleOrbTap();
     });
+    orb?.addEventListener("click", handleOrbTap);
   }
 
   // --------------------------------------------------------------------------
@@ -1406,27 +1802,35 @@
   function renderMindMatch() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 18px;">
-        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Round ${activeGameState.round} of 5</span>
+          <span class="touch-status-pill">📱 Touch Choice Sync</span>
           <span>Harmony: <b style="color: var(--likby-cyan);">${activeGameState.score}%</b></span>
         </div>
         <div style="text-align: center; font-size: 18px; font-weight: 800; margin: 20px 0;">
           ${activeGameState.prompt}
         </div>
         <div style="display: flex; flex-direction: column; gap: 12px;">
-          <button class="btn-primary mm-btn" data-choice="A" style="padding: 16px; font-size: 15px;">${activeGameState.optA}</button>
-          <button class="btn-primary mm-btn" data-choice="B" style="padding: 16px; font-size: 15px; background: linear-gradient(135deg, var(--likby-violet), var(--likby-pink));">${activeGameState.optB}</button>
+          <button class="btn-primary mm-btn" data-choice="A" style="padding: 16px; font-size: 15px; user-select: none;">${activeGameState.optA}</button>
+          <button class="btn-primary mm-btn" data-choice="B" style="padding: 16px; font-size: 15px; background: linear-gradient(135deg, var(--likby-violet), var(--likby-pink)); user-select: none;">${activeGameState.optB}</button>
         </div>
       </div>
     `;
 
     document.querySelectorAll(".mm-btn").forEach((btn) => {
-      btn.addEventListener("click", () => {
+      const handleChoice = () => {
         playSound("score");
+        TouchSystem.triggerHaptic("medium");
         showToast("💙 Selection synced with partner!");
         activeGameState.round++;
         submitAction("choose_option", { choice: btn.dataset.choice });
+      };
+
+      btn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        handleChoice();
       });
+      btn.addEventListener("click", handleChoice);
     });
   }
 
@@ -1434,33 +1838,86 @@
   // GAME 11: MYSTERY MISSION
   // --------------------------------------------------------------------------
   function renderMysteryMission() {
+    let currentCode = "";
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 16px;">
-        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Stage ${activeGameState.stage} of 3</span>
+          <span class="touch-status-pill">📱 Touch Keypad Safe</span>
           <span style="color: var(--likby-amber); font-weight: 800;">🔒 LOCKED SAFE</span>
         </div>
-        <div style="background: var(--likby-surface-raised); border: 1px solid var(--likby-cyan); border-radius: 14px; padding: 16px; margin: 10px 0;">
-          <div style="font-size: 11px; text-transform: uppercase; color: var(--likby-cyan); font-weight: 800; margin-bottom: 6px;">Co-op Mission Clue:</div>
-          <div style="font-size: 14px; line-height: 1.5;">${activeGameState.hint}</div>
+        <div style="background: var(--likby-surface-raised); border: 1px solid var(--likby-cyan); border-radius: 14px; padding: 12px; margin: 6px 0;">
+          <div style="font-size: 11px; text-transform: uppercase; color: var(--likby-cyan); font-weight: 800; margin-bottom: 4px;">Co-op Mission Clue:</div>
+          <div style="font-size: 13px; line-height: 1.4;">${activeGameState.hint}</div>
         </div>
-        <div style="display: flex; gap: 8px;">
-          <input type="text" id="missionInput" class="input-field" placeholder="Enter 4-digit code..." />
-          <button class="btn-primary" id="missionUnlockBtn">Unlock 🔓</button>
+        <div class="safe-code-dots">
+          <div class="safe-dot" id="sDot0"></div>
+          <div class="safe-dot" id="sDot1"></div>
+          <div class="safe-dot" id="sDot2"></div>
+          <div class="safe-dot" id="sDot3"></div>
+        </div>
+        <div class="safe-keypad" id="safeKeypad">
+          ${[1, 2, 3, 4, 5, 6, 7, 8, 9].map((n) => `<button class="safe-key" data-num="${n}">${n}</button>`).join("")}
+          <button class="safe-key" data-action="backspace">⌫</button>
+          <button class="safe-key" data-num="0">0</button>
+          <button class="safe-key" data-action="unlock" style="background: var(--likby-cyan); color: #030712;">🔓</button>
         </div>
       </div>
     `;
 
-    document.getElementById("missionUnlockBtn")?.addEventListener("click", () => {
-      const code = document.getElementById("missionInput")?.value.trim();
-      if (code === "2026") {
+    const updateDots = () => {
+      for (let i = 0; i < 4; i++) {
+        const dot = document.getElementById(`sDot${i}`);
+        if (dot) dot.classList.toggle("filled", i < currentCode.length);
+      }
+    };
+
+    const attemptUnlock = () => {
+      if (currentCode === "2026") {
         playSound("win");
+        TouchSystem.triggerHaptic("success");
         showToast("🎉 SAFE CRACKED! Mission Accomplished!");
+        submitAction("submit_solution", { code: currentCode });
       } else {
         playSound("error");
+        TouchSystem.triggerHaptic("warning");
         showToast("❌ Incorrect passcode. Combine clues!");
+        currentCode = "";
+        updateDots();
       }
-      submitAction("submit_solution", { code });
+    };
+
+    document.querySelectorAll(".safe-key").forEach((key) => {
+      const handleKeyPress = () => {
+        const num = key.dataset.num;
+        const action = key.dataset.action;
+        if (num !== undefined) {
+          if (currentCode.length < 4) {
+            currentCode += num;
+            playSound("click");
+            TouchSystem.triggerHaptic("light");
+            updateDots();
+            if (currentCode.length === 4) {
+              setTimeout(attemptUnlock, 200);
+            }
+          }
+        } else if (action === "backspace") {
+          if (currentCode.length > 0) {
+            currentCode = currentCode.slice(0, -1);
+            playSound("click");
+            TouchSystem.triggerHaptic("light");
+            updateDots();
+          }
+        } else if (action === "unlock") {
+          attemptUnlock();
+        }
+      };
+
+      key.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        handleKeyPress();
+      });
+      key.addEventListener("click", handleKeyPress);
     });
   }
 
@@ -1471,11 +1928,12 @@
     const grid = activeGameState.grid;
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Zen Score: <b style="color: var(--likby-cyan);">${activeGameState.score}</b></span>
+          <span class="touch-status-pill">📱 4-Way Touch Swipe</span>
           <span>Goal: <b>2048</b></span>
         </div>
-        <div class="zen-grid" id="zenGrid">
+        <div class="zen-grid touch-interactive-surface" id="zenGrid">
           ${grid.map((row) => row.map((cell) => `
             <div class="zen-tile ${cell > 0 ? 't' + cell : ''}">${cell > 0 ? cell : ''}</div>
           `).join("")).join("")}
@@ -1489,16 +1947,47 @@
       </div>
     `;
 
-    document.querySelectorAll(".zm-dir").forEach((btn) => {
-      btn.addEventListener("click", () => {
-        handleZenSwipe(btn.dataset.dir);
+    const zenGrid = document.getElementById("zenGrid");
+    let touchStartX = 0, touchStartY = 0;
+    if (zenGrid) {
+      zenGrid.addEventListener("touchstart", (e) => {
+        const touch = e.touches[0];
+        touchStartX = touch.clientX;
+        touchStartY = touch.clientY;
+      }, { passive: true });
+
+      zenGrid.addEventListener("touchend", (e) => {
+        const touch = e.changedTouches[0];
+        const dx = touch.clientX - touchStartX;
+        const dy = touch.clientY - touchStartY;
+        if (Math.hypot(dx, dy) >= 25) {
+          let dir = "UP";
+          if (Math.abs(dx) > Math.abs(dy)) {
+            dir = dx > 0 ? "RIGHT" : "LEFT";
+          } else {
+            dir = dy > 0 ? "DOWN" : "UP";
+          }
+          TouchSystem.triggerHaptic("selection");
+          handleZenSwipe(dir);
+        }
       });
+    }
+
+    document.querySelectorAll(".zm-dir").forEach((btn) => {
+      const handleDir = () => {
+        TouchSystem.triggerHaptic("selection");
+        handleZenSwipe(btn.dataset.dir);
+      };
+      btn.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        handleDir();
+      });
+      btn.addEventListener("click", handleDir);
     });
   }
 
   function handleZenSwipe(dir) {
     playSound("move");
-    // Add random 2 or 4 tile
     const emptyCells = [];
     activeGameState.grid.forEach((row, r) => {
       row.forEach((cell, c) => {
@@ -1509,6 +1998,7 @@
       const pick = emptyCells[Math.floor(Math.random() * emptyCells.length)];
       activeGameState.grid[pick.r][pick.c] = 2;
       activeGameState.score += 4;
+      TouchSystem.triggerHaptic("light");
     }
     renderZenMerge();
   }
@@ -1518,45 +2008,99 @@
   // --------------------------------------------------------------------------
   function renderWordHunt() {
     const grid = activeGameState.grid;
+    let selectedTiles = [];
+    let currentDragWord = "";
+
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Found: <b>${activeGameState.found.length} / ${activeGameState.words.length}</b></span>
-          <span>Search 5x5 Matrix</span>
+          <span class="touch-status-pill">📱 Touch Drag Matrix</span>
+          <span style="color: var(--likby-cyan); font-weight: 700;">Targets: ${activeGameState.words.join(", ")}</span>
         </div>
-        <div style="display: grid; grid-template-columns: repeat(5, 42px); gap: 6px; margin: 0 auto;">
-          ${grid.map((row) => row.map((char) => `
-            <div class="quick-chip wh-tile" data-char="${char}" style="width: 42px; height: 42px; justify-content: center; font-size: 16px; font-weight: 800;">${char}</div>
+        <div id="whMatrix" class="wh-matrix touch-interactive-surface" style="display: grid; grid-template-columns: repeat(5, 42px); gap: 6px; margin: 0 auto;">
+          ${grid.map((row, r) => row.map((char, c) => `
+            <div class="quick-chip wh-tile" data-char="${char}" data-row="${r}" data-col="${c}" style="width: 42px; height: 42px; justify-content: center; font-size: 16px; font-weight: 800; cursor: pointer; user-select: none;">${char}</div>
           `).join("")).join("")}
         </div>
         <div style="display: flex; gap: 8px;">
-          <input type="text" id="whInput" class="input-field" placeholder="Found word..." />
-          <button class="btn-primary" id="whSubmit">Claim</button>
+          <input type="text" id="whInput" class="input-field" placeholder="Found word..." readonly style="font-weight: 800; letter-spacing: 2px; font-size: 15px;" />
+          <button class="btn-primary" id="whSubmit">Claim ✨</button>
         </div>
       </div>
     `;
 
+    const matrix = document.getElementById("whMatrix");
+    const input = document.getElementById("whInput");
+
+    const claimWord = (w) => {
+      const word = (w || input?.value || "").trim().toUpperCase();
+      if (activeGameState.words.includes(word) && !activeGameState.found.includes(word)) {
+        activeGameState.found.push(word);
+        playSound("win");
+        TouchSystem.triggerHaptic("success");
+        showToast(`🎉 Found: ${word}!`);
+        if (input) input.value = "";
+        renderWordHunt();
+      } else if (activeGameState.found.includes(word)) {
+        showToast("⚠️ Word already claimed!");
+        TouchSystem.triggerHaptic("warning");
+      } else {
+        playSound("error");
+        TouchSystem.triggerHaptic("warning");
+      }
+    };
+
+    if (matrix) {
+      let isDragging = false;
+      const addTile = (tile) => {
+        if (!tile || selectedTiles.includes(tile)) return;
+        selectedTiles.push(tile);
+        tile.classList.add("active-drag");
+        currentDragWord += tile.dataset.char;
+        if (input) input.value = currentDragWord;
+        playSound("click");
+        TouchSystem.triggerHaptic("light");
+      };
+
+      matrix.addEventListener("touchstart", (e) => {
+        isDragging = true;
+        selectedTiles = [];
+        currentDragWord = "";
+        matrix.querySelectorAll(".wh-tile").forEach(t => t.classList.remove("active-drag"));
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el?.classList.contains("wh-tile")) addTile(el);
+      }, { passive: true });
+
+      matrix.addEventListener("touchmove", (e) => {
+        if (!isDragging) return;
+        const touch = e.touches[0];
+        const el = document.elementFromPoint(touch.clientX, touch.clientY);
+        if (el?.classList.contains("wh-tile")) addTile(el);
+      }, { passive: true });
+
+      window.addEventListener("touchend", () => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (currentDragWord) {
+          claimWord(currentDragWord);
+        }
+        setTimeout(() => {
+          matrix?.querySelectorAll(".wh-tile").forEach(t => t.classList.remove("active-drag"));
+        }, 300);
+      }, { once: true });
+    }
+
     document.querySelectorAll(".wh-tile").forEach((t) => {
       t.addEventListener("click", () => {
-        const inp = document.getElementById("whInput");
-        if (inp) inp.value += t.dataset.char;
+        if (input) input.value += t.dataset.char;
         playSound("click");
+        TouchSystem.triggerHaptic("light");
       });
     });
 
-    document.getElementById("whSubmit")?.addEventListener("click", () => {
-      const inp = document.getElementById("whInput");
-      const w = inp?.value.trim().toUpperCase();
-      if (activeGameState.words.includes(w) && !activeGameState.found.includes(w)) {
-        activeGameState.found.push(w);
-        playSound("win");
-        showToast(`🎉 Found: ${w}!`);
-        inp.value = "";
-        renderWordHunt();
-      } else {
-        playSound("error");
-      }
-    });
+    document.getElementById("whSubmit")?.addEventListener("click", () => claimWord());
   }
 
   // --------------------------------------------------------------------------
@@ -1565,11 +2109,12 @@
   function renderColorFlow() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Flows: <b>${activeGameState.flows_connected} / ${activeGameState.target_flows}</b></span>
-          <span>Connect Colors</span>
+          <span class="touch-status-pill">📱 Connect Flow Conduits</span>
+          <span>Target: 100%</span>
         </div>
-        <div style="width: 260px; height: 260px; background: #0f172a; border-radius: 16px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px;">
+        <div id="cfBoard" class="touch-interactive-surface" style="width: 260px; height: 260px; background: #0f172a; border-radius: 16px; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px; box-shadow: inset 0 0 20px rgba(0,0,0,0.6);">
           <div class="cf-dot" data-color="CYAN" style="background: var(--likby-cyan); border-radius: 50%;"></div>
           <div></div><div></div>
           <div class="cf-dot" data-color="CYAN" style="background: var(--likby-cyan); border-radius: 50%;"></div>
@@ -1585,9 +2130,50 @@
       </div>
     `;
 
+    let activeColorDot = null;
+    document.querySelectorAll(".cf-dot").forEach((dot) => {
+      const handleDot = () => {
+        const col = dot.dataset.color;
+        if (!activeColorDot) {
+          activeColorDot = dot;
+          dot.classList.add("active");
+          playSound("click");
+          TouchSystem.triggerHaptic("light");
+        } else if (activeColorDot === dot) {
+          activeColorDot.classList.remove("active");
+          activeColorDot = null;
+        } else if (activeColorDot.dataset.color === col) {
+          dot.classList.add("active");
+          activeGameState.flows_connected = Math.min(activeGameState.target_flows, activeGameState.flows_connected + 1);
+          playSound("score");
+          TouchSystem.triggerHaptic("medium");
+          showToast(`⚡ ${col} flow conduit bridged!`);
+          activeColorDot = null;
+          if (activeGameState.flows_connected >= activeGameState.target_flows) {
+            playSound("win");
+            TouchSystem.triggerHaptic("success");
+            showToast("✨ 100% Color Flow Achieved!");
+          }
+          setTimeout(() => renderColorFlow(), 400);
+        } else {
+          playSound("error");
+          TouchSystem.triggerHaptic("warning");
+          activeColorDot.classList.remove("active");
+          activeColorDot = null;
+        }
+      };
+
+      dot.addEventListener("touchstart", (e) => {
+        e.preventDefault();
+        handleDot();
+      });
+      dot.addEventListener("click", handleDot);
+    });
+
     document.getElementById("cfCompleteBtn")?.addEventListener("click", () => {
       activeGameState.flows_connected = activeGameState.target_flows;
       playSound("win");
+      TouchSystem.triggerHaptic("success");
       showToast("✨ 100% Color Flow Achieved!");
       renderColorFlow();
     });
@@ -1599,19 +2185,22 @@
   function renderPocketGolf() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 14px;">
-        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Hole 1 (Par 3)</span>
+          <span class="touch-status-pill">📱 Slingshot Putt Drag</span>
           <span>Strokes: <b style="color: var(--likby-cyan);">${activeGameState.strokes}</b></span>
         </div>
-        <div style="width: 280px; height: 280px; background: #064e3b; border: 8px solid #022c22; border-radius: 20px; position: relative; margin: 0 auto;">
+        <div id="golfCourse" class="touch-interactive-surface" style="width: 280px; height: 280px; background: #064e3b; border: 8px solid #022c22; border-radius: 20px; position: relative; margin: 0 auto; overflow: hidden; box-shadow: inset 0 0 20px rgba(0,0,0,0.6);">
           <!-- Sand trap -->
           <div style="position: absolute; top: 120px; left: 40px; width: 60px; height: 40px; background: #d97706; border-radius: 50%; opacity: 0.6;"></div>
           <!-- Hole -->
-          <div style="position: absolute; top: 40px; left: 130px; width: 22px; height: 22px; background: #000; border-radius: 50%; border: 2px solid #fff;"></div>
+          <div id="golfHole" style="position: absolute; top: 40px; left: 130px; width: 22px; height: 22px; background: #000; border-radius: 50%; border: 2px solid #fff;"></div>
           <!-- Flag -->
           <div style="position: absolute; top: 22px; left: 138px; font-size: 18px;">🚩</div>
           <!-- Ball -->
-          <div id="golfBall" style="position: absolute; bottom: 40px; left: 132px; width: 16px; height: 16px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px #fff; transition: transform 0.4s ease-out;"></div>
+          <div id="golfBall" style="position: absolute; bottom: 40px; left: 132px; width: 16px; height: 16px; background: #fff; border-radius: 50%; box-shadow: 0 0 8px #fff; cursor: grab; z-index: 10; transition: transform 0.4s ease-out;"></div>
+          <!-- Slingshot Aim Line -->
+          <div id="golfAimLine" class="touch-slingshot-line" style="display: none;"></div>
         </div>
         <div style="display: flex; gap: 8px;">
           <button class="btn-secondary" id="golfPuttShort" style="flex: 1;">Tap Putt</button>
@@ -1620,53 +2209,111 @@
       </div>
     `;
 
-    document.getElementById("golfPuttLong")?.addEventListener("click", () => {
+    const ball = document.getElementById("golfBall");
+    const course = document.getElementById("golfCourse");
+    const aimLine = document.getElementById("golfAimLine");
+    let isDragging = false;
+    let dragStartX = 0, dragStartY = 0;
+
+    const executePutt = (power) => {
       activeGameState.strokes++;
       playSound("strike");
-      const ball = document.getElementById("golfBall");
+      TouchSystem.triggerHaptic("heavy");
       if (ball) {
-        ball.style.transform = "translate(0, -180px)";
+        ball.style.transform = `translate(0, -${power}px)`;
         setTimeout(() => {
-          playSound("win");
-          showToast("⛳ In the hole! Birdie!");
+          if (power >= 160) {
+            playSound("win");
+            TouchSystem.triggerHaptic("success");
+            showToast("⛳ In the hole! Birdie!");
+          } else {
+            playSound("score");
+            TouchSystem.triggerHaptic("medium");
+            showToast("⛳ Nice approach putt!");
+          }
         }, 400);
       }
-    });
+    };
 
-    document.getElementById("golfPuttShort")?.addEventListener("click", () => {
-      activeGameState.strokes++;
-      playSound("move");
-      const ball = document.getElementById("golfBall");
-      if (ball) ball.style.transform = "translate(0, -60px)";
-    });
+    if (ball && course) {
+      ball.addEventListener("touchstart", (e) => {
+        isDragging = true;
+        const pos = TouchSystem.getTouchPos(e, course);
+        dragStartX = pos.x;
+        dragStartY = pos.y;
+        TouchSystem.triggerHaptic("light");
+      }, { passive: true });
+
+      course.addEventListener("touchmove", (e) => {
+        if (!isDragging) return;
+        const pos = TouchSystem.getTouchPos(e, course);
+        const dy = pos.y - dragStartY;
+        if (dy > 10 && aimLine) {
+          aimLine.style.display = "block";
+          aimLine.style.left = "140px";
+          aimLine.style.top = "230px";
+          const dist = Math.min(180, dy * 2);
+          aimLine.style.width = `${dist}px`;
+          aimLine.style.transform = "rotate(-1.57rad)";
+        }
+      }, { passive: true });
+
+      window.addEventListener("touchend", (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        if (aimLine) aimLine.style.display = "none";
+        const pos = TouchSystem.getTouchPos(e, course);
+        const dy = pos.y - dragStartY;
+        if (dy > 15) {
+          const power = Math.min(180, Math.round(dy * 2));
+          executePutt(power);
+        }
+      }, { once: true });
+    }
+
+    document.getElementById("golfPuttLong")?.addEventListener("click", () => executePutt(180));
+    document.getElementById("golfPuttShort")?.addEventListener("click", () => executePutt(70));
   }
 
   // --------------------------------------------------------------------------
   // GAME 16: REFLEX LAB (SOLO)
   // --------------------------------------------------------------------------
   function renderReflexLab() {
+    const randX = Math.floor(Math.random() * 80 - 40);
+    const randY = Math.floor(Math.random() * 60 - 30);
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; align-items: center; justify-content: space-between; height: 100%; padding: 20px;">
-        <div style="display: flex; justify-content: space-between; width: 100%; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; width: 100%; font-size: 13px;">
           <span>Neuro Speed Matrix</span>
+          <span class="touch-status-pill">📱 Pop Dynamic Target Orbs</span>
           <span>Best: <b style="color: var(--likby-cyan);">${activeGameState.best_ms} ms</b></span>
         </div>
-        <div id="labOrb" style="width: 160px; height: 160px; border-radius: 50%; background: linear-gradient(135deg, var(--likby-cyan), var(--likby-blue)); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: #030712; cursor: pointer; box-shadow: var(--likby-cyan-glow);">
-          ⚡ POP
+        <div style="height: 220px; width: 220px; position: relative; display: flex; align-items: center; justify-content: center;">
+          <div id="labOrb" style="width: 140px; height: 140px; border-radius: 50%; background: linear-gradient(135deg, var(--likby-cyan), var(--likby-blue)); display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 800; color: #030712; cursor: pointer; box-shadow: var(--likby-cyan-glow); transform: translate(${randX}px, ${randY}px); user-select: none;">
+            ⚡ POP
+          </div>
         </div>
         <div style="font-size: 12px; color: var(--likby-text-muted);">
-          Tap as quickly as possible upon appearance
+          Tap orbs as quickly as possible upon appearance
         </div>
       </div>
     `;
 
-    document.getElementById("labOrb")?.addEventListener("click", () => {
+    const handleLabPop = () => {
       playSound("score");
+      TouchSystem.triggerHaptic("heavy");
       const ms = Math.floor(Math.random() * 80 + 170);
       if (ms < activeGameState.best_ms) activeGameState.best_ms = ms;
       showToast(`⚡ ${ms} ms! Reaction logged.`);
       renderReflexLab();
+    };
+
+    const orb = document.getElementById("labOrb");
+    orb?.addEventListener("touchstart", (e) => {
+      e.preventDefault();
+      handleLabPop();
     });
+    orb?.addEventListener("click", handleLabPop);
   }
 
   // --------------------------------------------------------------------------
@@ -1675,31 +2322,60 @@
   function renderDailyMystery() {
     canvasContainer.innerHTML = `
       <div style="display: flex; flex-direction: column; justify-content: space-between; height: 100%; padding: 18px;">
-        <div style="display: flex; justify-content: space-between; font-size: 13px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 13px;">
           <span>Daily Cryptic Riddle 🔐</span>
+          <span class="touch-status-pill">📱 Touch Solve & Hints</span>
           <span>Reward: +10 Karma</span>
         </div>
-        <div style="background: var(--likby-surface-raised); border: 1px solid var(--likby-glass-border-hover); border-radius: 16px; padding: 20px; margin: 16px 0;">
-          <p style="font-size: 15px; line-height: 1.6; color: #fff;">"${activeGameState.clue}"</p>
+        <div style="background: var(--likby-surface-raised); border: 1px solid var(--likby-glass-border-hover); border-radius: 16px; padding: 18px; margin: 12px 0;">
+          <p style="font-size: 15px; line-height: 1.6; color: #fff; margin-bottom: 8px;">"${activeGameState.clue}"</p>
+          <div id="dmHintReveal" style="font-size: 12px; color: var(--likby-cyan); display: none;">💡 Hint: 4 letters, begins with 'E'.</div>
+        </div>
+        <div style="display: flex; gap: 6px; justify-content: center; margin-bottom: 8px;">
+          <button class="btn-secondary" id="dmHintBtn" style="padding: 6px 14px; font-size: 12px;">💡 Clue Hint</button>
+          <div class="quick-chip dm-chip" data-ans="echo">Echo</div>
+          <div class="quick-chip dm-chip" data-ans="shadow">Shadow</div>
+          <div class="quick-chip dm-chip" data-ans="wind">Wind</div>
         </div>
         <div style="display: flex; gap: 8px;">
           <input type="text" id="dmInput" class="input-field" placeholder="Type riddle answer..." />
-          <button class="btn-primary" id="dmSubmit">Solve</button>
+          <button class="btn-primary" id="dmSubmit">Solve ✨</button>
         </div>
       </div>
     `;
 
-    document.getElementById("dmSubmit")?.addEventListener("click", () => {
+    document.getElementById("dmHintBtn")?.addEventListener("click", () => {
+      const hint = document.getElementById("dmHintReveal");
+      if (hint) hint.style.display = "block";
+      playSound("click");
+      TouchSystem.triggerHaptic("light");
+    });
+
+    document.querySelectorAll(".dm-chip").forEach((chip) => {
+      chip.addEventListener("click", () => {
+        const input = document.getElementById("dmInput");
+        if (input) input.value = chip.dataset.ans;
+        playSound("click");
+        TouchSystem.triggerHaptic("selection");
+      });
+    });
+
+    const solveRiddle = () => {
       const ans = document.getElementById("dmInput")?.value.trim().toLowerCase();
       if (ans === activeGameState.answer) {
         playSound("win");
+        TouchSystem.triggerHaptic("success");
         showToast("🎉 Riddle Solved! +10 Karma Earned!");
       } else {
         playSound("error");
+        TouchSystem.triggerHaptic("warning");
         showToast("❌ Not quite. Ponder deeper!");
       }
-    });
+    };
+
+    document.getElementById("dmSubmit")?.addEventListener("click", solveRiddle);
   }
+
 
   // Boot on DOM ready
   document.addEventListener("DOMContentLoaded", init);

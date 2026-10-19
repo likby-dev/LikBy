@@ -210,6 +210,27 @@ class PlayGameService:
         await self._play_repo.save_invitation(invitation)
         return True, "Invitation rejected. No credits were consumed."
 
+    async def cancel_invitation(
+        self,
+        invitation_id: str,
+        sender_id: str,
+    ) -> Tuple[bool, str]:
+        """Cancel a pending duel challenge before recipient responds, with zero credit consumption."""
+        invitation = await self._play_repo.get_invitation(invitation_id)
+        if not invitation:
+            return False, "Invitation not found."
+
+        if invitation.sender_id != sender_id:
+            return False, "You are not authorized to cancel this invitation."
+
+        if invitation.status != GameInvitationStatus.PENDING:
+            return False, f"Invitation is no longer pending (status: {invitation.status.value})."
+
+        invitation.status = GameInvitationStatus.CANCELLED
+        await self._play_repo.save_invitation(invitation)
+        return True, "Duel challenge cancelled. No duel credits were consumed."
+
+
     async def start_solo_game(
         self,
         user_id: str,

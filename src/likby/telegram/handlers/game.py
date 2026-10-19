@@ -20,7 +20,7 @@ from likby.repositories.interfaces import (
     UserRepository,
 )
 from likby.services.chat_relay_service import ChatRelayService
-from likby.telegram.keyboards import get_chat_duel_invite_keyboard, get_tictactoe_keyboard
+from likby.telegram.keyboards import get_chat_duel_invite_keyboard, get_play_hub_keyboard, get_tictactoe_keyboard
 from likby.telegram.utils import safe_edit_text
 
 router = Router(name="game")
