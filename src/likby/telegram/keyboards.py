@@ -417,18 +417,7 @@ def get_solo_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboar
         ],
     ]
 
-    if is_https:
-        clean_base = mini_app_url.split("?")[0].rstrip("/")
-        solo_hub_url = f"{clean_base}?mode=solo"
-        rows.append([
-            InlineKeyboardButton(
-                text="🚀 Open Solo Arcade in LikBy Play",
-                web_app=WebAppInfo(url=solo_hub_url),
-            )
-        ])
-
     rows.append([
-        InlineKeyboardButton(text="⚔️ 2-Player Duels", callback_data="play:duels"),
         InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
     ])
 
