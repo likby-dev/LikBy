@@ -297,6 +297,64 @@ async def test_chat_message_unrelayed_solo_shortcut_and_idle_help():
     msg2.answer.assert_called_once()
     text_sent = msg2.answer.call_args[0][0]
     assert "You are not currently in an active chat session" in text_sent
+    assert "You are not currently in an active chat session" in text_sent
     assert "6 Free Solo Games" in text_sent
+
+
+def test_duel_games_keyboards_all_eleven_buttons():
+    """Validates that duel games keyboard provides all 11 games as selectable buttons."""
+    from likby.telegram.keyboards import get_duel_games_keyboard, get_duel_game_card_keyboard
+
+    # Local / non-https -> callbacks
+    kb_local = get_duel_games_keyboard("http://localhost:8000/play/")
+    game_callbacks = [btn.callback_data for row in kb_local.inline_keyboard[:6] for btn in row]
+    assert len(game_callbacks) == 11
+    assert "play:duel_card:connect_four" in game_callbacks
+    assert "play:duel_card:carrom_clash" in game_callbacks
+    assert "play:duel_card:air_rush" in game_callbacks
+    assert "play:duel_card:pocket_pool" in game_callbacks
+    assert "play:duel_card:stick_arena" in game_callbacks
+    assert "play:duel_card:quickdraw" in game_callbacks
+    assert "play:duel_card:word_rush" in game_callbacks
+    assert "play:duel_card:brain_blitz" in game_callbacks
+    assert "play:duel_card:reflex_rush" in game_callbacks
+    assert "play:duel_card:mindmatch" in game_callbacks
+    assert "play:duel_card:mystery_mission" in game_callbacks
+
+    # Card keyboard
+    card_kb = get_duel_game_card_keyboard("carrom_clash", "https://likby-dev.onrender.com/play/", in_active_session=False)
+    assert card_kb.inline_keyboard[0][0].web_app is not None
+    assert "game=carrom_clash" in card_kb.inline_keyboard[0][0].web_app.url
+
+
+@pytest.mark.asyncio
+async def test_show_duels_handler_presents_button_selector():
+    """Validates that show_duels handler renders all 11 duels as clickable buttons."""
+    from unittest.mock import AsyncMock, MagicMock
+    from aiogram.types import CallbackQuery, Message, User
+    from likby.telegram.handlers.play import show_duels
+
+    cb = MagicMock(spec=CallbackQuery)
+    cb.data = "play:duels"
+    cb.from_user = User(id=77777, is_bot=False, first_name="Player")
+    cb.answer = AsyncMock()
+    msg = MagicMock(spec=Message)
+    msg.edit_text = AsyncMock()
+    cb.message = msg
+
+    user_repo_mock = MagicMock()
+    user_repo_mock.get_by_telegram_id = AsyncMock(return_value=None)
+
+    await show_duels(cb, user_repo=user_repo_mock)
+
+    cb.answer.assert_called_once()
+    msg.edit_text.assert_called_once()
+    kwargs = msg.edit_text.call_args[1]
+    markup = kwargs["reply_markup"]
+    assert markup is not None
+    callbacks = [btn.callback_data for row in markup.inline_keyboard for btn in row if btn.callback_data]
+    assert "play:duel_card:connect_four" in callbacks
+    assert "play:duel_card:carrom_clash" in callbacks
+
 
 

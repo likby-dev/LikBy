@@ -446,6 +446,95 @@ def get_solo_game_card_keyboard(game_id: str, mini_app_url: Optional[str] = None
     return InlineKeyboardMarkup(inline_keyboard=rows)
 
 
+def get_duel_games_keyboard(mini_app_url: Optional[str] = None) -> InlineKeyboardMarkup:
+    """
+    Dedicated interactive selector keyboard for all 11 official LikBy Multiplayer Duels.
+    Provides clickable buttons for every single duel game with detail cards & instant launch.
+    """
+    is_https = bool(mini_app_url and mini_app_url.startswith("https://"))
+
+    def _btn(label: str, game_id: str) -> InlineKeyboardButton:
+        if is_https:
+            clean_base = mini_app_url.split("?")[0].rstrip("/")
+            game_url = f"{clean_base}?game={game_id}"
+            return InlineKeyboardButton(text=label, web_app=WebAppInfo(url=game_url))
+        return InlineKeyboardButton(text=label, callback_data=f"play:duel_card:{game_id}")
+
+    rows = [
+        [
+            _btn("🔴 1. Connect Four", "connect_four"),
+            _btn("🎯 2. Carrom Clash", "carrom_clash"),
+        ],
+        [
+            _btn("🏒 3. Air Rush", "air_rush"),
+            _btn("🎱 4. Pocket Pool", "pocket_pool"),
+        ],
+        [
+            _btn("🤺 5. Stick Arena", "stick_arena"),
+            _btn("🎨 6. QuickDraw", "quickdraw"),
+        ],
+        [
+            _btn("🔤 7. Word Rush", "word_rush"),
+            _btn("🧠 8. Brain Blitz", "brain_blitz"),
+        ],
+        [
+            _btn("⚡️ 9. Reflex Rush", "reflex_rush"),
+            _btn("💭 10. MindMatch", "mindmatch"),
+        ],
+        [
+            _btn("🔍 11. Mystery Mission (Co-op)", "mystery_mission"),
+        ],
+    ]
+
+    if is_https:
+        clean_base = mini_app_url.split("?")[0].rstrip("/")
+        duel_hub_url = f"{clean_base}?mode=duel"
+        rows.append([
+            InlineKeyboardButton(
+                text="🚀 Open Duels in LikBy Play (Mini App)",
+                web_app=WebAppInfo(url=duel_hub_url),
+            )
+        ])
+
+    rows.append([
+        InlineKeyboardButton(text="🧩 Solo Games (6 Games)", callback_data="play:solo_info"),
+        InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
+    ])
+
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
+def get_duel_game_card_keyboard(
+    game_id: str,
+    mini_app_url: Optional[str] = None,
+    in_active_session: bool = False,
+) -> InlineKeyboardMarkup:
+    """Action keyboard for a specific multiplayer duel game card."""
+    rows = []
+    if mini_app_url and mini_app_url.startswith("https://"):
+        clean_base = mini_app_url.split("?")[0].rstrip("/")
+        game_url = f"{clean_base}?game={game_id}"
+        rows.append([
+            InlineKeyboardButton(text="🚀 Play in LikBy Play (Mini App)", web_app=WebAppInfo(url=game_url))
+        ])
+
+    if in_active_session:
+        rows.append([
+            InlineKeyboardButton(text="⚔️ Challenge Active Partner", callback_data=f"duel:invite:{game_id}")
+        ])
+    else:
+        rows.append([
+            InlineKeyboardButton(text="🤖 Practice vs AI Bot", callback_data=f"duel:practice:{game_id}"),
+            InlineKeyboardButton(text="🎲 Find Partner", callback_data="queue:find_new"),
+        ])
+
+    rows.append([
+        InlineKeyboardButton(text="« Back to 11 Duels", callback_data="play:duels"),
+        InlineKeyboardButton(text="🏠 Gaming Hub", callback_data="play:hub"),
+    ])
+    return InlineKeyboardMarkup(inline_keyboard=rows)
+
+
 
 def get_chat_duel_invite_keyboard(duel_url: str) -> InlineKeyboardMarkup:
     """Challenge active chat partner to live multiplayer duel in LikBy Play."""

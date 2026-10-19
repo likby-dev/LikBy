@@ -20,13 +20,18 @@ from likby.services.media_quota_service import MediaQuotaService
 from likby.services.social_service import SocialService
 from likby.services.transcript_service import TranscriptService
 from likby.telegram.handlers.play import (
+    DUEL_GAMES_DETAILS,
+    DUEL_NUM_MAP,
     SOLO_GAMES_DETAILS,
     SOLO_NUM_MAP,
+    format_duel_card,
     format_solo_card,
 )
 from likby.telegram.keyboards import (
     get_active_chat_keyboard,
     get_chat_hub_keyboard,
+    get_duel_game_card_keyboard,
+    get_duel_games_keyboard,
     get_main_menu_keyboard,
     get_post_session_keyboard,
     get_solo_game_card_keyboard,
@@ -302,6 +307,39 @@ async def handle_chat_message(
                 kb = get_solo_game_card_keyboard(game_id, mini_app_url)
                 await message.answer(card_text, parse_mode="HTML", reply_markup=kb)
                 return
+
+        if clean_text in DUEL_NUM_MAP:
+            game_id = DUEL_NUM_MAP[clean_text]
+            info = DUEL_GAMES_DETAILS.get(game_id)
+            if info:
+                settings = get_settings()
+                mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+                card_text = format_duel_card(info, mini_app_url)
+                kb = get_duel_game_card_keyboard(game_id, mini_app_url, in_active_session=False)
+                await message.answer(card_text, parse_mode="HTML", reply_markup=kb)
+                return
+
+        if clean_text in ["duels", "duel", "multiplayer", "2 player", "2-player"]:
+            settings = get_settings()
+            mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+            duel_text = (
+                "⚔️ <b>LikBy Play — 11 Multiplayer Duels</b>\n\n"
+                "<i>Duels unlock live with your chat partner or practice vs AI!</i>\n\n"
+                "1. 🔴 <b>Connect Four</b> — <i>Align 4 discs in 7x6 grid</i>\n"
+                "2. 🎯 <b>Carrom Clash</b> — <i>Striker physics & Queen rules</i>\n"
+                "3. 🏒 <b>Air Rush</b> — <i>Fast-paced kinetic air hockey</i>\n"
+                "4. 🎱 <b>Pocket Pool</b> — <i>8-Ball billiards & cue physics</i>\n"
+                "5. 🤺 <b>Stick Arena</b> — <i>Martial combat platform brawler</i>\n"
+                "6. 🎨 <b>QuickDraw</b> — <i>Real-time sketch & guess race</i>\n"
+                "7. 🔤 <b>Word Rush</b> — <i>Shared letter pool vocabulary race</i>\n"
+                "8. 🧠 <b>Brain Blitz</b> — <i>Simultaneous esports trivia battle</i>\n"
+                "9. ⚡️ <b>Reflex Rush</b> — <i>Sub-180ms reaction test chamber</i>\n"
+                "10. 💭 <b>MindMatch</b> — <i>Social compatibility & harmony</i>\n"
+                "11. 🔍 <b>Mystery Mission</b> — <i>Co-op escape room clues</i>\n\n"
+                "👉 <b>Tap any game button below to select and view rules or challenge!</b>"
+            )
+            await message.answer(duel_text, parse_mode="HTML", reply_markup=get_duel_games_keyboard(mini_app_url))
+            return
 
         if clean_text in ["solo", "play", "games", "game", "arcade", "solo games"]:
             settings = get_settings()

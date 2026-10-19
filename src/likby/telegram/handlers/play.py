@@ -5,9 +5,9 @@ Handles /play, /games, /duels, /solo, /mygames commands and interactive game men
 """
 
 from typing import Any, Optional
-from aiogram import F, Router
+from aiogram import Bot, F, Router
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message, WebAppInfo
 
 from likby.config import get_settings
 from likby.domain.entities.play_game import GAME_CATALOGUE
@@ -16,9 +16,11 @@ from likby.repositories.interfaces import UserRepository
 from likby.services.gaming_entitlement_service import GamingEntitlementService
 from likby.services.play_game_service import PlayGameService
 from likby.telegram.keyboards import (
+    get_duel_game_card_keyboard,
+    get_duel_games_keyboard,
     get_play_hub_keyboard,
-    get_solo_games_keyboard,
     get_solo_game_card_keyboard,
+    get_solo_games_keyboard,
 )
 
 router = Router(name="play")
@@ -71,6 +73,203 @@ async def play_hub_command(
         await message.answer(text, parse_mode="HTML", reply_markup=kb)
 
 
+DUEL_GAMES_DETAILS = {
+    "connect_four": {
+        "num": 1,
+        "name": "Connect Four",
+        "emoji": "🔴",
+        "category": "Turn-based Strategy",
+        "duration": "2–5 mins",
+        "desc": "Drop colored discs into the 7-column vertical grid. Outwit your partner by connecting 4 pieces in a row horizontally, vertically, or diagonally.",
+        "rules": [
+            "Players take turns dropping one disc per turn into any open column.",
+            "Discs fall to the lowest unoccupied space within the chosen column.",
+            "First player to form an unbroken horizontal, vertical, or diagonal line of 4 wins!",
+        ],
+        "reward": "Winning a duel awards +15 Karma and Duel Victory status!",
+    },
+    "carrom_clash": {
+        "num": 2,
+        "name": "Carrom Clash",
+        "emoji": "🎯",
+        "category": "Physics Tabletop",
+        "duration": "3–7 mins",
+        "desc": "Smooth striker tabletop carrom physics with rebound bank shots, friction mechanics, and official queen covering rules.",
+        "rules": [
+            "Position your striker on the baseline and choose angle and power.",
+            "Pocket your designated pieces (White or Black) into corner pockets.",
+            "Pocket and cover the Red Queen to seal maximum victory points!",
+        ],
+        "reward": "Pocketing the Queen & winning awards +20 Karma!",
+    },
+    "air_rush": {
+        "num": 3,
+        "name": "Air Rush",
+        "emoji": "🏒",
+        "category": "Arcade Air Hockey",
+        "duration": "1–3 mins",
+        "desc": "High-octane neon air hockey table with responsive paddle collisions and fast kinetic rebounds.",
+        "rules": [
+            "Control your paddle to defend your goal line.",
+            "Smash the puck past your opponent's paddle into their goal.",
+            "First player to score 5 goals wins the match!",
+        ],
+        "reward": "Flawless shutout victory awards Ace Striker badge!",
+    },
+    "pocket_pool": {
+        "num": 4,
+        "name": "Pocket Pool",
+        "emoji": "🎱",
+        "category": "Precision 8-Ball Billiards",
+        "duration": "3–8 mins",
+        "desc": "Tactical 8-ball billiards with realistic collision angles, cue ball spin control, and smooth felt table physics.",
+        "rules": [
+            "Break the rack and claim either Solids (1-7) or Stripes (9-15).",
+            "Clear all balls of your designated suit into the pockets.",
+            "Legally sink the 8-Ball into a called pocket for the win!",
+        ],
+        "reward": "Victory awards +15 Karma score!",
+    },
+    "stick_arena": {
+        "num": 5,
+        "name": "Stick Arena",
+        "emoji": "🤺",
+        "category": "Platform Martial Action",
+        "duration": "1–3 mins",
+        "desc": "Fast-paced 2D platform brawler with martial arts combos, dodge rolls, and dynamic arena platforms.",
+        "rules": [
+            "Time strikes, jump between platforms, and dodge enemy attacks.",
+            "Build combo multipliers to unleash powerful knockback strikes.",
+            "Deplete the opponent's 100 HP or knock them out of the arena!",
+        ],
+        "reward": "Arena champion earns +15 Karma standing!",
+    },
+    "quickdraw": {
+        "num": 6,
+        "name": "QuickDraw",
+        "emoji": "🎨",
+        "category": "Real-time Sketch & Guess",
+        "duration": "2–5 mins",
+        "desc": "One player sketches a secret word on an interactive canvas while the other player guesses in real time.",
+        "rules": [
+            "Drawer gets a secret prompt and 60 seconds to sketch clues on canvas.",
+            "Guesser watches live brushstrokes and types guesses.",
+            "Swap roles across 4 rounds for total combined creative score!",
+        ],
+        "reward": "High synchro score awards Master Sketcher title!",
+    },
+    "word_rush": {
+        "num": 7,
+        "name": "Word Rush",
+        "emoji": "🔤",
+        "category": "Competitive Vocabulary Race",
+        "duration": "1–3 mins",
+        "desc": "Race head-to-head against a shared 3D acrylic letter tile pool to submit valid dictionary words.",
+        "rules": [
+            "Scramble valid words using letters from the shared pool.",
+            "Longer words and fast submissions award combo multipliers.",
+            "Highest cumulative word score when the 90-second timer expires wins!",
+        ],
+        "reward": "Vocabulary champion earns +10 Karma points!",
+    },
+    "brain_blitz": {
+        "num": 8,
+        "name": "Brain Blitz",
+        "emoji": "🧠",
+        "category": "Esports Trivia Showdown",
+        "duration": "2–4 mins",
+        "desc": "Head-to-head live quiz battle across pop culture, science, geography, and cinema with secret simultaneous reveals.",
+        "rules": [
+            "Both players receive the same multiple-choice question simultaneously.",
+            "15-second countdown per question — faster correct answers earn streak bonuses.",
+            "Player with the highest score after 5 questions wins!",
+        ],
+        "reward": "Perfect 5/5 score awards Grandmaster Scholar badge!",
+    },
+    "reflex_rush": {
+        "num": 9,
+        "name": "Reflex Rush",
+        "emoji": "⚡️",
+        "category": "Millisecond Reaction Chamber",
+        "duration": "30–90 secs",
+        "desc": "High-tension reaction chamber testing neuro-kinetic tap speed with strict false-start penalties.",
+        "rules": [
+            "Hold steady during the red anticipation phase (1.5s to 4.0s random delay).",
+            "The instant the chamber flashes GREEN, tap immediately!",
+            "Fastest valid reaction time across 5 rounds wins the duel.",
+        ],
+        "reward": "Sub-180ms reaction time awards Lightning Reflexes title!",
+    },
+    "mindmatch": {
+        "num": 10,
+        "name": "MindMatch",
+        "emoji": "💭",
+        "category": "Social Discovery & Harmony",
+        "duration": "2–4 mins",
+        "desc": "Discover romantic and social compatibility! Both players secretly answer intriguing prompts to calculate harmony score.",
+        "rules": [
+            "Read the scenario or dilemma (travel, lifestyle, evening vibes, values).",
+            "Choose your authentic preference between Option A and Option B.",
+            "Reveal synced answers and compute your match percentage (0% to 100%)!",
+        ],
+        "reward": "80%+ Harmony unlocks Soul Connection achievement!",
+    },
+    "mystery_mission": {
+        "num": 11,
+        "name": "Mystery Mission",
+        "emoji": "🔍",
+        "category": "Co-op Cyber Escape Room",
+        "duration": "3–7 mins",
+        "desc": "A cooperative mystery escape console! Both partners receive complementary half-clues that must be combined to crack ciphers.",
+        "rules": [
+            "Player 1 receives Clue A; Player 2 receives Clue B in chat.",
+            "Communicate and combine your clue fragments together.",
+            "Enter the decrypted 4-digit master code to unlock the safe!",
+        ],
+        "reward": "Cracking the safe awards +20 Karma to both partners!",
+    },
+}
+
+DUEL_NUM_MAP = {
+    "connect four": "connect_four",
+    "c4": "connect_four",
+    "carrom": "carrom_clash",
+    "carrom clash": "carrom_clash",
+    "air rush": "air_rush",
+    "hockey": "air_rush",
+    "pool": "pocket_pool",
+    "pocket pool": "pocket_pool",
+    "stick": "stick_arena",
+    "stick arena": "stick_arena",
+    "draw": "quickdraw",
+    "quickdraw": "quickdraw",
+    "word rush": "word_rush",
+    "trivia": "brain_blitz",
+    "brain blitz": "brain_blitz",
+    "reflex rush": "reflex_rush",
+    "mindmatch": "mindmatch",
+    "mystery mission": "mystery_mission",
+    "coop": "mystery_mission",
+}
+
+
+def format_duel_card(info: dict, mini_app_url: str, quota_info: str = "") -> str:
+    rules_text = "\n".join(f"• {r}" for r in info["rules"])
+    quota_header = f"🎯 <b>Daily Duel Allowance:</b> {quota_info}\n" if quota_info else ""
+    return (
+        f"{info['emoji']} <b>{info['name']} — Multiplayer Duel #{info['num']}</b> ⚔️\n\n"
+        f"🌟 <b>Genre:</b> {info['category']}\n"
+        f"⏱ <b>Duration:</b> {info['duration']} (Head-to-head)\n"
+        f"{quota_header}\n"
+        f"📖 <b>About the Duel:</b>\n"
+        f"{info['desc']}\n\n"
+        f"🎮 <b>How to Play:</b>\n"
+        f"{rules_text}\n\n"
+        f"🏆 <b>Victory Rewards:</b> {info['reward']}\n\n"
+        f"👉 <i>Select an action below to challenge your partner or launch LikBy Play!</i>"
+    )
+
+
 @router.message(Command("duels"))
 @router.callback_query(F.data == "play:duels")
 async def show_duels(
@@ -78,7 +277,7 @@ async def show_duels(
     user_repo: UserRepository,
     gaming_entitlement_service: Optional[GamingEntitlementService] = None,
 ) -> None:
-    """Displays the 11 duel games and daily allowance."""
+    """Displays the 11 duel games with dedicated interactive selection buttons."""
     settings = get_settings()
     mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
 
@@ -94,24 +293,31 @@ async def show_duels(
             rem_str = "Unlimited" if rem == -1 else f"{rem}"
             quota_info = f"{rem_str} of {lim_str} duels remaining today"
 
-    duels = [g for g in GAME_CATALOGUE.values() if g.mode in (GameMode.DUEL, GameMode.COOP_DUEL)]
-    duel_list_lines = []
-    for idx, d in enumerate(duels, 1):
-        duel_list_lines.append(f"{idx}. <b>{d.name}</b> — <i>{d.description}</i> ({d.typical_duration})")
-
     duel_text = (
         "⚔️ <b>LikBy Play — 11 Multiplayer Duels</b>\n\n"
-        f"🎯 <b>Your Allowance:</b> {quota_info}\n\n"
-        + "\n\n".join(duel_list_lines)
-        + "\n\n<i>To start a duel, open LikBy Play or challenge your active chat partner!</i>"
+        f"🎯 <b>Your Allowance:</b> {quota_info}\n"
+        "<i>Duels unlock live with your chat partner or practice vs AI!</i>\n\n"
+        "1. 🔴 <b>Connect Four</b> — <i>Align 4 discs in 7x6 grid</i>\n"
+        "2. 🎯 <b>Carrom Clash</b> — <i>Striker physics & Queen rules</i>\n"
+        "3. 🏒 <b>Air Rush</b> — <i>Fast-paced kinetic air hockey</i>\n"
+        "4. 🎱 <b>Pocket Pool</b> — <i>8-Ball billiards & cue physics</i>\n"
+        "5. 🤺 <b>Stick Arena</b> — <i>Martial combat platform brawler</i>\n"
+        "6. 🎨 <b>QuickDraw</b> — <i>Real-time sketch & guess race</i>\n"
+        "7. 🔤 <b>Word Rush</b> — <i>Shared letter pool vocabulary race</i>\n"
+        "8. 🧠 <b>Brain Blitz</b> — <i>Simultaneous esports trivia battle</i>\n"
+        "9. ⚡️ <b>Reflex Rush</b> — <i>Sub-180ms reaction test chamber</i>\n"
+        "10. 💭 <b>MindMatch</b> — <i>Social compatibility & harmony</i>\n"
+        "11. 🔍 <b>Mystery Mission</b> — <i>Co-op escape room clues</i>\n\n"
+        "👉 <b>Tap any game button below to select and view rules or challenge!</b>"
     )
 
+    kb = get_duel_games_keyboard(mini_app_url)
     if isinstance(event, Message):
-        await event.answer(duel_text, parse_mode="HTML", reply_markup=get_play_hub_keyboard(mini_app_url))
+        await event.answer(duel_text, parse_mode="HTML", reply_markup=kb)
     else:
         await event.answer()
         if event.message:
-            await event.message.edit_text(duel_text, parse_mode="HTML", reply_markup=get_play_hub_keyboard(mini_app_url))
+            await event.message.edit_text(duel_text, parse_mode="HTML", reply_markup=kb)
 
 
 SOLO_GAMES_DETAILS = {
@@ -311,6 +517,134 @@ async def solo_game_card_callback(
         await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
 
 
+@router.callback_query(F.data.startswith("play:duel_card:"))
+async def duel_game_card_callback(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    chat_relay: Optional[Any] = None,
+    gaming_entitlement_service: Optional[GamingEntitlementService] = None,
+) -> None:
+    """Renders the detailed game card for a specific duel game with challenge buttons."""
+    if not callback.data:
+        return
+    game_id = callback.data.split("play:duel_card:")[1]
+    info = DUEL_GAMES_DETAILS.get(game_id)
+    if not info:
+        await callback.answer("Duel game not found", show_alert=True)
+        return
+    await callback.answer()
+
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+
+    tg_id = callback.from_user.id if callback.from_user else 0
+    in_active = False
+    quota_info = "5 duels/day on Base"
+    if chat_relay and tg_id:
+        active_session = await chat_relay.get_or_warm_session(tg_id)
+        in_active = active_session is not None
+
+    if user_repo and gaming_entitlement_service and tg_id:
+        user = await user_repo.get_by_telegram_id(tg_id)
+        if user:
+            ent = await gaming_entitlement_service.get_user_entitlements(user.id)
+            rem = ent["daily_duels_remaining"]
+            lim = ent["daily_duels_limit"]
+            lim_str = "Unlimited" if lim == -1 else f"{lim}"
+            rem_str = "Unlimited" if rem == -1 else f"{rem}"
+            quota_info = f"{rem_str} of {lim_str} duels remaining"
+
+    text = format_duel_card(info, mini_app_url, quota_info)
+    kb = get_duel_game_card_keyboard(game_id, mini_app_url, in_active_session=in_active)
+    if callback.message:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=kb)
+
+
+@router.callback_query(F.data.startswith("duel:practice:"))
+async def duel_practice_callback(
+    callback: CallbackQuery,
+) -> None:
+    """Launches AI practice arena for a duel game."""
+    if not callback.data:
+        return
+    game_id = callback.data.split("duel:practice:")[1]
+    info = DUEL_GAMES_DETAILS.get(game_id)
+    game_name = info["name"] if info else game_id.replace("_", " ").title()
+    await callback.answer()
+
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+    clean_base = mini_app_url.split("?")[0].rstrip("/")
+    game_url = f"{clean_base}?game={game_id}&practice=1"
+
+    text = (
+        f"🤖 <b>AI Practice Arena — {game_name}</b>\n\n"
+        "Sharpen your skills against the LikBy Practice Bot! "
+        "Practice matches do not consume daily duel credits.\n\n"
+        "👉 <i>Tap <b>Launch Practice Arena</b> below to begin!</i>"
+    )
+    rows = []
+    if mini_app_url and mini_app_url.startswith("https://"):
+        rows.append([
+            InlineKeyboardButton(text="🚀 Launch Practice Arena (Mini App)", web_app=WebAppInfo(url=game_url))
+        ])
+    rows.append([
+        InlineKeyboardButton(text=f"« Back to {game_name}", callback_data=f"play:duel_card:{game_id}"),
+        InlineKeyboardButton(text="« All 11 Duels", callback_data="play:duels"),
+    ])
+    if callback.message:
+        await callback.message.edit_text(text, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(inline_keyboard=rows))
+
+
+@router.callback_query(F.data.startswith("duel:invite:"))
+async def duel_invite_callback(
+    callback: CallbackQuery,
+    chat_relay: Optional[Any] = None,
+    bot: Optional[Bot] = None,
+) -> None:
+    """Challenges the user's active conversation partner to this duel game."""
+    if not callback.data or not callback.from_user:
+        return
+    game_id = callback.data.split("duel:invite:")[1]
+    info = DUEL_GAMES_DETAILS.get(game_id)
+    game_name = info["name"] if info else game_id.replace("_", " ").title()
+
+    if not chat_relay:
+        await callback.answer("Chat service unavailable.", show_alert=True)
+        return
+
+    session = await chat_relay.get_or_warm_session(callback.from_user.id)
+    if not session:
+        await callback.answer("You are not currently in an active chat session.", show_alert=True)
+        return
+
+    partner_tg_id = session.user2_tg_id if session.user1_tg_id == callback.from_user.id else session.user1_tg_id
+
+    settings = get_settings()
+    mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
+    clean_base = mini_app_url.split("?")[0].rstrip("/")
+    duel_url = f"{clean_base}?game={game_id}&partner_id={callback.from_user.id}&session_id={session.id}"
+
+    if bot:
+        partner_btn = (
+            InlineKeyboardButton(text=f"⚔️ Accept {game_name} Duel", web_app=WebAppInfo(url=duel_url))
+            if mini_app_url and mini_app_url.startswith("https://")
+            else InlineKeyboardButton(text=f"⚔️ Accept {game_name} Duel", callback_data=f"play:duel_card:{game_id}")
+        )
+        partner_kb = InlineKeyboardMarkup(inline_keyboard=[[partner_btn]])
+        try:
+            await bot.send_message(
+                chat_id=partner_tg_id,
+                text=f"⚔️ <b>Your partner has challenged you to {game_name}!</b>\n\n<i>Tap below to accept and enter the match:</i>",
+                parse_mode="HTML",
+                reply_markup=partner_kb,
+            )
+        except Exception:
+            pass
+
+    await callback.answer(f"⚔️ Challenge sent for {game_name}!", show_alert=True)
+
+
 async def not_in_active_session_filter(message: Message, chat_relay: Optional[Any] = None) -> bool:
     """Filter that matches ONLY when the user is NOT in an active conversation session."""
     if not message.from_user:
@@ -324,27 +658,41 @@ async def not_in_active_session_filter(message: Message, chat_relay: Optional[An
         return True
 
 
-@router.message(F.text.in_(["1", "2", "3", "4", "5", "6"]), not_in_active_session_filter)
-@router.message(F.text.lower().in_(list(SOLO_NUM_MAP.keys())), not_in_active_session_filter)
+COMBINED_GAMES_MAP = {**SOLO_NUM_MAP, **DUEL_NUM_MAP}
+
+
+@router.message(F.text.in_(["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11"]), not_in_active_session_filter)
+@router.message(F.text.lower().in_(list(COMBINED_GAMES_MAP.keys())), not_in_active_session_filter)
 async def handle_solo_number_shortcut(
     message: Message,
     chat_relay: Optional[Any] = None,
+    user_repo: Optional[UserRepository] = None,
+    gaming_entitlement_service: Optional[GamingEntitlementService] = None,
 ) -> None:
-    """Instantly launches or shows the solo game card when typing 1-6 or game name outside chat."""
+    """Instantly launches or shows game card when typing number or game name outside chat."""
     text_clean = (message.text or "").strip().lower()
-    game_id = SOLO_NUM_MAP.get(text_clean)
-    if not game_id:
-        return
-
-    info = SOLO_GAMES_DETAILS.get(game_id)
-    if not info:
-        return
-
     settings = get_settings()
     mini_app_url = settings.telegram_mini_app_url or f"{settings.base_url.rstrip('/')}/play/"
-    text = format_solo_card(info, mini_app_url)
-    kb = get_solo_game_card_keyboard(game_id, mini_app_url)
-    await message.answer(text, parse_mode="HTML", reply_markup=kb)
+
+    # Check solo games first
+    if text_clean in SOLO_NUM_MAP:
+        game_id = SOLO_NUM_MAP[text_clean]
+        info = SOLO_GAMES_DETAILS.get(game_id)
+        if info:
+            text = format_solo_card(info, mini_app_url)
+            kb = get_solo_game_card_keyboard(game_id, mini_app_url)
+            await message.answer(text, parse_mode="HTML", reply_markup=kb)
+            return
+
+    # Check duel games
+    if text_clean in DUEL_NUM_MAP:
+        game_id = DUEL_NUM_MAP[text_clean]
+        info = DUEL_GAMES_DETAILS.get(game_id)
+        if info:
+            text = format_duel_card(info, mini_app_url)
+            kb = get_duel_game_card_keyboard(game_id, mini_app_url, in_active_session=False)
+            await message.answer(text, parse_mode="HTML", reply_markup=kb)
+            return
 
 
 
