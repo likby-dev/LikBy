@@ -26,6 +26,7 @@ async def handle_start(
     user_repo: UserRepository,
     profile_repo: ProfileRepository,
     referral_service: Optional[Any] = None,
+    subscription_service: Optional[Any] = None,
 ) -> None:
     if not message.from_user:
         return

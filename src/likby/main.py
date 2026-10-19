@@ -7,11 +7,14 @@ import argparse
 import asyncio
 import contextlib
 from contextlib import asynccontextmanager
+import logging
 import os
 import sys
 import time
 from datetime import datetime, timezone
 from typing import AsyncGenerator, Optional
+
+logger = logging.getLogger(__name__)
 
 from aiogram import Bot, Dispatcher
 from aiogram.types import Update
@@ -129,11 +132,14 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         sb_key = (
             (settings.supabase_secret_key.get_secret_value() if settings.supabase_secret_key else None)
             or settings.supabase_key
+            or getattr(settings, "supabase_publishable_key", None)
             or os.environ.get("SUPABASE_SECRET_KEY")
             or os.environ.get("SUPABASE_KEY")
+            or os.environ.get("SUPABASE_PUBLISHABLE_KEY")
         )
         if sb_url and sb_key:
             app.state.supabase_client = create_client(sb_url, sb_key)
+            logger.info("[Supabase] Successfully connected to %s", sb_url)
         else:
             app.state.supabase_client = None
 
@@ -180,6 +186,32 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     webhook_ledger_repo = SqliteWebhookLedgerRepository(conn)
     audit_repo = SqliteAuditEventRepository(conn)
     referral_repo = SqliteReferralRewardRepository(conn)
+
+    # Attach Supabase persistent repositories when Supabase client is available
+    if getattr(app.state, "supabase_client", None):
+        from likby.repositories.supabase import (
+            SupabaseUserRepository,
+            SupabaseProfileRepository,
+            SupabaseChatSessionRepository,
+            SupabaseLikeRepository,
+            SupabaseFriendshipRepository,
+            SupabaseConnectionRequestRepository,
+            SupabaseRatingRepository,
+            SupabaseKarmaRepository,
+            SupabaseDailyUsageRepository,
+            SupabaseReportRepository,
+        )
+        user_repo = SupabaseUserRepository(app.state.supabase_client, local_fallback=user_repo)
+        profile_repo = SupabaseProfileRepository(app.state.supabase_client, local_fallback=profile_repo)
+        session_repo = SupabaseChatSessionRepository(app.state.supabase_client, local_fallback=session_repo)
+        like_repo = SupabaseLikeRepository(app.state.supabase_client, local_fallback=like_repo)
+        friendship_repo = SupabaseFriendshipRepository(app.state.supabase_client, local_fallback=friendship_repo)
+        request_repo = SupabaseConnectionRequestRepository(app.state.supabase_client, local_fallback=request_repo)
+        rating_repo = SupabaseRatingRepository(app.state.supabase_client, local_fallback=rating_repo)
+        karma_repo = SupabaseKarmaRepository(app.state.supabase_client, local_fallback=karma_repo)
+        daily_usage_repo = SupabaseDailyUsageRepository(app.state.supabase_client, local_fallback=daily_usage_repo)
+        report_repo = SupabaseReportRepository(app.state.supabase_client, local_fallback=report_repo)
+        logger.info("[Supabase] Persistent Supabase repositories successfully wired into application.")
 
     # 3. Build Services
     session_cache = ActiveSessionCache()
