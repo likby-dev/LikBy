@@ -75,11 +75,14 @@ class SupabaseProfileRepository(ProfileRepository):
         payload = {
             "user_id": profile.user_id,
             "display_name": profile.display_name,
+            "dob": profile.dob.isoformat() if profile.dob else None,
             "age": profile.age,
             "gender": gender_val,
             "bio": profile.bio,
             "location_country": profile.location_country,
+            "location_state": profile.location_state,
             "location_city": profile.location_city,
+            "relationship_intent": profile.relationship_intent,
             "languages": profile.languages or ["en"],
             "interests": profile.interests or [],
             "preferred_gender_filter": pref_val,
@@ -105,6 +108,17 @@ class SupabaseProfileRepository(ProfileRepository):
         if row.get("updated_at"):
             updated_at = datetime.fromisoformat(row["updated_at"])
 
+        dob = None
+        if row.get("dob"):
+            try:
+                from datetime import date
+                if isinstance(row["dob"], date):
+                    dob = row["dob"]
+                else:
+                    dob = date.fromisoformat(str(row["dob"]).split("T")[0])
+            except Exception:
+                dob = None
+
         languages = row.get("languages") or ["en"]
         interests = row.get("interests") or []
         raw_prefs = row.get("preferred_gender_filter") or ["ANY"]
@@ -123,11 +137,14 @@ class SupabaseProfileRepository(ProfileRepository):
             user_id=row["user_id"],
             unique_id=unique_id,
             display_name=row["display_name"],
+            dob=dob,
             age=int(row["age"]),
             gender=Gender(row["gender"]),
             bio=row.get("bio"),
             location_country=row.get("location_country"),
+            location_state=row.get("location_state"),
             location_city=row.get("location_city"),
+            relationship_intent=row.get("relationship_intent"),
             languages=languages,
             interests=interests,
             preferred_gender_filter=pref_list,

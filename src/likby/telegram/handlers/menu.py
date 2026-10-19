@@ -6,11 +6,14 @@ Authoritative handlers for LikBy Navigation Hubs:
 - 💬 My Chats Hub (Active conversation controls, instant matchmaking, transcripts)
 """
 
-from typing import Optional
+from datetime import date, datetime, timezone
+import re
+from typing import Optional, Sequence
 from aiogram import Router, F
 from aiogram.filters import Command
 from aiogram.fsm.context import FSMContext
 from aiogram.types import CallbackQuery, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from likby.domain.enums import Gender, GenderPreference
 from likby.repositories.interfaces import (
     ChatSessionRepository,
     ProfileRepository,
@@ -21,15 +24,24 @@ from likby.services.karma_service import KarmaService
 from likby.services.social_service import SocialService
 from likby.services.subscription_service import SubscriptionService
 from likby.telegram.keyboards import (
+    AVAILABLE_INTERESTS,
+    AVAILABLE_LANGUAGES,
     get_chat_hub_keyboard,
     get_connections_hub_keyboard,
+    get_interests_keyboard,
+    get_languages_keyboard,
     get_main_menu_keyboard,
+    get_preferred_gender_keyboard,
+    get_profile_edit_menu_keyboard,
+    get_profile_interests_keyboard,
     get_profile_vip_keyboard,
+    get_relationship_intent_keyboard,
 )
 from likby.telegram.states import EditProfileStates, SearchStates
-from likby.telegram.utils import safe_edit_text
+from likby.telegram.utils import safe_edit_reply_markup, safe_edit_text
 
 router = Router(name="menu")
+
 
 
 async def send_or_edit(
@@ -53,6 +65,30 @@ async def send_or_edit(
             parse_mode="HTML",
             reply_markup=reply_markup,
         )
+
+
+def parse_date_of_birth(raw: str) -> Optional[date]:
+    """Parse DOB from flexible formats: YYYY-MM-DD, DD/MM/YYYY, DD-MM-YYYY, YYYY/MM/DD, DD.MM.YYYY."""
+    clean = raw.strip()
+    patterns = ["%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%Y/%m/%d", "%d.%m.%Y"]
+    for pat in patterns:
+        try:
+            return datetime.strptime(clean, pat).date()
+        except ValueError:
+            continue
+    return None
+
+
+def parse_location_input(raw: str) -> tuple[Optional[str], Optional[str], Optional[str]]:
+    """Parse user location string into (city, state, country)."""
+    parts = [p.strip() for p in raw.split(",") if p.strip()]
+    if len(parts) >= 3:
+        return parts[0][:100], parts[1][:100], parts[2][:60]
+    elif len(parts) == 2:
+        return parts[0][:100], None, parts[1][:60]
+    elif len(parts) == 1:
+        return parts[0][:100], None, None
+    return None, None, None
 
 
 # ==============================================================================
@@ -97,8 +133,28 @@ async def show_profile_vip_hub(
 
     tier_name = limits.get("display_name", limits.get("tier", "Base")).upper()
     unique_tag = f"@{user.unique_id or profile.unique_id}" if (user.unique_id or profile.unique_id) else "<i>Not set</i>"
-    interests_str = ", ".join(profile.interests).title() if profile.interests else "None selected"
+    interests_str = ", ".join(profile.interests).title() if profile.interests else "<i>None selected</i>"
     gender_str = profile.gender.value.replace("_", " ").title()
+
+    # DOB and age
+    dob_str = profile.dob.strftime("%d %B %Y") if profile.dob else "<i>Not set</i>"
+
+    # Preferred matching gender
+    pref_parts = [p.value.replace("_", " ").title() for p in profile.preferred_gender_filter]
+    pref_gender_str = ", ".join(pref_parts) if pref_parts else "Any"
+
+    # Location
+    loc_parts = [p for p in (profile.location_city, profile.location_state, profile.location_country) if p]
+    location_str = ", ".join(loc_parts) if loc_parts else "<i>Not set</i>"
+
+    # Languages
+    languages_str = ", ".join(l.upper() for l in profile.languages) if profile.languages else "EN"
+
+    # Intent
+    intent_str = profile.relationship_intent or "<i>Not specified</i>"
+
+    # Bio
+    bio_str = f"<i>\"{profile.bio}\"</i>" if profile.bio else "<i>No bio yet — tap Edit Profile Details to add one!</i>"
 
     # Dynamic Karma Status Badge
     karma = user.karma_score
@@ -113,7 +169,12 @@ async def show_profile_vip_hub(
         f"👤 <b>LikBy Profile & VIP Membership</b>\n\n"
         f"• <b>Display Name:</b> {profile.display_name}\n"
         f"• <b>Permanent ID:</b> {unique_tag} 🔒 <i>(Immutable)</i>\n"
-        f"• <b>Age & Gender:</b> {profile.age} • {gender_str}\n"
+        f"• <b>Age & DOB:</b> {profile.age} yrs • DOB: {dob_str}\n"
+        f"• <b>Gender:</b> {gender_str} • <b>Looking For:</b> {intent_str}\n"
+        f"• <b>Matching Filter:</b> {pref_gender_str}\n"
+        f"• <b>Location:</b> {location_str}\n"
+        f"• <b>Languages:</b> {languages_str}\n"
+        f"• <b>Bio:</b> {bio_str}\n"
         f"• <b>Interests:</b> {interests_str}\n"
         f"• <b>Karma Reputation:</b> {karma} / 500 ({karma_badge})\n\n"
         f"👑 <b>Current Tier:</b> <b>{tier_name}</b>\n"
@@ -128,6 +189,70 @@ async def show_profile_vip_hub(
         text,
         reply_markup=get_profile_vip_keyboard(tier_code=limits.get("tier", "BASE")),
     )
+
+
+# ------------------------------------------------------------------------------
+# Profile Edit Submenu & Handlers
+# ------------------------------------------------------------------------------
+
+async def render_profile_edit_menu(
+    message: Optional[Message],
+    tg_id: int,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Render the profile edit menu in-place."""
+    if not message:
+        return
+    user = await user_repo.get_by_telegram_id(tg_id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    dob_str = profile.dob.strftime("%d %B %Y") if profile.dob else "Not set"
+    loc_parts = [p for p in (profile.location_city, profile.location_state, profile.location_country) if p]
+    location_str = ", ".join(loc_parts) if loc_parts else "Not set"
+    languages_str = ", ".join(l.upper() for l in profile.languages) if profile.languages else "EN"
+    pref_parts = [p.value.replace("_", " ").title() for p in profile.preferred_gender_filter]
+    pref_str = ", ".join(pref_parts) if pref_parts else "Any"
+    intent_str = profile.relationship_intent or "Not set"
+    bio_str = f"\"{profile.bio}\"" if profile.bio else "Not set"
+
+    text = (
+        f"⚙️ <b>Edit Profile Details</b>\n\n"
+        f"Select an item to update your profile information:\n\n"
+        f"• <b>Display Name:</b> {profile.display_name}\n"
+        f"• <b>Bio:</b> {bio_str}\n"
+        f"• <b>Date of Birth:</b> {dob_str} <i>(Age: {profile.age})</i>\n"
+        f"• <b>Location:</b> {location_str}\n"
+        f"• <b>Looking For:</b> {intent_str}\n"
+        f"• <b>Matching Filter:</b> {pref_str}\n"
+        f"• <b>Languages:</b> {languages_str}\n"
+        f"• <b>Interests:</b> {', '.join(profile.interests).title() if profile.interests else 'None'}\n"
+    )
+
+    await safe_edit_text(
+        message,
+        text,
+        parse_mode="HTML",
+        reply_markup=get_profile_edit_menu_keyboard(),
+    )
+
+
+@router.callback_query(F.data == "profile:edit_menu")
+async def show_profile_edit_menu(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Submenu for viewing and editing individual profile details."""
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+    await render_profile_edit_menu(callback.message, callback.from_user.id, user_repo, profile_repo)
+
 
 
 @router.callback_query(F.data == "profile:edit_name")
@@ -155,7 +280,7 @@ async def start_edit_name(
 
     cancel_kb = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="« Back to Profile Hub", callback_data="vip:hub")]
+            [InlineKeyboardButton(text="« Back to Edit Menu", callback_data="profile:edit_menu")]
         ]
     )
 
@@ -223,6 +348,576 @@ async def process_new_name(
         parse_mode="HTML",
         reply_markup=done_kb,
     )
+
+
+@router.callback_query(F.data == "profile:edit_bio")
+async def start_edit_bio(
+    callback: CallbackQuery,
+    state: FSMContext,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Prompt user to set or update their bio."""
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    await state.set_state(EditProfileStates.waiting_for_bio)
+    current_bio = f"<i>\"{profile.bio}\"</i>" if profile.bio else "<i>None</i>"
+
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Back to Edit Menu", callback_data="profile:edit_menu")]
+        ]
+    )
+
+    await callback.message.answer(
+        f"📝 <b>Edit Personal Bio</b>\n\n"
+        f"Current Bio: {current_bio}\n\n"
+        f"Please send your new bio (up to 500 characters).\n"
+        f"<i>(Send 'clear' to remove your bio, or /cancel to abort.)</i>",
+        parse_mode="HTML",
+        reply_markup=cancel_kb,
+    )
+
+
+@router.message(EditProfileStates.waiting_for_bio)
+async def process_new_bio(
+    message: Message,
+    state: FSMContext,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Validate and persist new bio."""
+    raw_text = (message.text or "").strip()
+    if raw_text == "/cancel":
+        await state.clear()
+        cancel_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Return to Profile Hub", callback_data="vip:hub")]
+            ]
+        )
+        await message.answer("Bio update cancelled.", reply_markup=cancel_kb)
+        return
+
+    if not message.from_user:
+        return
+
+    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    if not user:
+        return
+
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    if raw_text.lower() == "clear":
+        profile.update_bio(None)
+    else:
+        if len(raw_text) > 500:
+            await message.answer("⚠️ Bio cannot exceed 500 characters. Please shorten your message (or /cancel):")
+            return
+        profile.update_bio(raw_text)
+
+    await profile_repo.save(profile)
+    await state.clear()
+
+    done_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Return to Profile Hub", callback_data="vip:hub")]
+        ]
+    )
+    status_str = "cleared" if not profile.bio else f"updated to: <i>\"{profile.bio}\"</i>"
+    await message.answer(
+        f"✅ <b>Bio Updated!</b>\n\nYour personal bio is now {status_str}.",
+        parse_mode="HTML",
+        reply_markup=done_kb,
+    )
+
+
+@router.callback_query(F.data == "profile:edit_dob")
+async def start_edit_dob(
+    callback: CallbackQuery,
+    state: FSMContext,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Prompt user to set their date of birth."""
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    await state.set_state(EditProfileStates.waiting_for_dob)
+    current_dob = profile.dob.strftime("%d %B %Y") if profile.dob else "Not set"
+
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Back to Edit Menu", callback_data="profile:edit_menu")]
+        ]
+    )
+
+    await callback.message.answer(
+        f"🎂 <b>Set Date of Birth</b>\n\n"
+        f"Current DOB: <b>{current_dob}</b> <i>(Current age: {profile.age})</i>\n\n"
+        f"Please enter your Date of Birth in <code>YYYY-MM-DD</code> or <code>DD/MM/YYYY</code> format:\n"
+        f"<i>(Example: <code>2000-05-15</code> or <code>15/05/2000</code>. Type /cancel to abort.)</i>",
+        parse_mode="HTML",
+        reply_markup=cancel_kb,
+    )
+
+
+@router.message(EditProfileStates.waiting_for_dob)
+async def process_new_dob(
+    message: Message,
+    state: FSMContext,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Validate and persist date of birth and derived age."""
+    raw_text = (message.text or "").strip()
+    if raw_text == "/cancel":
+        await state.clear()
+        cancel_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Return to Profile Hub", callback_data="vip:hub")]
+            ]
+        )
+        await message.answer("Date of birth change cancelled.", reply_markup=cancel_kb)
+        return
+
+    parsed_date = parse_date_of_birth(raw_text)
+    if not parsed_date:
+        await message.answer(
+            "⚠️ <b>Invalid date format.</b>\n\n"
+            "Please use <code>YYYY-MM-DD</code> or <code>DD/MM/YYYY</code> format (e.g. <code>2001-08-20</code> or <code>20/08/2001</code>):\n"
+            "<i>(Type /cancel to abort.)</i>",
+            parse_mode="HTML",
+        )
+        return
+
+    today = datetime.now(timezone.utc).date()
+    if parsed_date > today:
+        await message.answer("⚠️ Date of birth cannot be in the future. Please try again (or /cancel):")
+        return
+
+    calc_age = today.year - parsed_date.year - ((today.month, today.day) < (parsed_date.month, parsed_date.day))
+    if calc_age < 18:
+        await message.answer(
+            "🛑 <b>Age Restriction:</b> LikBy is strictly for users 18 years or older. "
+            "Please enter a valid adult date of birth (or /cancel):"
+        )
+        return
+    if calc_age > 120:
+        await message.answer("⚠️ Please enter a realistic date of birth (or /cancel):")
+        return
+
+    if not message.from_user:
+        return
+    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    profile.set_dob(parsed_date)
+    await profile_repo.save(profile)
+    await state.clear()
+
+    done_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Return to Profile Hub", callback_data="vip:hub")]
+        ]
+    )
+    await message.answer(
+        f"✅ <b>Date of Birth Updated!</b>\n\n"
+        f"• <b>DOB:</b> {parsed_date.strftime('%d %B %Y')}\n"
+        f"• <b>Verified Age:</b> {profile.age} years old 🎂",
+        parse_mode="HTML",
+        reply_markup=done_kb,
+    )
+
+
+@router.callback_query(F.data == "profile:edit_location")
+async def start_edit_location(
+    callback: CallbackQuery,
+    state: FSMContext,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Prompt user to set their location."""
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    await state.set_state(EditProfileStates.waiting_for_location)
+    loc_parts = [p for p in (profile.location_city, profile.location_state, profile.location_country) if p]
+    current_loc = ", ".join(loc_parts) if loc_parts else "Not set"
+
+    cancel_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Back to Edit Menu", callback_data="profile:edit_menu")]
+        ]
+    )
+
+    await callback.message.answer(
+        f"📍 <b>Set Location</b>\n\n"
+        f"Current Location: <b>{current_loc}</b>\n\n"
+        f"Please enter your <code>City, State, Country</code> (e.g. <code>San Francisco, California, United States</code> or <code>Mumbai, Maharashtra, India</code> or <code>London, UK</code>):\n"
+        f"<i>(Send 'clear' to reset location, or /cancel to abort.)</i>",
+        parse_mode="HTML",
+        reply_markup=cancel_kb,
+    )
+
+
+@router.message(EditProfileStates.waiting_for_location)
+async def process_new_location(
+    message: Message,
+    state: FSMContext,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Validate and persist geographic location."""
+    raw_text = (message.text or "").strip()
+    if raw_text == "/cancel":
+        await state.clear()
+        cancel_kb = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="« Return to Profile Hub", callback_data="vip:hub")]
+            ]
+        )
+        await message.answer("Location update cancelled.", reply_markup=cancel_kb)
+        return
+
+    if not message.from_user:
+        return
+    user = await user_repo.get_by_telegram_id(message.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    if raw_text.lower() == "clear":
+        profile.update_location(country=None, state=None, city=None)
+    else:
+        city, state_name, country = parse_location_input(raw_text)
+        profile.update_location(country=country, state=state_name, city=city)
+
+    await profile_repo.save(profile)
+    await state.clear()
+
+    loc_parts = [p for p in (profile.location_city, profile.location_state, profile.location_country) if p]
+    loc_display = ", ".join(loc_parts) if loc_parts else "Cleared"
+
+    done_kb = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="« Return to Profile Hub", callback_data="vip:hub")]
+        ]
+    )
+    await message.answer(
+        f"✅ <b>Location Updated!</b>\n\n"
+        f"• <b>Current Location:</b> {loc_display} 📍",
+        parse_mode="HTML",
+        reply_markup=done_kb,
+    )
+
+
+@router.callback_query(F.data == "profile:edit_intent")
+async def show_edit_intent(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Display relationship / social intent selector."""
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    await safe_edit_text(
+        callback.message,
+        "💘 <b>What are you looking for on LikBy?</b>\n\n"
+        "Select your primary intent to help match you with like-minded people:",
+        parse_mode="HTML",
+        reply_markup=get_relationship_intent_keyboard(current_intent=profile.relationship_intent),
+    )
+
+
+@router.callback_query(F.data.startswith("intent:"))
+async def set_relationship_intent(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Save selected relationship / social intent."""
+    intent_val = callback.data.split(":", 1)[1]
+    if not callback.from_user or not callback.message:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    profile.update_relationship_intent(intent_val)
+    await profile_repo.save(profile)
+    await callback.answer(f"Updated looking for to: {intent_val}! ✨")
+
+    await safe_edit_reply_markup(
+        callback.message,
+        reply_markup=get_relationship_intent_keyboard(current_intent=profile.relationship_intent),
+    )
+
+
+@router.callback_query(F.data == "profile:edit_pref_gender")
+async def show_edit_pref_gender(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Display matching partner gender filter selector."""
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    current = [p.value for p in profile.preferred_gender_filter]
+    await safe_edit_text(
+        callback.message,
+        "⚧ <b>Preferred Partner Matching Gender:</b>\n\n"
+        "Choose who you would like to be matched with during discovery:",
+        parse_mode="HTML",
+        reply_markup=get_preferred_gender_keyboard(current_pref=current),
+    )
+
+
+@router.callback_query(F.data.startswith("pref_gender:"))
+async def set_preferred_gender(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Update partner matching gender preference filter."""
+    gender_code = callback.data.split(":", 1)[1]
+    if not callback.from_user or not callback.message:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    try:
+        pref_enum = GenderPreference(gender_code)
+    except Exception:
+        pref_enum = GenderPreference.ANY
+
+    profile.update_preferences(preferred_gender=[pref_enum])
+    await profile_repo.save(profile)
+    await callback.answer(f"Matching preference updated to: {gender_code.replace('_', ' ').title()}! ✨")
+
+    await safe_edit_reply_markup(
+        callback.message,
+        reply_markup=get_preferred_gender_keyboard(current_pref=[pref_enum.value]),
+    )
+
+
+@router.callback_query(F.data == "profile:edit_languages")
+async def show_edit_languages(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Display language multi-select matrix."""
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    await safe_edit_text(
+        callback.message,
+        "🌐 <b>Select Spoken Languages</b>\n\n"
+        "Tap languages to select or deselect, then press Save:",
+        parse_mode="HTML",
+        reply_markup=get_languages_keyboard(selected=profile.languages),
+    )
+
+
+@router.callback_query(F.data.startswith("lang_toggle:"))
+async def toggle_language(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Toggle language selection for user profile."""
+    lang_code = callback.data.split(":", 1)[1].lower()
+    if not callback.from_user or not callback.message:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    current = list(profile.languages)
+    if lang_code in current:
+        if len(current) <= 1:
+            await callback.answer("You must select at least 1 language!", show_alert=True)
+            return
+        current.remove(lang_code)
+    else:
+        current.append(lang_code)
+
+    profile.update_languages(current)
+    await profile_repo.save(profile)
+    await callback.answer()
+
+    await safe_edit_reply_markup(
+        callback.message,
+        reply_markup=get_languages_keyboard(selected=profile.languages),
+    )
+
+
+@router.callback_query(F.data == "lang_done")
+async def finish_languages(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Acknowledge language save and return to edit menu."""
+    await callback.answer("Languages saved successfully! ✨")
+    if callback.from_user:
+        await render_profile_edit_menu(callback.message, callback.from_user.id, user_repo, profile_repo)
+
+
+
+@router.callback_query(F.data == "profile:edit_interests")
+async def show_edit_interests(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Display interest multi-select matrix for profile."""
+    await callback.answer()
+    if not callback.from_user or not callback.message:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    await safe_edit_text(
+        callback.message,
+        "🎯 <b>Select Topics & Interests</b>\n\n"
+        "Tap to select 2 to 5 topics you enjoy discussing:",
+        parse_mode="HTML",
+        reply_markup=get_profile_interests_keyboard(selected=profile.interests),
+    )
+
+
+@router.callback_query(F.data.startswith("prof_interest_toggle:"))
+async def toggle_profile_interest(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Toggle interest code in profile."""
+    code = callback.data.split(":", 1)[1].lower()
+    if not callback.from_user or not callback.message:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    selected = list(profile.interests)
+    if code in selected:
+        selected.remove(code)
+    else:
+        if len(selected) >= 5:
+            await callback.answer("Maximum 5 interests allowed! Tap Save when finished.", show_alert=True)
+            return
+        selected.append(code)
+
+    profile.interests = selected
+    profile.updated_at = datetime.now(timezone.utc)
+    await profile_repo.save(profile)
+    await callback.answer()
+
+    await safe_edit_reply_markup(
+        callback.message,
+        reply_markup=get_profile_interests_keyboard(selected=profile.interests),
+    )
+
+
+@router.callback_query(F.data == "prof_interest_done")
+async def finish_profile_interests(
+    callback: CallbackQuery,
+    user_repo: UserRepository,
+    profile_repo: ProfileRepository,
+) -> None:
+    """Verify minimum 2 interests and return to edit menu."""
+    if not callback.from_user:
+        return
+    user = await user_repo.get_by_telegram_id(callback.from_user.id)
+    if not user:
+        return
+    profile = await profile_repo.get_by_user_id(user.id)
+    if not profile:
+        return
+
+    if len(profile.interests) < 2:
+        await callback.answer("Please select at least 2 interests!", show_alert=True)
+        return
+
+    await callback.answer("Interests saved successfully! ✨")
+    await render_profile_edit_menu(callback.message, callback.from_user.id, user_repo, profile_repo)
+
+
 
 
 # ==============================================================================

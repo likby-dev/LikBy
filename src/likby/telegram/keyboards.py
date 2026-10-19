@@ -85,6 +85,29 @@ def get_interests_keyboard(selected: Sequence[str]) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(inline_keyboard=buttons)
 
 
+def get_profile_interests_keyboard(selected: Sequence[str]) -> InlineKeyboardMarkup:
+    """Multi-select interest matrix for profile hub."""
+    buttons = []
+    row = []
+    selected_set = {s.lower() for s in selected}
+    for label, code in AVAILABLE_INTERESTS:
+        prefix = "✅ " if code in selected_set else ""
+        btn_text = f"{prefix}{label}"
+        row.append(InlineKeyboardButton(text=btn_text, callback_data=f"prof_interest_toggle:{code}"))
+        if len(row) == 3:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+
+    count = len(selected_set)
+    done_text = f"✅ Save ({count} Selected)" if count >= 2 else "Select at least 2 interests"
+    buttons.append([InlineKeyboardButton(text=done_text, callback_data="prof_interest_done")])
+    buttons.append([InlineKeyboardButton(text="« Back to Edit Menu", callback_data="profile:edit_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
+
+
 def get_main_menu_keyboard() -> ReplyKeyboardMarkup:
     """
     World-class 5-button persistent main menu keyboard for LikBy.
@@ -147,8 +170,124 @@ def get_profile_vip_keyboard(tier_code: str = "BASE") -> InlineKeyboardMarkup:
                 InlineKeyboardButton(text="🛡 Safety & Guidelines", callback_data="vip:safety"),
                 InlineKeyboardButton(text="💬 Support & Help", callback_data="sub:paysupport"),
             ],
+            [
+                InlineKeyboardButton(text="⚙️ Edit Profile Details (Bio, Location, DOB...)", callback_data="profile:edit_menu"),
+            ],
         ]
     )
+
+
+def get_profile_edit_menu_keyboard() -> InlineKeyboardMarkup:
+    """Submenu keyboard for editing individual profile attributes."""
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✏️ Display Name", callback_data="profile:edit_name"),
+                InlineKeyboardButton(text="📝 Bio", callback_data="profile:edit_bio"),
+            ],
+            [
+                InlineKeyboardButton(text="🎂 Date of Birth", callback_data="profile:edit_dob"),
+                InlineKeyboardButton(text="📍 Location", callback_data="profile:edit_location"),
+            ],
+            [
+                InlineKeyboardButton(text="🌐 Languages", callback_data="profile:edit_languages"),
+                InlineKeyboardButton(text="💘 Looking For", callback_data="profile:edit_intent"),
+            ],
+            [
+                InlineKeyboardButton(text="⚧ Matching Prefs", callback_data="profile:edit_pref_gender"),
+                InlineKeyboardButton(text="🎯 Interests", callback_data="profile:edit_interests"),
+            ],
+            [
+                InlineKeyboardButton(text="« Back to Profile Hub", callback_data="vip:hub"),
+            ],
+        ]
+    )
+
+
+def get_preferred_gender_keyboard(current_pref: Optional[Sequence[str]] = None) -> InlineKeyboardMarkup:
+    """Keyboard for selecting preferred partner genders for matching."""
+    selected = list(current_pref or [])
+    def _chk(val: str, label: str) -> str:
+        return f"✅ {label}" if val in selected else label
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=_chk("ANY", "✨ Anyone (All Genders)"), callback_data="pref_gender:ANY"),
+            ],
+            [
+                InlineKeyboardButton(text=_chk("MALE", "👨 Men Only"), callback_data="pref_gender:MALE"),
+                InlineKeyboardButton(text=_chk("FEMALE", "👩 Women Only"), callback_data="pref_gender:FEMALE"),
+            ],
+            [
+                InlineKeyboardButton(text=_chk("NON_BINARY", "🧑 Non-Binary Only"), callback_data="pref_gender:NON_BINARY"),
+            ],
+            [
+                InlineKeyboardButton(text="« Back to Edit Menu", callback_data="profile:edit_menu"),
+            ],
+        ]
+    )
+
+
+def get_relationship_intent_keyboard(current_intent: Optional[str] = None) -> InlineKeyboardMarkup:
+    """Keyboard for selecting social / relationship intent."""
+    def _chk(val: str, label: str) -> str:
+        return f"✅ {label}" if current_intent and current_intent.lower() == val.lower() else label
+
+    return InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text=_chk("Friendship", "👥 New Friends"), callback_data="intent:Friendship"),
+                InlineKeyboardButton(text=_chk("Casual Chat", "💬 Casual Chat"), callback_data="intent:Casual Chat"),
+            ],
+            [
+                InlineKeyboardButton(text=_chk("Dating & Romance", "💙 Dating & Romance"), callback_data="intent:Dating & Romance"),
+                InlineKeyboardButton(text=_chk("Gaming Duo", "🎮 Gaming Duo"), callback_data="intent:Gaming Duo"),
+            ],
+            [
+                InlineKeyboardButton(text=_chk("Open to Anything", "✨ Open to Anything"), callback_data="intent:Open to Anything"),
+            ],
+            [
+                InlineKeyboardButton(text="« Back to Edit Menu", callback_data="profile:edit_menu"),
+            ],
+        ]
+    )
+
+
+AVAILABLE_LANGUAGES = [
+    ("🇬🇧 English", "en"),
+    ("🇮🇳 Hindi", "hi"),
+    ("🇪🇸 Spanish", "es"),
+    ("🇫🇷 French", "fr"),
+    ("🇩🇪 German", "de"),
+    ("🇷🇺 Russian", "ru"),
+    ("🇸🇦 Arabic", "ar"),
+    ("🇯🇵 Japanese", "ja"),
+    ("🇧🇷 Portuguese", "pt"),
+]
+
+
+def get_languages_keyboard(selected: Sequence[str]) -> InlineKeyboardMarkup:
+    """Multi-select language matrix inline keyboard."""
+    buttons = []
+    row = []
+    selected_set = {s.lower() for s in selected}
+    for label, code in AVAILABLE_LANGUAGES:
+        prefix = "✅ " if code in selected_set else ""
+        btn_text = f"{prefix}{label}"
+        row.append(InlineKeyboardButton(text=btn_text, callback_data=f"lang_toggle:{code}"))
+        if len(row) == 3:
+            buttons.append(row)
+            row = []
+    if row:
+        buttons.append(row)
+
+    count = len(selected_set)
+    done_text = f"✅ Done ({count} Selected)" if count >= 1 else "Select at least 1 language"
+    buttons.append([InlineKeyboardButton(text=done_text, callback_data="lang_done")])
+    buttons.append([InlineKeyboardButton(text="« Back to Edit Menu", callback_data="profile:edit_menu")])
+    return InlineKeyboardMarkup(inline_keyboard=buttons)
+
 
 
 def get_chat_hub_keyboard(

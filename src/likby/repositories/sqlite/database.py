@@ -35,11 +35,14 @@ CREATE TABLE IF NOT EXISTS profiles (
     user_id TEXT PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
     unique_id TEXT UNIQUE,
     display_name TEXT NOT NULL,
+    dob TEXT,
     age INTEGER NOT NULL,
     gender TEXT NOT NULL,
     bio TEXT,
     location_country TEXT,
+    location_state TEXT,
     location_city TEXT,
+    relationship_intent TEXT,
     languages TEXT NOT NULL DEFAULT '["en"]',
     interests TEXT NOT NULL DEFAULT '[]',
     preferred_gender_filter TEXT NOT NULL DEFAULT '["ANY"]',
@@ -48,6 +51,24 @@ CREATE TABLE IF NOT EXISTS profiles (
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL
 );
+
+CREATE INDEX IF NOT EXISTS idx_profiles_location ON profiles (location_country, location_state, location_city);
+CREATE INDEX IF NOT EXISTS idx_profiles_intent ON profiles (relationship_intent);
+CREATE INDEX IF NOT EXISTS idx_profiles_dob ON profiles (dob);
+
+-- Automated Timestamp Maintenance Triggers
+CREATE TRIGGER IF NOT EXISTS trg_profiles_updated_at AFTER UPDATE ON profiles
+WHEN (NEW.updated_at IS OLD.updated_at)
+BEGIN
+    UPDATE profiles SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE user_id = NEW.user_id;
+END;
+
+CREATE TRIGGER IF NOT EXISTS trg_users_updated_at AFTER UPDATE ON users
+WHEN (NEW.updated_at IS OLD.updated_at)
+BEGIN
+    UPDATE users SET updated_at = strftime('%Y-%m-%dT%H:%M:%SZ', 'now') WHERE id = NEW.id;
+END;
+
 
 -- Match tickets table
 CREATE TABLE IF NOT EXISTS match_tickets (
@@ -580,6 +601,12 @@ async def init_sqlite_db(db_path: str) -> aiosqlite.Connection:
         profile_cols = [r[1] for r in await cursor.fetchall()]
         if "unique_id" not in profile_cols:
             await conn.execute("ALTER TABLE profiles ADD COLUMN unique_id TEXT")
+        if "dob" not in profile_cols:
+            await conn.execute("ALTER TABLE profiles ADD COLUMN dob TEXT")
+        if "location_state" not in profile_cols:
+            await conn.execute("ALTER TABLE profiles ADD COLUMN location_state TEXT")
+        if "relationship_intent" not in profile_cols:
+            await conn.execute("ALTER TABLE profiles ADD COLUMN relationship_intent TEXT")
 
     async with conn.execute("PRAGMA table_info(subscriptions)") as cursor:
         sub_cols = [r[1] for r in await cursor.fetchall()]

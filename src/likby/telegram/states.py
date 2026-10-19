@@ -19,6 +19,11 @@ class OnboardingStates(StatesGroup):
 class EditProfileStates(StatesGroup):
     """Profile editing state machine."""
     waiting_for_new_name = State()
+    waiting_for_bio = State()
+    waiting_for_dob = State()
+    waiting_for_location = State()
+    waiting_for_languages = State()
+    waiting_for_interests = State()
 
 
 class ReportStates(StatesGroup):

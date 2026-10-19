@@ -62,6 +62,7 @@ async def test_user_repository_crud(db_conn):
 
 
 async def test_profile_repository_crud(db_conn):
+    from datetime import date
     user_repo = SqliteUserRepository(db_conn)
     profile_repo = SqliteProfileRepository(db_conn)
 
@@ -72,7 +73,13 @@ async def test_profile_repository_crud(db_conn):
         user_id="usr_02",
         display_name="Morgan",
         age=28,
+        dob=date(1996, 4, 12),
         gender=Gender.FEMALE,
+        location_country="United Kingdom",
+        location_state="Greater London",
+        location_city="London",
+        relationship_intent="Dating",
+        languages=["en", "fr"],
         interests=["coffee", "books"],
         preferred_gender_filter=[GenderPreference.ANY],
     )
@@ -81,7 +88,26 @@ async def test_profile_repository_crud(db_conn):
     fetched = await profile_repo.get_by_user_id("usr_02")
     assert fetched is not None
     assert fetched.display_name == "Morgan"
+    assert fetched.dob == date(1996, 4, 12)
+    assert fetched.location_country == "United Kingdom"
+    assert fetched.location_state == "Greater London"
+    assert fetched.location_city == "London"
+    assert fetched.relationship_intent == "Dating"
+    assert fetched.languages == ["en", "fr"]
     assert fetched.interests == ["coffee", "books"]
+
+    # Test update and automated trigger
+    profile.update_location(country="France", state="Île-de-France", city="Paris")
+    profile.update_relationship_intent("Casual Chat")
+    await profile_repo.save(profile)
+
+    updated = await profile_repo.get_by_user_id("usr_02")
+    assert updated is not None
+    assert updated.location_country == "France"
+    assert updated.location_state == "Île-de-France"
+    assert updated.location_city == "Paris"
+    assert updated.relationship_intent == "Casual Chat"
+
 
 
 async def test_match_ticket_repository(db_conn):

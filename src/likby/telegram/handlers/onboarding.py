@@ -372,12 +372,14 @@ async def finish_interests(
         f"• 🎂 <b>Age & Gender:</b> {profile.age} • {gender_label}\n"
         f"• 🎯 <b>Interests ({len(profile.interests)}):</b> {interests_label}\n"
         f"• 🌟 <b>Karma Standing:</b> {user.karma_score} / 500 (Good Standing ✨)\n\n"
+        f"✨ <b>Pro Tip:</b> You can customize your <b>Bio, Date of Birth, Location, Languages, and Looking For intent</b> anytime by opening <b>👤 Profile & VIP</b> in the menu below!\n\n"
         f"🔒 <b>Privacy Shield Guarantee:</b>\n"
         f"• 🛡 Your Telegram username and phone number are 100% confidential and hidden.\n"
         f"• 💬 Conversations are ephemeral with zero permanent database chat logs.\n"
         f"• 🎮 All games are ready to play in the <b>LikBy Play Mini App</b>!\n\n"
         f"Tap <b>🎲 Find Match</b> below whenever you're ready to start chatting!"
     )
+
 
     message_sent = False
     if target_bot:
